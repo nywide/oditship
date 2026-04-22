@@ -1,0 +1,137 @@
+import { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Logo } from "@/components/Logo";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+const Login = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    try {
+      // Look up email by username
+      const { data: profile, error: pErr } = await supabase
+        .from("profiles")
+        .select("id, is_active")
+        .eq("username", username.trim().toLowerCase())
+        .maybeSingle();
+
+      if (pErr || !profile) {
+        toast.error("Identifiants invalides", { description: "Nom d'utilisateur introuvable." });
+        setLoading(false);
+        return;
+      }
+      if (!profile.is_active) {
+        toast.error("Compte désactivé", { description: "Veuillez contacter l'administrateur." });
+        setLoading(false);
+        return;
+      }
+
+      // Get email from auth via RPC
+      const { data: emailRow, error: eErr } = await supabase.rpc("get_user_email_by_username", { _username: username.trim().toLowerCase() });
+      if (eErr || !emailRow) {
+        toast.error("Erreur", { description: "Impossible de récupérer l'email associé." });
+        setLoading(false);
+        return;
+      }
+
+      const { error: signErr } = await supabase.auth.signInWithPassword({
+        email: emailRow as string,
+        password,
+      });
+      if (signErr) {
+        toast.error("Identifiants invalides", { description: signErr.message });
+        setLoading(false);
+        return;
+      }
+
+      const from = (location.state as any)?.from?.pathname || "/dashboard";
+      toast.success("Connexion réussie");
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      toast.error("Erreur", { description: err?.message ?? "Une erreur est survenue." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Email envoyé", { description: "Vérifiez votre boîte de réception." });
+      setForgotOpen(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-mesh p-4">
+      <div className="w-full max-w-md">
+        <Link to="/" className="flex justify-center mb-8">
+          <Logo showTagline />
+        </Link>
+        <Card className="shadow-elegant border-border/60">
+          <CardContent className="p-8">
+            <h1 className="text-2xl font-extrabold mb-1">Connexion</h1>
+            <p className="text-sm text-muted-foreground mb-6">Accédez à votre espace ODiT.</p>
+
+            {!forgotOpen ? (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="username">Nom d'utilisateur</Label>
+                  <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" className="mt-1.5" />
+                </div>
+                <div>
+                  <Label htmlFor="password">Mot de passe</Label>
+                  <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" className="mt-1.5" />
+                </div>
+                <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Se connecter"}
+                </Button>
+
+                <div className="flex items-center justify-between text-sm">
+                  <button type="button" onClick={() => setForgotOpen(true)} className="text-primary hover:underline">
+                    Mot de passe oublié ?
+                  </button>
+                  <Link to="/signup" className="text-muted-foreground hover:text-foreground">
+                    Créer un compte
+                  </Link>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleForgot} className="space-y-4">
+                <div>
+                  <Label htmlFor="femail">Votre email</Label>
+                  <Input id="femail" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required className="mt-1.5" />
+                </div>
+                <Button type="submit" className="w-full">Envoyer le lien</Button>
+                <button type="button" onClick={() => setForgotOpen(false)} className="text-sm text-muted-foreground hover:text-foreground w-full text-center">
+                  Retour à la connexion
+                </button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
