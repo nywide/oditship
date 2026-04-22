@@ -11,8 +11,9 @@ export type OrderStatus = typeof ORDER_STATUSES[number];
 // Display label override (only "livré" → "Livré" per spec)
 export const statusLabel = (s: string): string => (s === "livré" ? "Livré" : s);
 
-// Tailwind classes for status badges (uses semantic tokens; raw HSL only inside style)
-export const statusColor = (s: string): { bg: string; text: string; ring: string; hex: string } => {
+export interface StatusStyle { bg: string; text: string; ring: string; hex: string; }
+
+export const statusColor = (s: string): StatusStyle => {
   switch (s) {
     case "Crée":      return { bg: "bg-slate-100",    text: "text-slate-700",   ring: "ring-slate-200",    hex: "hsl(215 16% 65%)" };
     case "Confirmé":  return { bg: "bg-blue-100",     text: "text-blue-700",    ring: "ring-blue-200",     hex: "hsl(217 91% 60%)" };
@@ -29,15 +30,4 @@ export const statusColor = (s: string): { bg: string; text: string; ring: string
     case "Intéressé": return { bg: "bg-pink-100",     text: "text-pink-700",    ring: "ring-pink-200",     hex: "hsl(330 81% 60%)" };
     default:          return { bg: "bg-gray-100",     text: "text-gray-700",    ring: "ring-gray-200",     hex: "hsl(220 9% 50%)" };
   }
-};
-
-import { cn } from "@/lib/utils";
-
-export const StatusBadge = ({ status }: { status: string }) => {
-  const c = statusColor(status);
-  return (
-    <span className={cn("inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ring-inset", c.bg, c.text, c.ring)}>
-      {statusLabel(status)}
-    </span>
-  );
 };
