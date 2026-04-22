@@ -14,16 +14,530 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cities: {
+        Row: {
+          created_at: string
+          id: number
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      hub_cities: {
+        Row: {
+          city_name: string
+          hub_id: number
+          id: number
+        }
+        Insert: {
+          city_name: string
+          hub_id: number
+          id?: number
+        }
+        Update: {
+          city_name?: string
+          hub_id?: number
+          id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_cities_city_name_fkey"
+            columns: ["city_name"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "hub_cities_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hub_livreur: {
+        Row: {
+          created_at: string
+          hub_id: number
+          id: number
+          livreur_id: string
+        }
+        Insert: {
+          created_at?: string
+          hub_id: number
+          id?: number
+          livreur_id: string
+        }
+        Update: {
+          created_at?: string
+          hub_id?: number
+          id?: number
+          livreur_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_livreur_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: true
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_livreur_livreur_id_fkey"
+            columns: ["livreur_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      invoice_items: {
+        Row: {
+          fee_amount: number
+          fee_type: string | null
+          id: number
+          invoice_id: number
+          order_id: number | null
+          order_value: number
+        }
+        Insert: {
+          fee_amount?: number
+          fee_type?: string | null
+          id?: number
+          invoice_id: number
+          order_id?: number | null
+          order_value?: number
+        }
+        Update: {
+          fee_amount?: number
+          fee_type?: string | null
+          id?: number
+          invoice_id?: number
+          order_id?: number | null
+          order_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delivery_fees: number
+          id: number
+          net_amount: number
+          packaging_fees: number
+          paid_at: string | null
+          period_end: string
+          period_start: string
+          status: string
+          total_annule_fees: number
+          total_delivered_amount: number
+          total_refused_fees: number
+          vendeur_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delivery_fees?: number
+          id?: number
+          net_amount?: number
+          packaging_fees?: number
+          paid_at?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          total_annule_fees?: number
+          total_delivered_amount?: number
+          total_refused_fees?: number
+          vendeur_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delivery_fees?: number
+          id?: number
+          net_amount?: number
+          packaging_fees?: number
+          paid_at?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          total_annule_fees?: number
+          total_delivered_amount?: number
+          total_refused_fees?: number
+          vendeur_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_vendeur_id_fkey"
+            columns: ["vendeur_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: number
+          new_status: string
+          notes: string | null
+          old_status: string | null
+          order_id: number
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: number
+          new_status: string
+          notes?: string | null
+          old_status?: string | null
+          order_id: number
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: number
+          new_status?: string
+          notes?: string | null
+          old_status?: string | null
+          order_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_status_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          agent_id: string | null
+          api_sync_error: string | null
+          api_sync_status: string | null
+          assigned_livreur_id: string | null
+          barcode: string | null
+          comment: string | null
+          created_at: string
+          customer_address: string
+          customer_city: string
+          customer_name: string
+          customer_phone: string
+          delivered_at: string | null
+          external_tracking_number: string | null
+          hub_id: number | null
+          id: number
+          open_package: boolean
+          order_value: number
+          postponed_date: string | null
+          product_name: string
+          qr_code: string | null
+          return_note: string | null
+          scheduled_date: string | null
+          status: string
+          status_note: string | null
+          tracking_number: string | null
+          updated_at: string
+          vendeur_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          api_sync_error?: string | null
+          api_sync_status?: string | null
+          assigned_livreur_id?: string | null
+          barcode?: string | null
+          comment?: string | null
+          created_at?: string
+          customer_address: string
+          customer_city: string
+          customer_name: string
+          customer_phone: string
+          delivered_at?: string | null
+          external_tracking_number?: string | null
+          hub_id?: number | null
+          id?: number
+          open_package?: boolean
+          order_value?: number
+          postponed_date?: string | null
+          product_name: string
+          qr_code?: string | null
+          return_note?: string | null
+          scheduled_date?: string | null
+          status?: string
+          status_note?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+          vendeur_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          api_sync_error?: string | null
+          api_sync_status?: string | null
+          assigned_livreur_id?: string | null
+          barcode?: string | null
+          comment?: string | null
+          created_at?: string
+          customer_address?: string
+          customer_city?: string
+          customer_name?: string
+          customer_phone?: string
+          delivered_at?: string | null
+          external_tracking_number?: string | null
+          hub_id?: number | null
+          id?: number
+          open_package?: boolean
+          order_value?: number
+          postponed_date?: string | null
+          product_name?: string
+          qr_code?: string | null
+          return_note?: string | null
+          scheduled_date?: string | null
+          status?: string
+          status_note?: string | null
+          tracking_number?: string | null
+          updated_at?: string
+          vendeur_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_assigned_livreur_id_fkey"
+            columns: ["assigned_livreur_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_vendeur_id_fkey"
+            columns: ["vendeur_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_rules: {
+        Row: {
+          annulation_fee: number
+          city: string
+          created_at: string
+          delivery_fee: number
+          id: number
+          refusal_fee: number
+          updated_at: string
+          vendeur_id: string | null
+        }
+        Insert: {
+          annulation_fee?: number
+          city: string
+          created_at?: string
+          delivery_fee?: number
+          id?: number
+          refusal_fee?: number
+          updated_at?: string
+          vendeur_id?: string | null
+        }
+        Update: {
+          annulation_fee?: number
+          city?: string
+          created_at?: string
+          delivery_fee?: number
+          id?: number
+          refusal_fee?: number
+          updated_at?: string
+          vendeur_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_rules_city_fkey"
+            columns: ["city"]
+            isOneToOne: false
+            referencedRelation: "cities"
+            referencedColumns: ["name"]
+          },
+          {
+            foreignKeyName: "pricing_rules_vendeur_id_fkey"
+            columns: ["vendeur_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          affiliation_code: string | null
+          agent_of: string | null
+          api_enabled: boolean
+          api_token: string | null
+          cin: string | null
+          company_name: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          is_active: boolean
+          phone: string | null
+          role: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          affiliation_code?: string | null
+          agent_of?: string | null
+          api_enabled?: boolean
+          api_token?: string | null
+          cin?: string | null
+          company_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          is_active?: boolean
+          phone?: string | null
+          role?: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          affiliation_code?: string | null
+          agent_of?: string | null
+          api_enabled?: boolean
+          api_token?: string | null
+          cin?: string | null
+          company_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          is_active?: boolean
+          phone?: string | null
+          role?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_agent_of_fkey"
+            columns: ["agent_of"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "superviseur"
+        | "administrateur"
+        | "vendeur"
+        | "agent"
+        | "ramassoire"
+        | "magasinier"
+        | "support"
+        | "suivi"
+        | "comptable"
+        | "livreur"
+        | "commercial"
+        | "gestion_retour"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +664,21 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "superviseur",
+        "administrateur",
+        "vendeur",
+        "agent",
+        "ramassoire",
+        "magasinier",
+        "support",
+        "suivi",
+        "comptable",
+        "livreur",
+        "commercial",
+        "gestion_retour",
+      ],
+    },
   },
 } as const
