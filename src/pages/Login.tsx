@@ -42,7 +42,7 @@ const Login = () => {
       }
 
       // Get email from auth via RPC
-      const { data: emailRow, error: eErr } = await supabase.rpc("get_user_email_by_username", { _username: username.trim().toLowerCase() });
+      const { data: emailRow, error: eErr } = await (supabase.rpc as any)("get_user_email_by_username", { _username: username.trim().toLowerCase() });
       if (eErr || !emailRow) {
         toast.error("Erreur", { description: "Impossible de récupérer l'email associé." });
         setLoading(false);
@@ -50,7 +50,7 @@ const Login = () => {
       }
 
       const { error: signErr } = await supabase.auth.signInWithPassword({
-        email: emailRow as string,
+        email: String(emailRow),
         password,
       });
       if (signErr) {
