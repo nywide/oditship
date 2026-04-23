@@ -48,7 +48,7 @@ const Pricing = () => {
         <p className="text-accent text-sm font-bold uppercase tracking-wider mb-3">Tarification</p>
         <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Tarifs par ville</h1>
         <p className="text-muted-foreground text-lg">
-          Tous les tarifs sont en MAD, hors TVA. Aucun frais de packaging. Tarifs personnalisés disponibles sur demande pour les gros volumes.
+          Tarifs personnalisés disponibles sur demande pour les gros volumes.
         </p>
       </div>
 
