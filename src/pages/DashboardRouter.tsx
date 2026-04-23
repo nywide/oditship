@@ -13,12 +13,14 @@ const DashboardRouter = () => {
     switch (role) {
       case "vendeur":
       case "agent":
-        navigate("/dashboard/vendeur", { replace: true }); break;
+        navigate("/dashboard/vendeur/colis", { replace: true }); break;
       case "administrateur":
       case "superviseur":
-        navigate("/dashboard/administrateur", { replace: true }); break;
+        navigate("/dashboard/administrateur/colis", { replace: true }); break;
       case "livreur":
-        navigate("/dashboard/livreur", { replace: true }); break;
+        navigate("/dashboard/livreur/colis", { replace: true }); break;
+      case "ramassoire":
+        navigate("/dashboard/ramassoire/colis", { replace: true }); break;
       default:
         navigate("/dashboard/placeholder", { replace: true });
     }
