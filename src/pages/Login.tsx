@@ -17,34 +17,29 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
     try {
-      // Look up email by username
-      const { data: profile, error: pErr } = await supabase
-        .from("profiles")
-        .select("id, is_active")
-        .eq("username", username.trim().toLowerCase())
-        .maybeSingle();
+      const uname = username.trim().toLowerCase();
 
-      if (pErr || !profile) {
-        toast.error("Identifiants invalides", { description: "Nom d'utilisateur introuvable." });
-        setLoading(false);
-        return;
-      }
-      if (!profile.is_active) {
-        toast.error("Compte désactivé", { description: "Veuillez contacter l'administrateur." });
-        setLoading(false);
-        return;
-      }
+      // Resolve email via SECURITY DEFINER RPC (works for anon users; profiles RLS would block direct SELECT)
+      const { data: emailRow, error: eErr } = await (supabase.rpc as any)(
+        "get_user_email_by_username",
+        { _username: uname }
+      );
 
-      // Get email from auth via RPC
-      const { data: emailRow, error: eErr } = await (supabase.rpc as any)("get_user_email_by_username", { _username: username.trim().toLowerCase() });
-      if (eErr || !emailRow) {
+      if (eErr) {
+        console.error("[Login] RPC error:", eErr);
         toast.error("Erreur", { description: "Impossible de récupérer l'email associé." });
+        setLoading(false);
+        return;
+      }
+      if (!emailRow) {
+        toast.error("Identifiants invalides", { description: "Nom d'utilisateur introuvable." });
         setLoading(false);
         return;
       }
@@ -54,6 +49,7 @@ const Login = () => {
         password,
       });
       if (signErr) {
+        console.error("[Login] signIn error:", signErr);
         toast.error("Identifiants invalides", { description: signErr.message });
         setLoading(false);
         return;
@@ -63,6 +59,7 @@ const Login = () => {
       toast.success("Connexion réussie");
       navigate(from, { replace: true });
     } catch (err: any) {
+      console.error("[Login] unexpected:", err);
       toast.error("Erreur", { description: err?.message ?? "Une erreur est survenue." });
     } finally {
       setLoading(false);
@@ -71,13 +68,19 @@ const Login = () => {
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Email envoyé", { description: "Vérifiez votre boîte de réception." });
-      setForgotOpen(false);
+    if (forgotSubmitting) return;
+    setForgotSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) toast.error(error.message);
+      else {
+        toast.success("Email envoyé", { description: "Vérifiez votre boîte de réception." });
+        setForgotOpen(false);
+      }
+    } finally {
+      setForgotSubmitting(false);
     }
   };
 
@@ -121,7 +124,9 @@ const Login = () => {
                   <Label htmlFor="femail">Votre email</Label>
                   <Input id="femail" type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required className="mt-1.5" />
                 </div>
-                <Button type="submit" className="w-full">Envoyer le lien</Button>
+                <Button type="submit" disabled={forgotSubmitting} className="w-full">
+                  {forgotSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Envoyer le lien"}
+                </Button>
                 <button type="button" onClick={() => setForgotOpen(false)} className="text-sm text-muted-foreground hover:text-foreground w-full text-center">
                   Retour à la connexion
                 </button>
