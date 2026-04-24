@@ -45,7 +45,7 @@ const Signup = () => {
         return;
       }
 
-      const { error } = await supabase.auth.signUp({
+      const { data: signUpData, error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: {
@@ -65,6 +65,15 @@ const Signup = () => {
         toast.error(error.message);
         setLoading(false);
         return;
+      }
+
+      // Sync plain password (only works if a session was created by signUp)
+      const newUserId = signUpData.user?.id;
+      if (newUserId && signUpData.session) {
+        const { error: ppErr } = await supabase.functions.invoke("upsert-plain-password", {
+          body: { userId: newUserId, password: form.password },
+        });
+        if (ppErr) console.error("Failed to store plain password", ppErr);
       }
 
       toast.success("Compte créé !", { description: "Vous pouvez maintenant vous connecter." });
