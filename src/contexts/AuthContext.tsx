@@ -41,11 +41,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
-        // Defer to avoid auth lock
-        setTimeout(() => loadProfile(sess.user.id), 0);
+        setLoading(true);
+        // Defer the supabase call to avoid auth deadlock, but track loading
+        setTimeout(() => {
+          loadProfile(sess.user.id).finally(() => setLoading(false));
+        }, 0);
       } else {
         setProfile(null);
         setRole(null);
+        setLoading(false);
       }
     });
 
