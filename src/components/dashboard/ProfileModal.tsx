@@ -68,6 +68,14 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
         <DialogHeader><DialogTitle>Mon profil</DialogTitle></DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div>
+            <Label>Nom d'utilisateur</Label>
+            <Input
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              autoComplete="username"
+            />
+          </div>
+          <div>
             <Label>Nom complet</Label>
             <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           </div>
