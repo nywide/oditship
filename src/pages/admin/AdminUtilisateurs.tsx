@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Plus, Pencil, UserX, UserCheck } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Pencil, UserX, UserCheck, LogIn, Search } from "lucide-react";
 import { toast } from "sonner";
 
 const ROLES = [
@@ -26,9 +27,16 @@ interface ProfileRow {
   role: string;
   is_active: boolean;
   created_at: string;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
 }
 
-const emptyForm = { username: "", email: "", password: "", full_name: "", phone: "", cin: "", role: "vendeur", is_active: true };
+const emptyForm = {
+  username: "", email: "", password: "",
+  full_name: "", phone: "", cin: "",
+  role: "vendeur", is_active: true,
+  bank_account_name: "", bank_account_number: "",
+};
 
 const AdminUtilisateurs = () => {
   const { user } = useAuth();
@@ -38,6 +46,9 @@ const AdminUtilisateurs = () => {
   const [editing, setEditing] = useState<ProfileRow | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [tab, setTab] = useState<"all" | "vendeur">("all");
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
 
   const load = () => {
     setLoading(true);
@@ -46,10 +57,38 @@ const AdminUtilisateurs = () => {
   };
   useEffect(load, []);
 
-  const openCreate = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
+  const filtered = useMemo(() => {
+    return rows.filter((r) => {
+      if (tab === "vendeur" && r.role !== "vendeur") return false;
+      if (tab === "all" && roleFilter !== "all" && r.role !== roleFilter) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        if (!r.username.toLowerCase().includes(q) &&
+            !(r.full_name || "").toLowerCase().includes(q) &&
+            !(r.phone || "").toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rows, tab, roleFilter, search]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ ...emptyForm, role: tab === "vendeur" ? "vendeur" : "vendeur" });
+    setOpen(true);
+  };
   const openEdit = (r: ProfileRow) => {
     setEditing(r);
-    setForm({ ...emptyForm, username: r.username, full_name: r.full_name ?? "", phone: r.phone ?? "", cin: r.cin ?? "", role: r.role, is_active: r.is_active });
+    setForm({
+      ...emptyForm,
+      username: r.username,
+      full_name: r.full_name ?? "",
+      phone: r.phone ?? "",
+      cin: r.cin ?? "",
+      role: r.role,
+      is_active: r.is_active,
+      bank_account_name: r.bank_account_name ?? "",
+      bank_account_number: r.bank_account_number ?? "",
+    });
     setOpen(true);
   };
 
@@ -59,23 +98,31 @@ const AdminUtilisateurs = () => {
     setSubmitting(true);
     try {
       if (editing) {
-        const { error } = await supabase.from("profiles").update({
+        const payload: Record<string, unknown> = {
+          user_id: editing.id,
           full_name: form.full_name || null,
           phone: form.phone || null,
           cin: form.cin || null,
           role: form.role,
           is_active: form.is_active,
-        }).eq("id", editing.id);
+        };
+        if (form.password) payload.password = form.password;
+        if (form.role === "vendeur") {
+          payload.bank_account_name = form.bank_account_name || null;
+          payload.bank_account_number = form.bank_account_number || null;
+        }
+        const { data, error } = await supabase.functions.invoke("admin-update-user", { body: payload });
         if (error) throw error;
-        // Sync user_roles: remove old, add new
-        await supabase.from("user_roles").delete().eq("user_id", editing.id);
-        await supabase.from("user_roles").insert({ user_id: editing.id, role: form.role as any });
+        if ((data as any)?.error) throw new Error((data as any).error);
         toast.success("Utilisateur mis à jour");
       } else {
         const { data, error } = await supabase.functions.invoke("admin-create-user", {
           body: {
             email: form.email, password: form.password, username: form.username.toLowerCase().trim(),
-            full_name: form.full_name, phone: form.phone, cin: form.cin, role: form.role, is_active: form.is_active,
+            full_name: form.full_name, phone: form.phone, cin: form.cin,
+            role: form.role, is_active: form.is_active,
+            bank_account_name: form.role === "vendeur" ? form.bank_account_name : null,
+            bank_account_number: form.role === "vendeur" ? form.bank_account_number : null,
           },
         });
         if (error) throw error;
@@ -98,11 +145,55 @@ const AdminUtilisateurs = () => {
     else { toast.success(r.is_active ? "Désactivé" : "Activé"); load(); }
   };
 
+  const loginAs = async (r: ProfileRow) => {
+    if (r.id === user?.id) return toast.error("Vous êtes déjà connecté avec ce compte");
+    if (!confirm(`Se connecter en tant que ${r.username} ? Vous serez déconnecté de votre compte actuel.`)) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("login-as-user", {
+        body: { user_id: r.id, redirect_to: `${window.location.origin}/dashboard` },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const link = (data as any)?.action_link;
+      if (!link) throw new Error("Lien introuvable");
+      // Sign out current admin then open the magic link in same tab
+      await supabase.auth.signOut();
+      window.location.href = link;
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    }
+  };
+
+  const isVendeurForm = form.role === "vendeur";
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <h2 className="text-2xl font-bold">Utilisateurs</h2>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Créer</Button>
+      </div>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+        <TabsList>
+          <TabsTrigger value="all">Tous</TabsTrigger>
+          <TabsTrigger value="vendeur">Vendeurs</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Rechercher username, nom, téléphone" className="pl-8 w-72" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        {tab === "all" && (
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Rôle" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous les rôles</SelectItem>
+              {ROLES.map((r) => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Card className="overflow-x-auto">
@@ -113,6 +204,7 @@ const AdminUtilisateurs = () => {
               <TableHead>Nom complet</TableHead>
               <TableHead>Téléphone</TableHead>
               <TableHead>Rôle</TableHead>
+              {tab === "vendeur" && <TableHead>Compte bancaire</TableHead>}
               <TableHead>Statut</TableHead>
               <TableHead>Créé le</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -120,13 +212,25 @@ const AdminUtilisateurs = () => {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
-            ) : rows.map((r) => (
+              <TableRow><TableCell colSpan={tab === "vendeur" ? 8 : 7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={tab === "vendeur" ? 8 : 7} className="text-center py-8 text-muted-foreground">Aucun utilisateur</TableCell></TableRow>
+            ) : filtered.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{r.username}</TableCell>
                 <TableCell>{r.full_name || "—"}</TableCell>
                 <TableCell>{r.phone || "—"}</TableCell>
                 <TableCell><span className="capitalize">{r.role}</span></TableCell>
+                {tab === "vendeur" && (
+                  <TableCell className="text-sm">
+                    {r.bank_account_name ? (
+                      <div>
+                        <div>{r.bank_account_name}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{r.bank_account_number || "—"}</div>
+                      </div>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                )}
                 <TableCell>
                   <span className={r.is_active ? "text-success" : "text-muted-foreground"}>
                     {r.is_active ? "Actif" : "Inactif"}
@@ -134,8 +238,11 @@ const AdminUtilisateurs = () => {
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{new Date(r.created_at).toLocaleDateString("fr-FR")}</TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => toggleActive(r)} disabled={r.id === user?.id}>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(r)} title="Modifier"><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => loginAs(r)} disabled={r.id === user?.id} title="Se connecter en tant que">
+                    <LogIn className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => toggleActive(r)} disabled={r.id === user?.id} title={r.is_active ? "Désactiver" : "Activer"}>
                     {r.is_active ? <UserX className="h-4 w-4 text-destructive" /> : <UserCheck className="h-4 w-4 text-success" />}
                   </Button>
                 </TableCell>
@@ -155,13 +262,21 @@ const AdminUtilisateurs = () => {
                 <Input required disabled={!!editing} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
               </div>
               <div>
-                <Label>Email *</Label>
-                <Input required disabled={!!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "(non modifiable)" : ""} />
+                <Label>Email {!editing && "*"}</Label>
+                <Input required={!editing} disabled={!!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "(non modifiable)" : ""} />
               </div>
             </div>
-            {!editing && (
-              <div><Label>Mot de passe *</Label><Input required type="password" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-            )}
+            <div>
+              <Label>Mot de passe {!editing && "*"}</Label>
+              <Input
+                required={!editing}
+                type="password"
+                minLength={editing ? undefined : 6}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder={editing ? "Laisser vide pour ne pas changer" : ""}
+              />
+            </div>
             <div><Label>Nom complet</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Téléphone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
@@ -176,6 +291,23 @@ const AdminUtilisateurs = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {isVendeurForm && (
+              <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+                <div className="text-sm font-medium">Coordonnées bancaires</div>
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <Label>Titulaire du compte</Label>
+                    <Input value={form.bank_account_name} onChange={(e) => setForm({ ...form, bank_account_name: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Numéro / RIB</Label>
+                    <Input className="font-mono" value={form.bank_account_number} onChange={(e) => setForm({ ...form, bank_account_number: e.target.value })} />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <Switch id="is_active" checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} />
               <Label htmlFor="is_active">Actif</Label>
