@@ -243,13 +243,24 @@ const VendeurTeam = () => {
               <Label>Pages autorisées</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {PAGES.map((p) => (
-                  <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <Checkbox
-                      checked={createForm.pages[p.key] !== false}
-                      onCheckedChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [p.key]: !!v } })}
-                    />
-                    {p.label}
-                  </label>
+                  <div key={p.key} className="space-y-2 rounded-md border p-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={createForm.pages[p.key] !== false}
+                        onCheckedChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [p.key]: !!v } })}
+                      />
+                      {p.label}
+                    </label>
+                    {(p.key === "colis" || p.key === "graphique") && createForm.pages[p.key] !== false && (
+                      <Select value={String(createForm.pages[`${p.key}_scope`] ?? "all")} onValueChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [`${p.key}_scope`]: v } })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Toutes les commandes du vendeur</SelectItem>
+                          <SelectItem value="own">Seulement les commandes de l'agent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
