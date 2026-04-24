@@ -170,21 +170,28 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Nom client *</Label>
-              <Input required value={values.customer_name} onChange={(e) => setValues({ ...values, customer_name: e.target.value })} />
+              <Input required minLength={2} value={values.customer_name} onChange={(e) => setValues({ ...values, customer_name: e.target.value })} />
             </div>
             <div>
-              <Label>Téléphone *</Label>
-              <Input required value={values.customer_phone} onChange={(e) => setValues({ ...values, customer_phone: e.target.value })} />
+              <Label>Téléphone * (10 chiffres)</Label>
+              <Input
+                required
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                value={values.customer_phone}
+                onChange={(e) => setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+              />
             </div>
           </div>
           <div>
             <Label>Adresse *</Label>
-            <Input required value={values.customer_address} onChange={(e) => setValues({ ...values, customer_address: e.target.value })} />
+            <Input required minLength={2} value={values.customer_address} onChange={(e) => setValues({ ...values, customer_address: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Produit *</Label>
-              <Input required value={values.product_name} onChange={(e) => setValues({ ...values, product_name: e.target.value })} />
+              <Input required minLength={2} value={values.product_name} onChange={(e) => setValues({ ...values, product_name: e.target.value })} />
             </div>
             <div>
               <Label>Prix (MAD) *</Label>
