@@ -173,6 +173,13 @@ const AdminUtilisateurs = () => {
         toast.error("Veuillez autoriser les popups pour ce site");
       } else {
         toast.success(`Connexion en tant que ${r.username} dans un nouvel onglet`);
+        // Reload the admin tab shortly after to reset any UI side-effects
+        // triggered by storage events from the impersonated tab. The admin
+        // session in localStorage is unaffected, so the reload restores the
+        // correct admin URL and sidebar.
+        setTimeout(() => {
+          window.location.reload();
+        }, 600);
       }
     } catch (e: any) {
       toast.error(e.message || "Erreur");
