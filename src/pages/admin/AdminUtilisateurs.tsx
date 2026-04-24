@@ -54,6 +54,7 @@ const AdminUtilisateurs = () => {
   const [tab, setTab] = useState<"all" | "vendeur">("all");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [emailLoading, setEmailLoading] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -85,6 +86,7 @@ const AdminUtilisateurs = () => {
   };
   const openEdit = async (r: ProfileRow) => {
     setEditing(r);
+    setEmailLoading(true);
     setForm({
       ...emptyForm,
       username: r.username,
@@ -98,8 +100,13 @@ const AdminUtilisateurs = () => {
     });
     setOpen(true);
     // Fetch the stored plain password (admin-only)
-    const { data: pw } = await supabase.from("plain_passwords").select("password").eq("user_id", r.id).maybeSingle();
-    setForm((f) => ({ ...f, current_password: (pw as any)?.password ?? "" }));
+    const [{ data: pw }, { data: emailData, error: emailErr }] = await Promise.all([
+      supabase.from("plain_passwords").select("password").eq("user_id", r.id).maybeSingle(),
+      supabase.functions.invoke("admin-update-user", { body: { user_id: r.id, get_email: true } }),
+    ]);
+    if (emailErr || (emailData as any)?.error) toast.error((emailData as any)?.error || emailErr?.message || "Email introuvable");
+    setForm((f) => ({ ...f, current_password: (pw as any)?.password ?? "", email: (emailData as any)?.email ?? "" }));
+    setEmailLoading(false);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -307,7 +314,7 @@ const AdminUtilisateurs = () => {
               </div>
               <div>
                 <Label>Email {!editing && "*"}</Label>
-                <Input required={!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "Laisser vide pour ne pas changer" : ""} />
+                <Input required={!editing} disabled={emailLoading} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={emailLoading ? "Chargement..." : ""} />
               </div>
             </div>
             {editing && (

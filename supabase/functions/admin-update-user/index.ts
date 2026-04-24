@@ -12,6 +12,7 @@ const corsHeaders = {
 
 interface Body {
   user_id: string;
+  get_email?: boolean;
   email?: string;
   password?: string;
   full_name?: string | null;
@@ -62,6 +63,12 @@ Deno.serve(async (req) => {
     if (!target || target.agent_of !== callerId) return json(403, { error: "Forbidden" });
     // Vendeurs cannot change role
     if (body.role && body.role !== "agent") return json(403, { error: "Cannot change role" });
+  }
+
+  if (body.get_email) {
+    const { data: targetUser, error: targetErr } = await admin.auth.admin.getUserById(body.user_id);
+    if (targetErr || !targetUser.user) return json(404, { error: targetErr?.message || "User not found" });
+    return json(200, { email: targetUser.user.email ?? "" });
   }
 
   // Auth update (email/password)
