@@ -91,15 +91,6 @@ const VendeurTeam = () => {
     });
     setEditOpen(true);
   };
-    setEditing(a);
-    setEditForm({
-      email: "", password: "",
-      full_name: a.full_name ?? "", phone: a.phone ?? "", cin: a.cin ?? "",
-      is_active: a.is_active,
-      pages: { colis: true, facturation: true, graphique: true, team: false, ...(a.agent_pages ?? {}) },
-    });
-    setEditOpen(true);
-  };
 
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
