@@ -159,15 +159,16 @@ const AdminUtilisateurs = () => {
   const loginAs = async (r: ProfileRow) => {
     if (r.id === user?.id) return toast.error("Vous êtes déjà connecté avec ce compte");
     try {
-      const { data, error } = await supabase.functions.invoke("login-as-user", {
-        body: { user_id: r.id, redirect_to: `${window.location.origin}/dashboard` },
+      const { data, error } = await supabase.functions.invoke("get-impersonation-token", {
+        body: { targetUserId: r.id },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      const link = (data as any)?.action_link;
-      if (!link) throw new Error("Lien introuvable");
-      // Open in a new tab so the admin keeps their current session
-      const win = window.open(link, "_blank", "noopener,noreferrer");
+      const access_token = (data as any)?.access_token;
+      const refresh_token = (data as any)?.refresh_token;
+      if (!access_token || !refresh_token) throw new Error("Jeton de session introuvable");
+      const url = `/impersonate?access_token=${encodeURIComponent(access_token)}&refresh_token=${encodeURIComponent(refresh_token)}`;
+      const win = window.open(url, "_blank", "noopener,noreferrer");
       if (!win) {
         toast.error("Veuillez autoriser les popups pour ce site");
       } else {

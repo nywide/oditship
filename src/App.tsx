@@ -15,6 +15,7 @@ import Terms from "./pages/Terms";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
+import Impersonate from "./pages/Impersonate";
 import DashboardRouter from "./pages/DashboardRouter";
 import DashboardPlaceholder from "./pages/DashboardPlaceholder";
 import NotFound from "./pages/NotFound.tsx";
@@ -59,6 +60,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/impersonate" element={<Impersonate />} />
 
             {/* Dashboard router */}
             <Route path="/dashboard" element={<ProtectedRoute><DashboardRouter /></ProtectedRoute>} />
