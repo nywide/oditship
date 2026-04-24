@@ -27,7 +27,6 @@ const PAGES = [
   { key: "colis", label: "Colis" },
   { key: "facturation", label: "Facturation" },
   { key: "graphique", label: "Graphique" },
-  { key: "team", label: "Team" },
 ];
 
 const VendeurTeam = () => {
@@ -40,11 +39,11 @@ const VendeurTeam = () => {
   const [emailLoading, setEmailLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-    pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
+    pages: { colis: true, facturation: true, graphique: true } as Record<string, boolean>,
   });
   const [editForm, setEditForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-    pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
+    pages: { colis: true, facturation: true, graphique: true } as Record<string, boolean>,
   });
 
   const load = () => {
@@ -76,7 +75,7 @@ const VendeurTeam = () => {
       setCreateOpen(false);
       setCreateForm({
         username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-        pages: { colis: true, facturation: true, graphique: true, team: false },
+        pages: { colis: true, facturation: true, graphique: true },
       });
       load();
     } catch (e: any) { toast.error(e.message || "Erreur"); }
@@ -89,7 +88,7 @@ const VendeurTeam = () => {
       username: a.username, email: "", password: "",
       full_name: a.full_name ?? "", phone: a.phone ?? "", cin: a.cin ?? "",
       is_active: a.is_active,
-      pages: { colis: true, facturation: true, graphique: true, team: false, ...(a.agent_pages ?? {}) },
+      pages: { colis: true, facturation: true, graphique: true, ...(a.agent_pages ?? {}) },
     });
     setEditOpen(true);
     setEmailLoading(true);
