@@ -64,22 +64,33 @@ const VendeurTeam = () => {
           email: createForm.email, password: createForm.password,
           username: createForm.username.toLowerCase().trim(),
           full_name: createForm.full_name, phone: createForm.phone, cin: createForm.cin,
-          role: "agent", agent_of: user.id, is_active: true,
+          role: "agent", agent_of: user.id, is_active: createForm.is_active,
+          agent_pages: createForm.pages,
         },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success("Agent créé");
       setCreateOpen(false);
-      setCreateForm({ username: "", email: "", password: "", full_name: "", phone: "", cin: "" });
+      setCreateForm({
+        username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
+        pages: { colis: true, facturation: true, graphique: true, team: false },
+      });
       load();
     } catch (e: any) { toast.error(e.message || "Erreur"); }
     finally { setSubmitting(false); }
   };
 
-  const openEdit = async (a: Agent) => {
-    // Fetch email
-    const { data } = await supabase.functions.invoke("admin-update-user", { body: { user_id: a.id } }).catch(() => ({ data: null }));
+  const openEdit = (a: Agent) => {
+    setEditing(a);
+    setEditForm({
+      email: "", password: "",
+      full_name: a.full_name ?? "", phone: a.phone ?? "", cin: a.cin ?? "",
+      is_active: a.is_active,
+      pages: { colis: true, facturation: true, graphique: true, team: false, ...(a.agent_pages ?? {}) },
+    });
+    setEditOpen(true);
+  };
     setEditing(a);
     setEditForm({
       email: "", password: "",
