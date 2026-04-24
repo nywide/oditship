@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Eye, EyeOff, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, RefreshCw, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
@@ -24,6 +26,7 @@ const AdminLivreurs = () => {
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [hubLivreurs, setHubLivreurs] = useState<HubLivreur[]>([]);
   const [show, setShow] = useState<Set<string>>(new Set());
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = async () => {
     const [p, h, hl] = await Promise.all([
@@ -37,20 +40,29 @@ const AdminLivreurs = () => {
   };
   useEffect(() => { load(); }, []);
 
-  const hubOf = (livreurId: string) => hubLivreurs.find((x) => x.livreur_id === livreurId)?.hub_id;
-  const assignedHubIds = new Set(hubLivreurs.map((x) => x.hub_id));
+  const hubsOf = (livreurId: string) => hubLivreurs.filter((x) => x.livreur_id === livreurId).map((x) => x.hub_id);
+  const hubAssignedTo = (hubId: number) => hubLivreurs.find((x) => x.hub_id === hubId)?.livreur_id;
 
-  const setHub = async (livreurId: string, hubIdStr: string) => {
-    const hubId = hubIdStr === "none" ? null : parseInt(hubIdStr);
-    // remove any existing for this livreur or hub
-    await supabase.from("hub_livreur").delete().eq("livreur_id", livreurId);
-    if (hubId) {
-      await supabase.from("hub_livreur").delete().eq("hub_id", hubId);
-      const { error } = await supabase.from("hub_livreur").insert({ livreur_id: livreurId, hub_id: hubId });
-      if (error) return toast.error(error.message);
+  const toggleHubForLivreur = async (livreurId: string, hubId: number, currentlyAssigned: boolean) => {
+    setSavingId(livreurId);
+    try {
+      if (currentlyAssigned) {
+        const { error } = await supabase.from("hub_livreur").delete()
+          .eq("livreur_id", livreurId).eq("hub_id", hubId);
+        if (error) throw error;
+      } else {
+        // Hub may already belong to another livreur — caller must un-assign first via the other row.
+        // Defensive: remove any existing row for that hub before insert.
+        await supabase.from("hub_livreur").delete().eq("hub_id", hubId);
+        const { error } = await supabase.from("hub_livreur").insert({ livreur_id: livreurId, hub_id: hubId });
+        if (error) throw error;
+      }
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur");
+    } finally {
+      setSavingId(null);
     }
-    toast.success("Hub mis à jour");
-    load();
   };
 
   const toggleApi = async (l: Livreur, v: boolean) => {
@@ -74,7 +86,7 @@ const AdminLivreurs = () => {
         <TableHeader>
           <TableRow>
             <TableHead>Livreur</TableHead>
-            <TableHead>Hub assigné</TableHead>
+            <TableHead>Hubs assignés</TableHead>
             <TableHead>API activée</TableHead>
             <TableHead>API Token</TableHead>
           </TableRow>
@@ -83,7 +95,7 @@ const AdminLivreurs = () => {
           {livreurs.length === 0 ? (
             <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Aucun livreur</TableCell></TableRow>
           ) : livreurs.map((l) => {
-            const currentHub = hubOf(l.id);
+            const assigned = hubsOf(l.id);
             return (
               <TableRow key={l.id}>
                 <TableCell>
@@ -91,15 +103,43 @@ const AdminLivreurs = () => {
                   <div className="text-xs text-muted-foreground">{l.username}</div>
                 </TableCell>
                 <TableCell>
-                  <Select value={currentHub ? String(currentHub) : "none"} onValueChange={(v) => setHub(l.id, v)}>
-                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Aucun</SelectItem>
-                      {hubs.filter((h) => !assignedHubIds.has(h.id) || h.id === currentHub).map((h) => (
-                        <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {assigned.length === 0 && <span className="text-sm text-muted-foreground">Aucun</span>}
+                    {assigned.map((hid) => {
+                      const h = hubs.find((x) => x.id === hid);
+                      return <Badge key={hid} variant="secondary">{h?.name ?? `#${hid}`}</Badge>;
+                    })}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" disabled={savingId === l.id}>
+                          Modifier <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-64 p-2 max-h-72 overflow-y-auto" align="start">
+                        <div className="text-xs font-medium px-2 py-1 text-muted-foreground">Sélectionner les hubs</div>
+                        {hubs.length === 0 && <div className="text-sm p-2 text-muted-foreground">Aucun hub</div>}
+                        {hubs.map((h) => {
+                          const owner = hubAssignedTo(h.id);
+                          const isMine = owner === l.id;
+                          const takenByOther = !!owner && !isMine;
+                          return (
+                            <label
+                              key={h.id}
+                              className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent cursor-pointer ${takenByOther ? "opacity-50" : ""}`}
+                            >
+                              <Checkbox
+                                checked={isMine}
+                                disabled={takenByOther || savingId === l.id}
+                                onCheckedChange={() => toggleHubForLivreur(l.id, h.id, isMine)}
+                              />
+                              <span className="flex-1">{h.name}</span>
+                              {takenByOther && <span className="text-xs text-muted-foreground">pris</span>}
+                            </label>
+                          );
+                        })}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Switch checked={l.api_enabled} onCheckedChange={(v) => toggleApi(l, v)} />
