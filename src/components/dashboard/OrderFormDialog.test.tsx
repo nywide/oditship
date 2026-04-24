@@ -48,4 +48,25 @@ describe("OrderFormDialog city dropdown", () => {
       expect(screen.getByText("Ville 40")).toBeInTheDocument();
     });
   });
+
+  it("keeps the dropdown open when using the mouse wheel inside the city list", async () => {
+    render(
+      <OrderFormDialog
+        open
+        onOpenChange={vi.fn()}
+        vendeurId="vendeur-1"
+        agentId={null}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox"));
+
+    const searchInput = await screen.findByPlaceholderText("Rechercher une ville...");
+    const commandList = document.querySelector("[cmdk-list]") as HTMLElement;
+    fireEvent.wheel(commandList, { deltaY: 120 });
+
+    expect(searchInput).toBeInTheDocument();
+    expect(screen.getByText("Ville 40")).toBeInTheDocument();
+  });
 });

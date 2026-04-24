@@ -243,6 +243,12 @@ Deno.serve(async (req) => {
     const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
 
     const partnerTrackingID = `ODiT-${order.id}`;
+    console.log(JSON.stringify({
+      event: "olivraison-create-order-payload",
+      order_id: order.id,
+      open_package: order.open_package,
+      noOpen: order.open_package === true ? 1 : 0,
+    }));
     const result = await olivraisonCreatePackage(token, {
       price: Number(order.order_value),
       description: order.product_name,

@@ -130,7 +130,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         <form onSubmit={submit} className="space-y-3">
           <div>
             <Label>Ville *</Label>
-            <Popover open={cityOpen} onOpenChange={setCityOpen}>
+            <Popover open={cityOpen} onOpenChange={setCityOpen} modal>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
@@ -212,7 +212,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
             <Checkbox id="open_package" checked={values.open_package} onCheckedChange={(v) => setValues({ ...values, open_package: !!v })} className="mt-0.5" />
             <Label htmlFor="open_package" className="cursor-pointer text-destructive font-medium leading-tight">
-              Ne pas autorisé à ouvrir le colis
+              N'est pas autorisé à ouvrir le colis
             </Label>
           </div>
           <div>
