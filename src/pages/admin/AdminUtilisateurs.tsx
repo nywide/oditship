@@ -302,11 +302,19 @@ const AdminUtilisateurs = () => {
                 <Input required={!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "Laisser vide pour ne pas changer" : ""} />
               </div>
             </div>
+            {editing && (
+              <div>
+                <Label>Mot de passe actuel</Label>
+                <Input
+                  type="text"
+                  readOnly
+                  value={form.current_password || "Non défini"}
+                  className="font-mono bg-muted/50"
+                />
+              </div>
+            )}
             <div>
-              <Label>Mot de passe {!editing && "*"}</Label>
-              {editing && (
-                <p className="text-xs text-muted-foreground mb-1">Le mot de passe est masqué pour des raisons de sécurité</p>
-              )}
+              <Label>{editing ? "Nouveau mot de passe" : "Mot de passe *"}</Label>
               <Input
                 required={!editing}
                 type="password"
