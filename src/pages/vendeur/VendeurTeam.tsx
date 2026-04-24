@@ -135,6 +135,43 @@ const VendeurTeam = () => {
     finally { setSubmitting(false); }
   };
 
+  const loginAs = async (a: Agent) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("get-impersonation-token", {
+        body: { targetUserId: a.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const access_token = (data as any)?.access_token;
+      const refresh_token = (data as any)?.refresh_token;
+      if (!access_token || !refresh_token) throw new Error("Jeton de session introuvable");
+      const win = window.open(`/impersonate?access_token=${encodeURIComponent(access_token)}&refresh_token=${encodeURIComponent(refresh_token)}`, "_blank", "noopener,noreferrer");
+      if (!win) toast.error("Veuillez autoriser les popups pour ce site");
+      else toast.success(`Connexion en tant que ${a.username} dans un nouvel onglet`);
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", { body: { targetUserId: deleteTarget.id } });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Agent ${deleteTarget.username} supprimé`);
+      setDeleteTarget(null);
+      load();
+    } catch (e: any) { toast.error(e.message || "Erreur lors de la suppression"); }
+  };
+
+  const pageBadges = (pages: Record<string, boolean> | null) => {
+    const p = { ...defaultPages, ...(pages ?? {}) } as Record<string, boolean | string>;
+    return PAGES.filter((page) => p[page.key] === true).map((page) => {
+      if (page.key === "colis") return `${page.label}: ${p.colis_scope === "own" ? "Agent" : "Tous"}`;
+      if (page.key === "graphique") return `${page.label}: ${p.graphique_scope === "own" ? "Agent" : "Tous"}`;
+      return page.label;
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
