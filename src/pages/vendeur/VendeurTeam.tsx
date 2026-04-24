@@ -143,19 +143,27 @@ const VendeurTeam = () => {
               <TableHead>Username</TableHead>
               <TableHead>Téléphone</TableHead>
               <TableHead>CIN</TableHead>
+              <TableHead>Pages autorisées</TableHead>
               <TableHead>Statut</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {agents.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun agent</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun agent</TableCell></TableRow>
             ) : agents.map((a) => (
               <TableRow key={a.id}>
                 <TableCell className="font-medium">{a.full_name || "—"}</TableCell>
                 <TableCell>{a.username}</TableCell>
                 <TableCell>{a.phone || "—"}</TableCell>
                 <TableCell>{a.cin || "—"}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1 justify-start">
+                    {PAGES.filter((p) => a.agent_pages?.[p.key] === true).map((p) => (
+                      <Badge key={p.key} variant="secondary">{p.label}</Badge>
+                    ))}
+                  </div>
+                </TableCell>
                 <TableCell>{a.is_active ? "Actif" : "Inactif"}</TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
