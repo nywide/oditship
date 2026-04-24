@@ -145,7 +145,10 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" sideOffset={4}>
                 <Command>
                   <CommandInput placeholder="Rechercher une ville..." />
-                  <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
+                  <CommandList
+                    className="max-h-[260px] overflow-y-auto overscroll-contain"
+                    onWheel={(event) => event.stopPropagation()}
+                  >
                     <CommandEmpty>Aucune ville trouvée</CommandEmpty>
                     <CommandGroup>
                       {filteredCities.map((c) => (
@@ -212,7 +215,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
             <Checkbox id="open_package" checked={values.open_package} onCheckedChange={(v) => setValues({ ...values, open_package: !!v })} className="mt-0.5" />
             <Label htmlFor="open_package" className="cursor-pointer text-destructive font-medium leading-tight">
-              Ne pas autorisé à ouvrir le colis
+              N'est pas autorisé à ouvrir le colis
             </Label>
           </div>
           <div>
