@@ -56,6 +56,32 @@ async function olivraisonCreatePackage(token: string, body: Record<string, unkno
   return parsed as { trackingID: string; status?: string; partnerTrackingID?: string };
 }
 
+async function olivraisonUpdatePackage(token: string, trackingID: string, noOpen: boolean) {
+  const r = await fetch(`${OLIVRAISON_BASE}/package/update`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      trackingID,
+      updateObject: {
+        noOpen,
+      },
+    }),
+  });
+
+  const text = await r.text();
+  let parsed: any = {};
+  try { parsed = JSON.parse(text); } catch { /* keep raw */ }
+
+  if (!r.ok) {
+    throw new Error(`Olivraison /package/update ${r.status}: ${parsed?.description || text}`);
+  }
+
+  return parsed as { message?: string; trackingID?: string };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -243,12 +269,12 @@ Deno.serve(async (req) => {
     const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
 
     const partnerTrackingID = `ODiT-${order.id}`;
-    const noOpenValue = order.open_package === true ? 1 : 0;
+    const noOpenValue = order.open_package === true;
     console.log(JSON.stringify({
       event: "olivraison-create-order-payload",
       order_id: order.id,
       open_package: order.open_package,
-      no_open: noOpenValue,
+      noOpen: noOpenValue,
     }));
     const result = await olivraisonCreatePackage(token, {
       price: Number(order.order_value),
@@ -257,7 +283,6 @@ Deno.serve(async (req) => {
       comment: order.comment ?? "",
       orderId: String(order.id),
       partnerTrackingID,
-      no_open: noOpenValue,
       destination: {
         name: order.customer_name,
         phone: order.customer_phone,
@@ -265,6 +290,8 @@ Deno.serve(async (req) => {
         streetAddress: order.customer_address,
       },
     });
+
+    await olivraisonUpdatePackage(token, result.trackingID, noOpenValue);
 
     const { error: updErr } = await admin.from("orders").update({
       external_tracking_number: result.trackingID,
