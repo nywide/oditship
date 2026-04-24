@@ -15,6 +15,7 @@ import Terms from "./pages/Terms";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
+import Impersonate from "./pages/Impersonate";
 import DashboardRouter from "./pages/DashboardRouter";
 import DashboardPlaceholder from "./pages/DashboardPlaceholder";
 import NotFound from "./pages/NotFound.tsx";
