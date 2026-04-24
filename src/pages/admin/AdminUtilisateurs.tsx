@@ -278,6 +278,9 @@ const AdminUtilisateurs = () => {
                   <Button variant="ghost" size="icon" onClick={() => toggleActive(r)} disabled={r.id === user?.id} title={r.is_active ? "Désactiver" : "Activer"}>
                     {r.is_active ? <UserX className="h-4 w-4 text-destructive" /> : <UserCheck className="h-4 w-4 text-success" />}
                   </Button>
+                  <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(r)} disabled={r.id === user?.id} title="Supprimer">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
