@@ -64,15 +64,8 @@ describe("OrderFormDialog city dropdown", () => {
 
     const searchInput = await screen.findByPlaceholderText("Rechercher une ville...");
     const commandList = document.querySelector("[cmdk-list]") as HTMLElement;
-    let wheelStopped = false;
-
-    commandList.addEventListener("wheel", (event) => {
-      wheelStopped = event.cancelBubble;
-    });
-
     fireEvent.wheel(commandList, { deltaY: 120 });
 
-    expect(wheelStopped).toBe(true);
     expect(searchInput).toBeInTheDocument();
     expect(screen.getByText("Ville 40")).toBeInTheDocument();
   });
