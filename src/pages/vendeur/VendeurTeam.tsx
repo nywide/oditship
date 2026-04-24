@@ -10,7 +10,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Pencil } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Pencil, Trash2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
 interface Agent {
@@ -28,6 +33,8 @@ const PAGES = [
   { key: "facturation", label: "Facturation" },
   { key: "graphique", label: "Graphique" },
 ];
+
+const defaultPages = { colis: true, colis_scope: "all", facturation: true, graphique: true, graphique_scope: "all" } as Record<string, boolean | string>;
 
 const VendeurTeam = () => {
   const { user } = useAuth();
