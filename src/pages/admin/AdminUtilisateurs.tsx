@@ -180,7 +180,7 @@ const AdminUtilisateurs = () => {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
         <TabsList>
-          <TabsTrigger value="all">Tous</TabsTrigger>
+          <TabsTrigger value="all">Utilisateurs</TabsTrigger>
           <TabsTrigger value="vendeur">Vendeurs</TabsTrigger>
         </TabsList>
       </Tabs>
