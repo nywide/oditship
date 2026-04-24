@@ -155,7 +155,7 @@ const VendeurTeam = () => {
 
       {/* Create */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Nouvel agent</DialogTitle></DialogHeader>
           <form onSubmit={submitCreate} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -167,6 +167,24 @@ const VendeurTeam = () => {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Téléphone</Label><Input value={createForm.phone} onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })} /></div>
               <div><Label>CIN</Label><Input value={createForm.cin} onChange={(e) => setCreateForm({ ...createForm, cin: e.target.value })} /></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="create_active" checked={createForm.is_active} onCheckedChange={(v) => setCreateForm({ ...createForm, is_active: v })} />
+              <Label htmlFor="create_active">Compte actif</Label>
+            </div>
+            <div>
+              <Label>Pages autorisées</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {PAGES.map((p) => (
+                  <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={createForm.pages[p.key] !== false}
+                      onCheckedChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [p.key]: !!v } })}
+                    />
+                    {p.label}
+                  </label>
+                ))}
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Annuler</Button>
