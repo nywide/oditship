@@ -83,7 +83,7 @@ const VendeurTeam = () => {
       setCreateOpen(false);
       setCreateForm({
         username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-        pages: { colis: true, facturation: true, graphique: true },
+        pages: { ...defaultPages },
       });
       load();
     } catch (e: any) { toast.error(e.message || "Erreur"); }
@@ -96,7 +96,7 @@ const VendeurTeam = () => {
       username: a.username, email: "", password: "",
       full_name: a.full_name ?? "", phone: a.phone ?? "", cin: a.cin ?? "",
       is_active: a.is_active,
-      pages: { colis: true, facturation: true, graphique: true, ...(a.agent_pages ?? {}) },
+      pages: { ...defaultPages, ...(a.agent_pages ?? {}) },
     });
     setEditOpen(true);
     setEmailLoading(true);
