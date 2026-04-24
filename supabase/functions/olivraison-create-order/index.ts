@@ -243,11 +243,12 @@ Deno.serve(async (req) => {
     const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
 
     const partnerTrackingID = `ODiT-${order.id}`;
+    const noOpenValue = order.open_package === true ? 1 : 0;
     console.log(JSON.stringify({
       event: "olivraison-create-order-payload",
       order_id: order.id,
       open_package: order.open_package,
-      noOpen: order.open_package === true ? 1 : 0,
+      no_open: noOpenValue,
     }));
     const result = await olivraisonCreatePackage(token, {
       price: Number(order.order_value),
@@ -256,7 +257,7 @@ Deno.serve(async (req) => {
       comment: order.comment ?? "",
       orderId: String(order.id),
       partnerTrackingID,
-      noOpen: order.open_package === true ? 1 : 0,
+      no_open: noOpenValue,
       destination: {
         name: order.customer_name,
         phone: order.customer_phone,
