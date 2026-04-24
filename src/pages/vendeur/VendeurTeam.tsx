@@ -83,15 +83,25 @@ const VendeurTeam = () => {
     finally { setSubmitting(false); }
   };
 
-  const openEdit = (a: Agent) => {
+  const openEdit = async (a: Agent) => {
     setEditing(a);
     setEditForm({
-      email: "", password: "",
+      username: a.username, email: "", password: "",
       full_name: a.full_name ?? "", phone: a.phone ?? "", cin: a.cin ?? "",
       is_active: a.is_active,
       pages: { colis: true, facturation: true, graphique: true, team: false, ...(a.agent_pages ?? {}) },
     });
     setEditOpen(true);
+    setEmailLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-update-user", { body: { user_id: a.id, get_email: true } });
+      if (error) throw error;
+      setEditForm((f) => ({ ...f, email: (data as any)?.email ?? "" }));
+    } catch (e: any) {
+      toast.error(e.message || "Impossible de charger l'email");
+    } finally {
+      setEmailLoading(false);
+    }
   };
 
   const submitEdit = async (e: React.FormEvent) => {
@@ -101,6 +111,7 @@ const VendeurTeam = () => {
     try {
       const body: any = {
         user_id: editing.id,
+        username: editForm.username.toLowerCase().trim(),
         full_name: editForm.full_name, phone: editForm.phone, cin: editForm.cin,
         is_active: editForm.is_active,
         agent_pages: editForm.pages,
