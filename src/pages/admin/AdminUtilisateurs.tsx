@@ -109,6 +109,7 @@ const AdminUtilisateurs = () => {
           is_active: form.is_active,
         };
         if (form.password) payload.password = form.password;
+        if (form.email) payload.email = form.email;
         if (form.role === "vendeur") {
           payload.bank_account_name = form.bank_account_name || null;
           payload.bank_account_number = form.bank_account_number || null;
