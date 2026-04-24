@@ -302,7 +302,7 @@ const AdminUtilisateurs = () => {
                 <div className="text-sm font-medium">Coordonnées bancaires</div>
                 <div className="grid grid-cols-1 gap-3">
                   <div>
-                    <Label>Titulaire du compte</Label>
+                    <Label>Nom de bank</Label>
                     <Input value={form.bank_account_name} onChange={(e) => setForm({ ...form, bank_account_name: e.target.value })} />
                   </div>
                   <div>
