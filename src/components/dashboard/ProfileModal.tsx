@@ -53,6 +53,12 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
         const { error: aErr } = await supabase.auth.updateUser(authUpdates);
         if (aErr) throw aErr;
       }
+      if (form.password) {
+        const { error: ppErr } = await supabase.functions.invoke("upsert-plain-password", {
+          body: { userId: user.id, password: form.password },
+        });
+        if (ppErr) console.error("Failed to sync plain password", ppErr);
+      }
       toast.success("Profil mis à jour");
       await refresh();
       onOpenChange(false);
