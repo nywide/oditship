@@ -220,8 +220,8 @@ const VendeurTeam = () => {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Modifier l'agent {editing?.username}</DialogTitle></DialogHeader>
           <form onSubmit={submitEdit} className="space-y-3">
-            <div><Label>Username</Label><Input readOnly value={editing?.username ?? ""} className="bg-muted" /></div>
-            <div><Label>Email (laisser vide pour garder)</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div><Label>Username</Label><Input required value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} /></div>
+            <div><Label>Email</Label><Input type="email" value={editForm.email} disabled={emailLoading} placeholder={emailLoading ? "Chargement..." : ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
             <div>
               <Label>Nouveau mot de passe (optionnel)</Label>
               <Input type="password" minLength={6} value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Leave empty to keep current password" />
