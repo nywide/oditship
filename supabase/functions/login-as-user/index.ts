@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email: targetUser.user.email,
-    options: { redirectTo: body.redirect_to || `${SUPABASE_URL.replace(".supabase.co", ".lovable.app")}/dashboard` },
+    options: { redirectTo: body.redirect_to || `${new URL(req.url).origin}/dashboard` },
   });
   if (linkErr) return json(400, { error: linkErr.message });
 
