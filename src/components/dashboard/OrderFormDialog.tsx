@@ -142,10 +142,10 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" sideOffset={4}>
                 <Command>
                   <CommandInput placeholder="Rechercher une ville..." />
-                  <CommandList>
+                  <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                     <CommandEmpty>Aucune ville trouvée</CommandEmpty>
                     <CommandGroup>
                       {filteredCities.map((c) => (
