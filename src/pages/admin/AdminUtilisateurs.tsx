@@ -269,12 +269,15 @@ const AdminUtilisateurs = () => {
                 <Input required disabled={!!editing} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
               </div>
               <div>
-                <Label>Email {!editing && "*"}</Label>
-                <Input required={!editing} disabled={!!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "(non modifiable)" : ""} />
+                <Label>Email *</Label>
+                <Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "(modifier l'email)" : ""} />
               </div>
             </div>
             <div>
               <Label>Mot de passe {!editing && "*"}</Label>
+              {editing && (
+                <p className="text-xs text-muted-foreground mb-1">Le mot de passe est masqué pour des raisons de sécurité</p>
+              )}
               <Input
                 required={!editing}
                 type="password"
