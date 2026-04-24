@@ -44,7 +44,7 @@ const Login = () => {
         return;
       }
 
-      const { error: signErr } = await supabase.auth.signInWithPassword({
+      const { data: signData, error: signErr } = await supabase.auth.signInWithPassword({
         email: String(emailRow),
         password,
       });
@@ -53,6 +53,23 @@ const Login = () => {
         toast.error("Identifiants invalides", { description: signErr.message });
         setLoading(false);
         return;
+      }
+
+      // Check if account is active
+      if (signData.user) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("is_active")
+          .eq("id", signData.user.id)
+          .maybeSingle();
+        if (prof && prof.is_active === false) {
+          await supabase.auth.signOut();
+          toast.error("Compte désactivé", {
+            description: "Votre compte a été désactivé. Veuillez contacter le support.",
+          });
+          setLoading(false);
+          return;
+        }
       }
 
       const from = (location.state as any)?.from?.pathname || "/dashboard";
