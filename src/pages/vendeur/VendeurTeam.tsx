@@ -201,7 +201,10 @@ const VendeurTeam = () => {
           <form onSubmit={submitEdit} className="space-y-3">
             <div><Label>Username</Label><Input readOnly value={editing?.username ?? ""} className="bg-muted" /></div>
             <div><Label>Email (laisser vide pour garder)</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
-            <div><Label>Nouveau mot de passe (optionnel)</Label><Input type="password" minLength={6} value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} /></div>
+            <div>
+              <Label>Nouveau mot de passe (optionnel)</Label>
+              <Input type="password" minLength={6} value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Leave empty to keep current password" />
+            </div>
             <div><Label>Nom complet</Label><Input value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Téléphone</Label><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
