@@ -40,6 +40,7 @@ const emptyForm = {
   full_name: "", phone: "", cin: "",
   role: "vendeur", is_active: true,
   bank_account_name: "", bank_account_number: "",
+  current_password: "",
 };
 
 const AdminUtilisateurs = () => {
