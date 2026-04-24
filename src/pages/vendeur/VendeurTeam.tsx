@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Pencil } from "lucide-react";
@@ -36,12 +37,13 @@ const VendeurTeam = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
     pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
   });
   const [editForm, setEditForm] = useState({
-    email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
+    username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
     pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
   });
 
