@@ -195,7 +195,9 @@ const AdminUtilisateurs = () => {
             <SelectTrigger className="w-48"><SelectValue placeholder="Rôle" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous les rôles</SelectItem>
-              {ROLES.map((r) => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
+              {ROLES.filter((r) => r !== "vendeur" && r !== "agent").map((r) => (
+                <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
