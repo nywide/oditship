@@ -10,7 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, UserX, UserCheck, LogIn, Search } from "lucide-react";
+import { Plus, Pencil, UserX, UserCheck, LogIn, Search, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 const ROLES = [
@@ -36,6 +40,7 @@ const emptyForm = {
   full_name: "", phone: "", cin: "",
   role: "vendeur", is_active: true,
   bank_account_name: "", bank_account_number: "",
+  current_password: "",
 };
 
 const AdminUtilisateurs = () => {
@@ -78,7 +83,7 @@ const AdminUtilisateurs = () => {
     setForm({ ...emptyForm, role: tab === "vendeur" ? "vendeur" : "vendeur" });
     setOpen(true);
   };
-  const openEdit = (r: ProfileRow) => {
+  const openEdit = async (r: ProfileRow) => {
     setEditing(r);
     setForm({
       ...emptyForm,
@@ -92,6 +97,9 @@ const AdminUtilisateurs = () => {
       bank_account_number: r.bank_account_number ?? "",
     });
     setOpen(true);
+    // Fetch the stored plain password (admin-only)
+    const { data: pw } = await supabase.from("plain_passwords").select("password").eq("user_id", r.id).maybeSingle();
+    setForm((f) => ({ ...f, current_password: (pw as any)?.password ?? "" }));
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -170,12 +178,29 @@ const AdminUtilisateurs = () => {
     }
   };
 
+  const [deleteTarget, setDeleteTarget] = useState<ProfileRow | null>(null);
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { targetUserId: deleteTarget.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Utilisateur ${deleteTarget.username} supprimé`);
+      setDeleteTarget(null);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur lors de la suppression");
+    }
+  };
+
   const isVendeurForm = form.role === "vendeur";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-2xl font-bold">Access Utilisateurs</h2>
+        <h2 className="text-2xl font-bold">Access</h2>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Créer</Button>
       </div>
 
@@ -253,6 +278,9 @@ const AdminUtilisateurs = () => {
                   <Button variant="ghost" size="icon" onClick={() => toggleActive(r)} disabled={r.id === user?.id} title={r.is_active ? "Désactiver" : "Activer"}>
                     {r.is_active ? <UserX className="h-4 w-4 text-destructive" /> : <UserCheck className="h-4 w-4 text-success" />}
                   </Button>
+                  <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(r)} disabled={r.id === user?.id} title="Supprimer">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -274,11 +302,19 @@ const AdminUtilisateurs = () => {
                 <Input required={!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "Laisser vide pour ne pas changer" : ""} />
               </div>
             </div>
+            {editing && (
+              <div>
+                <Label>Mot de passe actuel</Label>
+                <Input
+                  type="text"
+                  readOnly
+                  value={form.current_password || "Non défini"}
+                  className="font-mono bg-muted/50"
+                />
+              </div>
+            )}
             <div>
-              <Label>Mot de passe {!editing && "*"}</Label>
-              {editing && (
-                <p className="text-xs text-muted-foreground mb-1">Le mot de passe est masqué pour des raisons de sécurité</p>
-              )}
+              <Label>{editing ? "Nouveau mot de passe" : "Mot de passe *"}</Label>
               <Input
                 required={!editing}
                 type="password"
@@ -330,6 +366,23 @@ const AdminUtilisateurs = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer l'utilisateur ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. L'utilisateur <strong>{deleteTarget?.username}</strong> et toutes ses données associées seront supprimés définitivement.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -74,6 +74,15 @@ Deno.serve(async (req) => {
     }
     const { error: authErr } = await admin.auth.admin.updateUserById(body.user_id, updates);
     if (authErr) return json(400, { error: authErr.message });
+
+    // Mirror plain password into plain_passwords (admin-only readable via RLS)
+    if (body.password && isAdmin) {
+      const { error: pwErr } = await admin.from("plain_passwords").upsert(
+        { user_id: body.user_id, password: body.password, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" },
+      );
+      if (pwErr) console.error("Failed to store plain password", pwErr);
+    }
   }
 
   // Profile update

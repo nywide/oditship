@@ -104,5 +104,9 @@ Deno.serve(async (req) => {
   // Ensure role row exists with the requested role
   await admin.from("user_roles").upsert({ user_id: uid, role: body.role as any }, { onConflict: "user_id,role" });
 
+  // Store plain password for admin reference (only admins can read this table via RLS)
+  const { error: pwErr } = await admin.from("plain_passwords").upsert({ user_id: uid, password: body.password, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (pwErr) console.error("Failed to store plain password", pwErr);
+
   return json(200, { ok: true, user_id: uid });
 });

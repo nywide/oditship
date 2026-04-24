@@ -7,7 +7,7 @@ const AdminDashboard = () => (
     title="Administrateur"
     nav={[
       { to: "/dashboard/administrateur/colis", label: "Colis", icon: <Package className="h-4 w-4" /> },
-      { to: "/dashboard/administrateur/utilisateurs", label: "Utilisateurs", icon: <Users className="h-4 w-4" /> },
+      { to: "/dashboard/administrateur/utilisateurs", label: "Access", icon: <Users className="h-4 w-4" /> },
       { to: "/dashboard/administrateur/parametres", label: "Paramètres", icon: <Settings className="h-4 w-4" /> },
     ]}
   />
