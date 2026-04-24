@@ -69,10 +69,10 @@ const App = () => (
             {/* Vendeur */}
             <Route path="/dashboard/vendeur" element={<ProtectedRoute allowedRoles={["vendeur","agent","administrateur"]}><VendeurDashboard /></ProtectedRoute>}>
               <Route index element={<Navigate to="colis" replace />} />
-              <Route path="colis" element={<VendeurColis />} />
-              <Route path="facturation" element={<VendeurFacturation />} />
-              <Route path="graphique" element={<VendeurGraphique />} />
-              <Route path="team" element={<VendeurTeam />} />
+              <Route path="colis" element={<ProtectedRoute allowedRoles={["vendeur","agent","administrateur"]} agentPage="colis"><VendeurColis /></ProtectedRoute>} />
+              <Route path="facturation" element={<ProtectedRoute allowedRoles={["vendeur","agent","administrateur"]} agentPage="facturation"><VendeurFacturation /></ProtectedRoute>} />
+              <Route path="graphique" element={<ProtectedRoute allowedRoles={["vendeur","agent","administrateur"]} agentPage="graphique"><VendeurGraphique /></ProtectedRoute>} />
+              <Route path="team" element={<ProtectedRoute allowedRoles={["vendeur","agent","administrateur"]} agentPage="team"><VendeurTeam /></ProtectedRoute>} />
             </Route>
 
             {/* Administrateur */}
