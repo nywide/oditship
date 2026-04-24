@@ -11,7 +11,8 @@ import { toast } from "sonner";
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; }
 
 export const ProfileModal = ({ open, onOpenChange }: Props) => {
-  const { user, profile, refresh } = useAuth();
+  const { user, profile, role, refresh } = useAuth();
+  const isVendeur = role === "vendeur";
   const [form, setForm] = useState({ username: "", full_name: "", phone: "", email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
 
@@ -92,20 +93,23 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
             <Input type="password" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Laisser vide pour ne pas changer" />
           </div>
 
-          <Separator />
-
-          <div className="space-y-2">
-            <div className="text-sm font-semibold text-muted-foreground">Informations bancaires (lecture seule)</div>
-            <div>
-              <Label>Titulaire du compte</Label>
-              <Input readOnly value={profile?.bank_account_name || "—"} className="bg-muted" />
-            </div>
-            <div>
-              <Label>Numéro de compte</Label>
-              <Input readOnly value={profile?.bank_account_number || "—"} className="bg-muted font-mono" />
-            </div>
-            <p className="text-xs text-muted-foreground">Ces champs sont gérés par l'administrateur.</p>
-          </div>
+          {isVendeur && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-muted-foreground">Informations bancaires (lecture seule)</div>
+                <div>
+                  <Label>Nom de bank</Label>
+                  <Input readOnly value={profile?.bank_account_name || "—"} className="bg-muted" />
+                </div>
+                <div>
+                  <Label>Numéro de compte</Label>
+                  <Input readOnly value={profile?.bank_account_number || "—"} className="bg-muted font-mono" />
+                </div>
+                <p className="text-xs text-muted-foreground">Ces champs sont gérés par l'administrateur.</p>
+              </div>
+            </>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>

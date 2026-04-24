@@ -109,6 +109,7 @@ const AdminUtilisateurs = () => {
           is_active: form.is_active,
         };
         if (form.password) payload.password = form.password;
+        if (form.email) payload.email = form.email;
         if (form.role === "vendeur") {
           payload.bank_account_name = form.bank_account_name || null;
           payload.bank_account_number = form.bank_account_number || null;
@@ -174,7 +175,7 @@ const AdminUtilisateurs = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-2xl font-bold">Utilisateurs</h2>
+        <h2 className="text-2xl font-bold">Access Utilisateurs</h2>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Créer</Button>
       </div>
 
@@ -270,11 +271,14 @@ const AdminUtilisateurs = () => {
               </div>
               <div>
                 <Label>Email {!editing && "*"}</Label>
-                <Input required={!editing} disabled={!!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "(non modifiable)" : ""} />
+                <Input required={!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "Laisser vide pour ne pas changer" : ""} />
               </div>
             </div>
             <div>
               <Label>Mot de passe {!editing && "*"}</Label>
+              {editing && (
+                <p className="text-xs text-muted-foreground mb-1">Le mot de passe est masqué pour des raisons de sécurité</p>
+              )}
               <Input
                 required={!editing}
                 type="password"

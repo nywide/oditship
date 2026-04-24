@@ -36,7 +36,10 @@ const VendeurTeam = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [createForm, setCreateForm] = useState({ username: "", email: "", password: "", full_name: "", phone: "", cin: "" });
+  const [createForm, setCreateForm] = useState({
+    username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
+    pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
+  });
   const [editForm, setEditForm] = useState({
     email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
     pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
@@ -61,22 +64,24 @@ const VendeurTeam = () => {
           email: createForm.email, password: createForm.password,
           username: createForm.username.toLowerCase().trim(),
           full_name: createForm.full_name, phone: createForm.phone, cin: createForm.cin,
-          role: "agent", agent_of: user.id, is_active: true,
+          role: "agent", agent_of: user.id, is_active: createForm.is_active,
+          agent_pages: createForm.pages,
         },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success("Agent créé");
       setCreateOpen(false);
-      setCreateForm({ username: "", email: "", password: "", full_name: "", phone: "", cin: "" });
+      setCreateForm({
+        username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
+        pages: { colis: true, facturation: true, graphique: true, team: false },
+      });
       load();
     } catch (e: any) { toast.error(e.message || "Erreur"); }
     finally { setSubmitting(false); }
   };
 
-  const openEdit = async (a: Agent) => {
-    // Fetch email
-    const { data } = await supabase.functions.invoke("admin-update-user", { body: { user_id: a.id } }).catch(() => ({ data: null }));
+  const openEdit = (a: Agent) => {
     setEditing(a);
     setEditForm({
       email: "", password: "",
@@ -150,7 +155,7 @@ const VendeurTeam = () => {
 
       {/* Create */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Nouvel agent</DialogTitle></DialogHeader>
           <form onSubmit={submitCreate} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -162,6 +167,24 @@ const VendeurTeam = () => {
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Téléphone</Label><Input value={createForm.phone} onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })} /></div>
               <div><Label>CIN</Label><Input value={createForm.cin} onChange={(e) => setCreateForm({ ...createForm, cin: e.target.value })} /></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="create_active" checked={createForm.is_active} onCheckedChange={(v) => setCreateForm({ ...createForm, is_active: v })} />
+              <Label htmlFor="create_active">Compte actif</Label>
+            </div>
+            <div>
+              <Label>Pages autorisées</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {PAGES.map((p) => (
+                  <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={createForm.pages[p.key] !== false}
+                      onCheckedChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [p.key]: !!v } })}
+                    />
+                    {p.label}
+                  </label>
+                ))}
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Annuler</Button>
@@ -178,7 +201,10 @@ const VendeurTeam = () => {
           <form onSubmit={submitEdit} className="space-y-3">
             <div><Label>Username</Label><Input readOnly value={editing?.username ?? ""} className="bg-muted" /></div>
             <div><Label>Email (laisser vide pour garder)</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
-            <div><Label>Nouveau mot de passe (optionnel)</Label><Input type="password" minLength={6} value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} /></div>
+            <div>
+              <Label>Nouveau mot de passe (optionnel)</Label>
+              <Input type="password" minLength={6} value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Leave empty to keep current password" />
+            </div>
             <div><Label>Nom complet</Label><Input value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Téléphone</Label><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>

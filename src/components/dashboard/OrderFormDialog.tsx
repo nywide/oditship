@@ -73,6 +73,11 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
     e.preventDefault();
     if (submitting) return;
     if (!values.customer_city) return toast.error("Choisissez une ville");
+    if (values.customer_name.trim().length < 2) return toast.error("Le nom doit contenir au moins 2 caractères");
+    if (values.product_name.trim().length < 2) return toast.error("Le produit doit contenir au moins 2 caractères");
+    if (values.customer_address.trim().length < 2) return toast.error("L'adresse doit contenir au moins 2 caractères");
+    const phoneDigits = values.customer_phone.replace(/\D/g, "");
+    if (phoneDigits.length !== 10) return toast.error("Le téléphone doit contenir exactement 10 chiffres");
     const priceNum = typeof values.order_value === "number" ? values.order_value : parseFloat(String(values.order_value));
     if (!priceNum || priceNum <= 0) return toast.error("Le prix doit être supérieur à 0");
     setSubmitting(true);
@@ -165,21 +170,28 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Nom client *</Label>
-              <Input required value={values.customer_name} onChange={(e) => setValues({ ...values, customer_name: e.target.value })} />
+              <Input required minLength={2} value={values.customer_name} onChange={(e) => setValues({ ...values, customer_name: e.target.value })} />
             </div>
             <div>
-              <Label>Téléphone *</Label>
-              <Input required value={values.customer_phone} onChange={(e) => setValues({ ...values, customer_phone: e.target.value })} />
+              <Label>Téléphone * (10 chiffres)</Label>
+              <Input
+                required
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                maxLength={10}
+                value={values.customer_phone}
+                onChange={(e) => setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+              />
             </div>
           </div>
           <div>
             <Label>Adresse *</Label>
-            <Input required value={values.customer_address} onChange={(e) => setValues({ ...values, customer_address: e.target.value })} />
+            <Input required minLength={2} value={values.customer_address} onChange={(e) => setValues({ ...values, customer_address: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Produit *</Label>
-              <Input required value={values.product_name} onChange={(e) => setValues({ ...values, product_name: e.target.value })} />
+              <Input required minLength={2} value={values.product_name} onChange={(e) => setValues({ ...values, product_name: e.target.value })} />
             </div>
             <div>
               <Label>Prix (MAD) *</Label>
