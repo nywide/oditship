@@ -12,12 +12,13 @@ interface Props { open: boolean; onOpenChange: (v: boolean) => void; }
 
 export const ProfileModal = ({ open, onOpenChange }: Props) => {
   const { user, profile, refresh } = useAuth();
-  const [form, setForm] = useState({ full_name: "", phone: "", email: "", password: "" });
+  const [form, setForm] = useState({ username: "", full_name: "", phone: "", email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setForm({
+        username: profile?.username ?? "",
         full_name: profile?.full_name ?? "",
         phone: profile?.phone ?? "",
         email: user?.email ?? "",
@@ -29,12 +30,19 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || !user) return;
+    const newUsername = form.username.trim().toLowerCase();
+    if (!newUsername) {
+      toast.error("Le nom d'utilisateur est requis");
+      return;
+    }
     setSubmitting(true);
     try {
-      const { error: pErr } = await supabase.from("profiles").update({
+      const updates: Record<string, unknown> = {
         full_name: form.full_name || null,
         phone: form.phone || null,
-      }).eq("id", user.id);
+      };
+      if (newUsername !== profile?.username) updates.username = newUsername;
+      const { error: pErr } = await supabase.from("profiles").update(updates).eq("id", user.id);
       if (pErr) throw pErr;
 
       const authUpdates: Record<string, string> = {};
