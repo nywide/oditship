@@ -383,6 +383,24 @@ export type Database = {
           },
         ]
       }
+      plain_passwords: {
+        Row: {
+          password: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          password: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          password?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pricing_rules: {
         Row: {
           annulation_fee: number
