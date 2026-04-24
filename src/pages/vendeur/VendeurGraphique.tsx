@@ -7,14 +7,18 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recha
 import { TrendingUp, ShoppingBag } from "lucide-react";
 
 const VendeurGraphique = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [orders, setOrders] = useState<{ status: string; order_value: number }[]>([]);
+  const isAgent = profile?.agent_of != null;
+  const agentPages = (profile?.agent_pages ?? {}) as Record<string, boolean | string>;
+  const graphiqueScope = agentPages.graphique_scope === "own" ? "own" : "all";
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("orders").select("status, order_value")
-      .then(({ data }) => setOrders((data ?? []) as any));
-  }, [user]);
+    let query = supabase.from("orders").select("status, order_value");
+    if (isAgent && graphiqueScope === "own") query = query.eq("agent_id", user.id);
+    query.then(({ data }) => setOrders((data ?? []) as any));
+  }, [user, isAgent, graphiqueScope]);
 
   const totalValue = useMemo(() => orders.reduce((a, b) => a + Number(b.order_value || 0), 0), [orders]);
   const totalCount = orders.length;
