@@ -117,6 +117,7 @@ const AdminUtilisateurs = () => {
       if (editing) {
         const payload: Record<string, unknown> = {
           user_id: editing.id,
+          username: form.username.toLowerCase().trim(),
           full_name: form.full_name || null,
           phone: form.phone || null,
           cin: form.cin || null,
@@ -310,7 +311,7 @@ const AdminUtilisateurs = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Username *</Label>
-                <Input required disabled={!!editing} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+                <Input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
               </div>
               <div>
                 <Label>Email {!editing && "*"}</Label>
