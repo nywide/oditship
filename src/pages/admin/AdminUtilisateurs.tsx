@@ -60,6 +60,8 @@ const AdminUtilisateurs = () => {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       if (tab === "vendeur" && r.role !== "vendeur") return false;
+      // "Utilisateurs" tab excludes vendeurs (and agents which belong to vendeurs)
+      if (tab === "all" && (r.role === "vendeur" || r.role === "agent")) return false;
       if (tab === "all" && roleFilter !== "all" && r.role !== roleFilter) return false;
       if (search.trim()) {
         const q = search.trim().toLowerCase();
