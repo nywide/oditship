@@ -38,6 +38,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Listener FIRST
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      // If an impersonation just happened in another tab, ignore this event
+      // so the admin tab's context (and therefore sidebar/URL) is not altered.
+      try {
+        if (localStorage.getItem("odit_ignore_next_auth_event") === "true") {
+          localStorage.removeItem("odit_ignore_next_auth_event");
+          return;
+        }
+      } catch {
+        // ignore storage errors
+      }
+
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) {
