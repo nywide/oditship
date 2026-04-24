@@ -130,7 +130,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         <form onSubmit={submit} className="space-y-3">
           <div>
             <Label>Ville *</Label>
-            <Popover open={cityOpen} onOpenChange={setCityOpen}>
+            <Popover open={cityOpen} onOpenChange={setCityOpen} modal>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
@@ -145,10 +145,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" sideOffset={4}>
                 <Command>
                   <CommandInput placeholder="Rechercher une ville..." />
-                  <CommandList
-                    className="max-h-[260px] overflow-y-auto overscroll-contain"
-                    onWheel={(event) => event.stopPropagation()}
-                  >
+                  <CommandList className="max-h-[260px] overflow-y-auto overscroll-contain">
                     <CommandEmpty>Aucune ville trouvée</CommandEmpty>
                     <CommandGroup>
                       {filteredCities.map((c) => (
