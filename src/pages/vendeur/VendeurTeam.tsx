@@ -44,13 +44,14 @@ const VendeurTeam = () => {
   const [editing, setEditing] = useState<Agent | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
   const [createForm, setCreateForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-    pages: { colis: true, facturation: true, graphique: true } as Record<string, boolean>,
+    pages: { ...defaultPages },
   });
   const [editForm, setEditForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-    pages: { colis: true, facturation: true, graphique: true } as Record<string, boolean>,
+    pages: { ...defaultPages },
   });
 
   const load = () => {
