@@ -4,12 +4,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut, Menu, X, UserCircle2 } from "lucide-react";
+import { ProfileModal } from "@/components/dashboard/ProfileModal";
 
 export interface NavItem {
   to: string;
   label: string;
   icon: ReactNode;
+  /** When set, this item is only shown if profile.agent_pages?.[permKey] !== false (for agents) */
+  permKey?: string;
 }
 
 interface Props {
@@ -21,11 +24,20 @@ export const DashboardLayout = ({ title, nav }: Props) => {
   const { profile, role, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/login");
   };
+
+  const isAgent = role === "agent" || profile?.agent_of != null;
+  const agentPages = (profile?.agent_pages ?? null) as Record<string, boolean> | null;
+
+  const visibleNav = nav.filter((item) => {
+    if (!isAgent || !item.permKey || !agentPages) return true;
+    return agentPages[item.permKey] !== false;
+  });
 
   return (
     <div className="min-h-screen bg-secondary/30 flex">
@@ -44,7 +56,7 @@ export const DashboardLayout = ({ title, nav }: Props) => {
         </div>
         <div className="px-5 py-3 text-xs uppercase tracking-wider text-sidebar-foreground/60">{title}</div>
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
-          {nav.map((item) => (
+          {visibleNav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -83,12 +95,19 @@ export const DashboardLayout = ({ title, nav }: Props) => {
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="font-semibold text-lg truncate">{title}</h1>
-          <div className="text-sm text-muted-foreground hidden sm:block">{profile?.username}</div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground hidden sm:block">{profile?.username}</span>
+            <Button variant="ghost" size="icon" onClick={() => setProfileOpen(true)} aria-label="Mon profil">
+              <UserCircle2 className="h-5 w-5" />
+            </Button>
+          </div>
         </header>
         <main className="flex-1 p-4 lg:p-6 overflow-x-auto">
           <Outlet />
         </main>
       </div>
+
+      <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
     </div>
   );
 };
