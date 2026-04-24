@@ -163,7 +163,7 @@ const VendeurTeam = () => {
     } catch (e: any) { toast.error(e.message || "Erreur lors de la suppression"); }
   };
 
-  const pageBadges = (pages: Record<string, boolean> | null) => {
+  const pageBadges = (pages: Record<string, boolean | string> | null) => {
     const p = { ...defaultPages, ...(pages ?? {}) } as Record<string, boolean | string>;
     return PAGES.filter((page) => p[page.key] === true).map((page) => {
       if (page.key === "colis") return `${page.label}: ${p.colis_scope === "own" ? "Agent" : "Tous"}`;
