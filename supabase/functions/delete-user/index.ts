@@ -1,4 +1,6 @@
-// Admin-only: permanently delete an auth user (and cascading rows).
+// Admin/vendor: permanently delete an auth user (and cascading rows).
+// - administrateur can delete any other user
+// - vendeur can delete only their own agents (profiles.agent_of = caller.id)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -35,9 +37,14 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false, autoRefreshToken: false } });
 
-  const { data: callerRoles } = await admin.from("user_roles").select("role").eq("user_id", callerId);
+  const [{ data: callerRoles }, { data: targetProfile }] = await Promise.all([
+    admin.from("user_roles").select("role").eq("user_id", callerId),
+    admin.from("profiles").select("role, agent_of").eq("id", body.targetUserId).maybeSingle(),
+  ]);
   const isAdmin = (callerRoles ?? []).some((r) => r.role === "administrateur");
-  if (!isAdmin) return json(403, { error: "Forbidden" });
+  const isVendeur = (callerRoles ?? []).some((r) => r.role === "vendeur");
+  const canDeleteOwnAgent = isVendeur && targetProfile?.role === "agent" && targetProfile?.agent_of === callerId;
+  if (!isAdmin && !canDeleteOwnAgent) return json(403, { error: "Forbidden" });
 
   const { error: delErr } = await admin.auth.admin.deleteUser(body.targetUserId);
   if (delErr) return json(400, { error: delErr.message });
