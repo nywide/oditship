@@ -26,16 +26,14 @@ export default function Impersonate() {
     // storage key to sessionStorage on next load (keeping admin tab unaffected).
     sessionStorage.setItem("sb-impersonating", "1");
 
-    // Tell any other open tab (the admin tab) to ignore the next auth-state
-    // change event triggered by setSession below. Auto-cleared after 2s in case
-    // no event arrives, so legitimate future events are not blocked.
+    // Tell any other open tab (the admin tab) to ignore auth-state change
+    // events for a short window while the impersonated session initializes.
+    // Auto-cleared after 3s so legitimate future events are not blocked.
     try {
-      localStorage.setItem("odit_ignore_next_auth_event", "true");
+      localStorage.setItem("odit_impersonation_active", "true");
       setTimeout(() => {
-        if (localStorage.getItem("odit_ignore_next_auth_event") === "true") {
-          localStorage.removeItem("odit_ignore_next_auth_event");
-        }
-      }, 2000);
+        localStorage.removeItem("odit_impersonation_active");
+      }, 3000);
     } catch {
       // ignore storage errors
     }
