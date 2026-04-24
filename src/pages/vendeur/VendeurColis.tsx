@@ -59,14 +59,18 @@ const VendeurColis = () => {
   const [pickingUp, setPickingUp] = useState(false);
 
   const isAgent = profile?.agent_of != null;
+  const agentPages = (profile?.agent_pages ?? {}) as Record<string, boolean | string>;
+  const colisScope = agentPages.colis_scope === "own" ? "own" : "all";
 
   const load = async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("orders")
       .select("*")
       .order("created_at", { ascending: false });
+    if (isAgent && colisScope === "own") query = query.eq("agent_id", user.id);
+    const { data, error } = await query;
     if (error) toast.error(error.message);
     setOrders((data ?? []) as Order[]);
     setLoading(false);
@@ -78,7 +82,7 @@ const VendeurColis = () => {
       supabase.from("profiles").select("id, full_name, username").eq("agent_of", user.id)
         .then(({ data }) => setAgents(data ?? []));
     }
-  }, [user]);
+  }, [user, isAgent, colisScope]);
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
