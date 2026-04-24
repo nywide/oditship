@@ -178,12 +178,29 @@ const AdminUtilisateurs = () => {
     }
   };
 
+  const [deleteTarget, setDeleteTarget] = useState<ProfileRow | null>(null);
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { targetUserId: deleteTarget.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Utilisateur ${deleteTarget.username} supprimé`);
+      setDeleteTarget(null);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erreur lors de la suppression");
+    }
+  };
+
   const isVendeurForm = form.role === "vendeur";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-2xl font-bold">Access Utilisateurs</h2>
+        <h2 className="text-2xl font-bold">Access</h2>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Créer</Button>
       </div>
 
