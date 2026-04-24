@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface OrderFormValues {
   id?: number;
@@ -16,7 +19,7 @@ export interface OrderFormValues {
   customer_address: string;
   customer_city: string;
   product_name: string;
-  order_value: number;
+  order_value: number | "";
   open_package: boolean;
   comment: string;
 }
@@ -26,6 +29,7 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   initial?: Partial<OrderFormValues> | null;
   vendeurId: string;
+  agentId?: string | null;
   onSaved: () => void;
 }
 
@@ -35,29 +39,42 @@ const empty: OrderFormValues = {
   customer_address: "",
   customer_city: "",
   product_name: "",
-  order_value: 0,
+  order_value: "",
   open_package: false,
   comment: "",
 };
 
-export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, onSaved }: Props) => {
+export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentId, onSaved }: Props) => {
   const [values, setValues] = useState<OrderFormValues>(empty);
   const [cities, setCities] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
   const editing = Boolean(initial?.id);
 
   useEffect(() => {
     if (open) {
-      setValues({ ...empty, ...(initial ?? {}) } as OrderFormValues);
+      const init = { ...empty, ...(initial ?? {}) } as OrderFormValues;
+      // If editing, keep numeric value; otherwise empty string for placeholder UX
+      if (initial?.id && typeof init.order_value === "number") {
+        // keep
+      } else if (!initial?.id) {
+        init.order_value = "";
+      }
+      setValues(init);
       supabase.from("cities").select("name").order("name").then(({ data }) => {
         setCities((data ?? []).map((c) => c.name));
       });
     }
   }, [open, initial]);
 
+  const filteredCities = useMemo(() => cities, [cities]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
+    if (!values.customer_city) return toast.error("Choisissez une ville");
+    const priceNum = typeof values.order_value === "number" ? values.order_value : parseFloat(String(values.order_value));
+    if (!priceNum || priceNum <= 0) return toast.error("Le prix doit être supérieur à 0");
     setSubmitting(true);
     try {
       if (editing && initial?.id) {
@@ -67,7 +84,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, onSave
           customer_address: values.customer_address,
           customer_city: values.customer_city,
           product_name: values.product_name,
-          order_value: values.order_value,
+          order_value: priceNum,
           open_package: values.open_package,
           comment: values.comment || null,
         }).eq("id", initial.id);
@@ -76,12 +93,13 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, onSave
       } else {
         const { error } = await supabase.from("orders").insert({
           vendeur_id: vendeurId,
+          agent_id: agentId ?? null,
           customer_name: values.customer_name,
           customer_phone: values.customer_phone,
           customer_address: values.customer_address,
           customer_city: values.customer_city,
           product_name: values.product_name,
-          order_value: values.order_value,
+          order_value: priceNum,
           open_package: values.open_package,
           comment: values.comment || null,
           status: "Crée",
@@ -107,12 +125,42 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, onSave
         <form onSubmit={submit} className="space-y-3">
           <div>
             <Label>Ville *</Label>
-            <Select value={values.customer_city} onValueChange={(v) => setValues({ ...values, customer_city: v })}>
-              <SelectTrigger><SelectValue placeholder="Choisir une ville" /></SelectTrigger>
-              <SelectContent className="max-h-72">
-                {cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Popover open={cityOpen} onOpenChange={setCityOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  className={cn("w-full justify-between font-normal", !values.customer_city && "text-muted-foreground")}
+                >
+                  {values.customer_city || "Choisir une ville..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Rechercher une ville..." />
+                  <CommandList>
+                    <CommandEmpty>Aucune ville trouvée</CommandEmpty>
+                    <CommandGroup>
+                      {filteredCities.map((c) => (
+                        <CommandItem
+                          key={c}
+                          value={c}
+                          onSelect={() => {
+                            setValues({ ...values, customer_city: c });
+                            setCityOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", values.customer_city === c ? "opacity-100" : "opacity-0")} />
+                          {c}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -135,13 +183,25 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, onSave
             </div>
             <div>
               <Label>Prix (MAD) *</Label>
-              <Input required type="number" min={0} step="0.01" value={values.order_value}
-                onChange={(e) => setValues({ ...values, order_value: parseFloat(e.target.value) || 0 })} />
+              <Input
+                required
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="0.00"
+                value={values.order_value === "" ? "" : values.order_value}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setValues({ ...values, order_value: v === "" ? "" : parseFloat(v) });
+                }}
+              />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Checkbox id="open_package" checked={values.open_package} onCheckedChange={(v) => setValues({ ...values, open_package: !!v })} />
-            <Label htmlFor="open_package" className="cursor-pointer">Autoriser l'ouverture du colis</Label>
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+            <Checkbox id="open_package" checked={values.open_package} onCheckedChange={(v) => setValues({ ...values, open_package: !!v })} className="mt-0.5" />
+            <Label htmlFor="open_package" className="cursor-pointer text-destructive font-medium leading-tight">
+              Ne pas autorisé à ouvrir le colis
+            </Label>
           </div>
           <div>
             <Label>Commentaire</Label>

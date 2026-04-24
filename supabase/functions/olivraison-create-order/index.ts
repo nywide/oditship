@@ -250,6 +250,7 @@ Deno.serve(async (req) => {
       comment: order.comment ?? "",
       orderId: String(order.id),
       partnerTrackingID,
+      noOpen: order.open_package === true,
       destination: {
         name: order.customer_name,
         phone: order.customer_phone,

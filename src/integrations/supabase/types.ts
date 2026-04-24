@@ -435,8 +435,11 @@ export type Database = {
         Row: {
           affiliation_code: string | null
           agent_of: string | null
+          agent_pages: Json | null
           api_enabled: boolean
           api_token: string | null
+          bank_account_name: string | null
+          bank_account_number: string | null
           cin: string | null
           company_name: string | null
           created_at: string
@@ -451,8 +454,11 @@ export type Database = {
         Insert: {
           affiliation_code?: string | null
           agent_of?: string | null
+          agent_pages?: Json | null
           api_enabled?: boolean
           api_token?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
           cin?: string | null
           company_name?: string | null
           created_at?: string
@@ -467,8 +473,11 @@ export type Database = {
         Update: {
           affiliation_code?: string | null
           agent_of?: string | null
+          agent_pages?: Json | null
           api_enabled?: boolean
           api_token?: string | null
+          bank_account_name?: string | null
+          bank_account_number?: string | null
           cin?: string | null
           company_name?: string | null
           created_at?: string

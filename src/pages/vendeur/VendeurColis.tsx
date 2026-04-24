@@ -4,13 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { OrderFormDialog, OrderFormValues } from "@/components/dashboard/OrderFormDialog";
-import { printSticker } from "@/lib/printSticker";
-import { Pencil, Trash2, CheckCircle2, Send, Printer, RefreshCw, Plus, Search } from "lucide-react";
+import { printSticker, printStickers } from "@/lib/printSticker";
+import { Pencil, Trash2, Printer, Plus, Search, CheckCircle2, PackageCheck, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -38,12 +39,11 @@ interface Order {
 }
 
 const VendeurColis = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [cityFilter, setCityFilter] = useState<string>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -51,9 +51,14 @@ const VendeurColis = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Partial<OrderFormValues> | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [sendingId, setSendingId] = useState<number | null>(null);
 
   const [agents, setAgents] = useState<{ id: string; full_name: string | null; username: string }[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const [confirming, setConfirming] = useState(false);
+  const [pickingUp, setPickingUp] = useState(false);
+
+  const isAgent = profile?.agent_of != null;
 
   const load = async () => {
     if (!user) return;
@@ -75,29 +80,50 @@ const VendeurColis = () => {
     }
   }, [user]);
 
-  const cities = useMemo(() => Array.from(new Set(orders.map((o) => o.customer_city))).sort(), [orders]);
-
   const filtered = useMemo(() => {
     return orders.filter((o) => {
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
-      if (cityFilter !== "all" && o.customer_city !== cityFilter) return false;
       if (agentFilter !== "all" && o.agent_id !== agentFilter) return false;
       if (dateFrom && new Date(o.created_at) < new Date(dateFrom)) return false;
       if (dateTo && new Date(o.created_at) > new Date(dateTo + "T23:59:59")) return false;
       if (search) {
         const s = search.toLowerCase();
-        if (!o.customer_name.toLowerCase().includes(s) && !o.customer_phone.includes(search)) return false;
+        const tracking = (o.external_tracking_number || o.tracking_number || `ODiT-${o.id}`).toLowerCase();
+        const matches =
+          o.customer_name.toLowerCase().includes(s) ||
+          o.customer_phone.includes(search) ||
+          o.customer_city.toLowerCase().includes(s) ||
+          tracking.includes(s);
+        if (!matches) return false;
       }
       return true;
     });
-  }, [orders, statusFilter, cityFilter, agentFilter, dateFrom, dateTo, search]);
+  }, [orders, statusFilter, agentFilter, dateFrom, dateTo, search]);
 
-  const confirmOrder = async (id: number) => {
-    const { error } = await supabase.from("orders").update({ status: "Confirmé" }).eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Commande confirmée");
-    load();
+  const selectedOrders = useMemo(() => orders.filter((o) => selected.has(o.id)), [orders, selected]);
+  const eligibleConfirm = selectedOrders.filter((o) => o.status === "Crée");
+  const eligiblePickup = selectedOrders.filter((o) => o.status === "Confirmé");
+  const eligibleSticker = selectedOrders.filter((o) => o.status === "Pickup");
+
+  const toggleOne = (id: number) => {
+    const n = new Set(selected);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    setSelected(n);
   };
+  const toggleAllVisible = () => {
+    const allIds = filtered.map((o) => o.id);
+    const allSel = allIds.every((id) => selected.has(id));
+    if (allSel) {
+      const n = new Set(selected);
+      allIds.forEach((id) => n.delete(id));
+      setSelected(n);
+    } else {
+      const n = new Set(selected);
+      allIds.forEach((id) => n.add(id));
+      setSelected(n);
+    }
+  };
+  const clearSelection = () => setSelected(new Set());
 
   const deleteOrder = async () => {
     if (!deleteId) return;
@@ -108,25 +134,53 @@ const VendeurColis = () => {
     load();
   };
 
-  const sendToDelivery = async (id: number) => {
-    setSendingId(id);
+  const groupConfirm = async () => {
+    if (eligibleConfirm.length === 0) return;
+    setConfirming(true);
     try {
-      const { data, error } = await supabase.functions.invoke("olivraison-create-order", {
-        body: { order_id: id },
-      });
+      const ids = eligibleConfirm.map((o) => o.id);
+      const { error } = await supabase.from("orders").update({ status: "Confirmé" }).in("id", ids);
       if (error) throw error;
-      toast.success(data?.mode === "olivraison" ? "Envoyé via Olivraison" : "Envoyé au livreur");
-      load();
+      toast.success(`${ids.length} commande(s) confirmée(s)`);
+      clearSelection();
+      await load();
     } catch (e: any) {
-      toast.error(e?.context?.body || e.message || "Échec de l'envoi");
-      load();
+      toast.error(e.message || "Échec de la confirmation");
     } finally {
-      setSendingId(null);
+      setConfirming(false);
     }
   };
 
+  const groupPickup = async () => {
+    if (eligiblePickup.length === 0) return;
+    setPickingUp(true);
+    let success = 0, failed = 0;
+    for (const o of eligiblePickup) {
+      try {
+        const { data, error } = await supabase.functions.invoke("olivraison-create-order", {
+          body: { order_id: o.id },
+        });
+        if (error) throw error;
+        if ((data as any)?.error) throw new Error((data as any).error);
+        success++;
+      } catch {
+        failed++;
+      }
+    }
+    if (success) toast.success(`${success} commande(s) envoyée(s) au livreur`);
+    if (failed) toast.error(`${failed} commande(s) en échec`);
+    clearSelection();
+    await load();
+    setPickingUp(false);
+  };
+
+  const groupPrintStickers = () => {
+    if (eligibleSticker.length === 0) return;
+    printStickers(eligibleSticker);
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-bold">Mes commandes</h2>
         <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
@@ -134,11 +188,18 @@ const VendeurColis = () => {
         </Button>
       </div>
 
+      {(profile?.bank_account_name || profile?.bank_account_number) && !isAgent && (
+        <Card className="p-3 bg-secondary/40 text-sm flex flex-wrap gap-x-6 gap-y-1">
+          <div><span className="text-muted-foreground">Compte bancaire :</span> <strong>{profile?.bank_account_name || "—"}</strong></div>
+          <div><span className="text-muted-foreground">N° :</span> <strong className="font-mono">{profile?.bank_account_number || "—"}</strong></div>
+        </Card>
+      )}
+
       <Card className="p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <div className="lg:col-span-2 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input className="pl-9" placeholder="Rechercher (nom ou téléphone)" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="pl-9" placeholder="Rechercher (nom, téléphone, ville, tracking)" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger><SelectValue placeholder="Statut" /></SelectTrigger>
@@ -147,17 +208,11 @@ const VendeurColis = () => {
               {ORDER_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={cityFilter} onValueChange={setCityFilter}>
-            <SelectTrigger><SelectValue placeholder="Ville" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Toutes villes</SelectItem>
-              {cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
           <Select value={agentFilter} onValueChange={setAgentFilter}>
             <SelectTrigger><SelectValue placeholder="Agent" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous agents</SelectItem>
+              <SelectItem value="__none__" disabled>—</SelectItem>
               {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name || a.username}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -172,6 +227,13 @@ const VendeurColis = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={filtered.length > 0 && filtered.every((o) => selected.has(o.id))}
+                  onCheckedChange={toggleAllVisible}
+                  aria-label="Tout sélectionner"
+                />
+              </TableHead>
               <TableHead>Client</TableHead>
               <TableHead>Ville</TableHead>
               <TableHead>Téléphone</TableHead>
@@ -182,11 +244,14 @@ const VendeurColis = () => {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucune commande</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune commande</TableCell></TableRow>
             ) : filtered.map((o) => (
-              <TableRow key={o.id}>
+              <TableRow key={o.id} data-state={selected.has(o.id) ? "selected" : undefined}>
+                <TableCell>
+                  <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} aria-label={`Sélectionner ${o.id}`} />
+                </TableCell>
                 <TableCell>
                   <div className="font-medium">{o.customer_name}</div>
                   <div className="text-xs text-muted-foreground">{o.product_name}</div>
@@ -212,16 +277,7 @@ const VendeurColis = () => {
                         <Button variant="ghost" size="icon" onClick={() => setDeleteId(o.id)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
-                        <Button size="sm" onClick={() => confirmOrder(o.id)}>
-                          <CheckCircle2 className="h-4 w-4 mr-1" /> Confirmer
-                        </Button>
                       </>
-                    )}
-                    {o.status === "Confirmé" && (
-                      <Button size="sm" onClick={() => sendToDelivery(o.id)} disabled={sendingId === o.id}>
-                        {o.api_sync_status === "failed" ? <RefreshCw className="h-4 w-4 mr-1" /> : <Send className="h-4 w-4 mr-1" />}
-                        {o.api_sync_status === "failed" ? "Réessayer" : "Envoyer"}
-                      </Button>
                     )}
                     {o.status === "Pickup" && (
                       <Button variant="outline" size="sm" onClick={() => printSticker(o)}>
@@ -236,12 +292,35 @@ const VendeurColis = () => {
         </Table>
       </Card>
 
+      {/* Floating action bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-background border border-border rounded-full shadow-elegant px-4 py-2 flex items-center gap-2">
+          <span className="text-sm font-medium px-2">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
+          <Button size="sm" onClick={groupConfirm} disabled={eligibleConfirm.length === 0 || confirming}>
+            {confirming ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+            Confirm ({eligibleConfirm.length})
+          </Button>
+          <Button size="sm" variant="default" onClick={groupPickup} disabled={eligiblePickup.length === 0 || pickingUp}>
+            {pickingUp ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackageCheck className="h-4 w-4 mr-1" />}
+            Pickup ({eligiblePickup.length})
+          </Button>
+          <Button size="sm" variant="outline" onClick={groupPrintStickers} disabled={eligibleSticker.length === 0}>
+            <Printer className="h-4 w-4 mr-1" />
+            Sticker ({eligibleSticker.length})
+          </Button>
+          <Button size="icon" variant="ghost" onClick={clearSelection} aria-label="Effacer la sélection">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {user && (
         <OrderFormDialog
           open={formOpen}
           onOpenChange={setFormOpen}
           initial={editing}
-          vendeurId={user.id}
+          vendeurId={isAgent ? (profile?.agent_of as string) : user.id}
+          agentId={isAgent ? user.id : null}
           onSaved={load}
         />
       )}
