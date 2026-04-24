@@ -11,7 +11,8 @@ import { toast } from "sonner";
 interface Props { open: boolean; onOpenChange: (v: boolean) => void; }
 
 export const ProfileModal = ({ open, onOpenChange }: Props) => {
-  const { user, profile, refresh } = useAuth();
+  const { user, profile, role, refresh } = useAuth();
+  const isVendeur = role === "vendeur";
   const [form, setForm] = useState({ username: "", full_name: "", phone: "", email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
 
