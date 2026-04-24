@@ -13,6 +13,7 @@ const corsHeaders = {
 interface Body {
   user_id: string;
   get_email?: boolean;
+  username?: string;
   email?: string;
   password?: string;
   full_name?: string | null;
@@ -94,6 +95,7 @@ Deno.serve(async (req) => {
 
   // Profile update
   const profileUpdates: Record<string, unknown> = {};
+  if (body.username !== undefined) profileUpdates.username = body.username.trim().toLowerCase();
   if (body.full_name !== undefined) profileUpdates.full_name = body.full_name;
   if (body.phone !== undefined) profileUpdates.phone = body.phone;
   if (body.cin !== undefined) profileUpdates.cin = body.cin;
