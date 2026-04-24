@@ -26,6 +26,20 @@ export default function Impersonate() {
     // storage key to sessionStorage on next load (keeping admin tab unaffected).
     sessionStorage.setItem("sb-impersonating", "1");
 
+    // Tell any other open tab (the admin tab) to ignore the next auth-state
+    // change event triggered by setSession below. Auto-cleared after 2s in case
+    // no event arrives, so legitimate future events are not blocked.
+    try {
+      localStorage.setItem("odit_ignore_next_auth_event", "true");
+      setTimeout(() => {
+        if (localStorage.getItem("odit_ignore_next_auth_event") === "true") {
+          localStorage.removeItem("odit_ignore_next_auth_event");
+        }
+      }, 2000);
+    } catch {
+      // ignore storage errors
+    }
+
     // Build a temporary client that writes the session into sessionStorage
     // under the SAME storage key the global supabase client expects.
     const tabStorage: Storage = {
