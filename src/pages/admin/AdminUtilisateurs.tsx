@@ -174,7 +174,7 @@ const AdminUtilisateurs = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-2xl font-bold">Utilisateurs</h2>
+        <h2 className="text-2xl font-bold">Access Utilisateurs</h2>
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-1" /> Créer</Button>
       </div>
 
