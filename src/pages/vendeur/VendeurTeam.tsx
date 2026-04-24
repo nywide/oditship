@@ -203,14 +203,16 @@ const VendeurTeam = () => {
                 <TableCell>{a.cin || "—"}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1 justify-start">
-                    {PAGES.filter((p) => a.agent_pages?.[p.key] === true).map((p) => (
-                      <Badge key={p.key} variant="secondary">{p.label}</Badge>
+                    {pageBadges(a.agent_pages).map((label) => (
+                      <Badge key={label} variant="secondary">{label}</Badge>
                     ))}
                   </div>
                 </TableCell>
                 <TableCell>{a.is_active ? "Actif" : "Inactif"}</TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(a)} title="Modifier"><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => loginAs(a)} title="Se connecter en tant que"><LogIn className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(a)} title="Supprimer"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </TableCell>
               </TableRow>
             ))}
