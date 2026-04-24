@@ -27,6 +27,7 @@ interface Body {
   is_active?: boolean;
   bank_account_name?: string | null;
   bank_account_number?: string | null;
+  agent_pages?: Record<string, boolean> | null;
 }
 
 const json = (status: number, obj: unknown) =>
@@ -97,6 +98,7 @@ Deno.serve(async (req) => {
     cin: body.cin ?? null,
     agent_of: body.agent_of ?? null,
     is_active: body.is_active ?? true,
+    agent_pages: body.role === "agent" ? (body.agent_pages ?? null) : null,
     bank_account_name: isAdmin ? (body.bank_account_name ?? null) : null,
     bank_account_number: isAdmin ? (body.bank_account_number ?? null) : null,
   }, { onConflict: "id" });

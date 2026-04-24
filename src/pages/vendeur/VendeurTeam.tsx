@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Pencil } from "lucide-react";
@@ -36,12 +37,13 @@ const VendeurTeam = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
     pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
   });
   const [editForm, setEditForm] = useState({
-    email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
+    username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
     pages: { colis: true, facturation: true, graphique: true, team: false } as Record<string, boolean>,
   });
 
@@ -81,15 +83,25 @@ const VendeurTeam = () => {
     finally { setSubmitting(false); }
   };
 
-  const openEdit = (a: Agent) => {
+  const openEdit = async (a: Agent) => {
     setEditing(a);
     setEditForm({
-      email: "", password: "",
+      username: a.username, email: "", password: "",
       full_name: a.full_name ?? "", phone: a.phone ?? "", cin: a.cin ?? "",
       is_active: a.is_active,
       pages: { colis: true, facturation: true, graphique: true, team: false, ...(a.agent_pages ?? {}) },
     });
     setEditOpen(true);
+    setEmailLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-update-user", { body: { user_id: a.id, get_email: true } });
+      if (error) throw error;
+      setEditForm((f) => ({ ...f, email: (data as any)?.email ?? "" }));
+    } catch (e: any) {
+      toast.error(e.message || "Impossible de charger l'email");
+    } finally {
+      setEmailLoading(false);
+    }
   };
 
   const submitEdit = async (e: React.FormEvent) => {
@@ -99,6 +111,7 @@ const VendeurTeam = () => {
     try {
       const body: any = {
         user_id: editing.id,
+        username: editForm.username.toLowerCase().trim(),
         full_name: editForm.full_name, phone: editForm.phone, cin: editForm.cin,
         is_active: editForm.is_active,
         agent_pages: editForm.pages,
@@ -130,19 +143,27 @@ const VendeurTeam = () => {
               <TableHead>Username</TableHead>
               <TableHead>Téléphone</TableHead>
               <TableHead>CIN</TableHead>
+              <TableHead>Pages autorisées</TableHead>
               <TableHead>Statut</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {agents.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun agent</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun agent</TableCell></TableRow>
             ) : agents.map((a) => (
               <TableRow key={a.id}>
                 <TableCell className="font-medium">{a.full_name || "—"}</TableCell>
                 <TableCell>{a.username}</TableCell>
                 <TableCell>{a.phone || "—"}</TableCell>
                 <TableCell>{a.cin || "—"}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1 justify-start">
+                    {PAGES.filter((p) => a.agent_pages?.[p.key] === true).map((p) => (
+                      <Badge key={p.key} variant="secondary">{p.label}</Badge>
+                    ))}
+                  </div>
+                </TableCell>
                 <TableCell>{a.is_active ? "Actif" : "Inactif"}</TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
@@ -199,8 +220,8 @@ const VendeurTeam = () => {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Modifier l'agent {editing?.username}</DialogTitle></DialogHeader>
           <form onSubmit={submitEdit} className="space-y-3">
-            <div><Label>Username</Label><Input readOnly value={editing?.username ?? ""} className="bg-muted" /></div>
-            <div><Label>Email (laisser vide pour garder)</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div><Label>Username</Label><Input required value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} /></div>
+            <div><Label>Email</Label><Input type="email" value={editForm.email} disabled={emailLoading} placeholder={emailLoading ? "Chargement..." : ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
             <div>
               <Label>Nouveau mot de passe (optionnel)</Label>
               <Input type="password" minLength={6} value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Leave empty to keep current password" />

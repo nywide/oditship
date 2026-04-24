@@ -35,8 +35,8 @@ export const DashboardLayout = ({ title, nav }: Props) => {
   const agentPages = (profile?.agent_pages ?? null) as Record<string, boolean> | null;
 
   const visibleNav = nav.filter((item) => {
-    if (!isAgent || !item.permKey || !agentPages) return true;
-    return agentPages[item.permKey] !== false;
+    if (!isAgent || !item.permKey) return true;
+    return agentPages?.[item.permKey] === true;
   });
 
   return (
