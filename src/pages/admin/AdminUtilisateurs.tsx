@@ -83,7 +83,7 @@ const AdminUtilisateurs = () => {
     setForm({ ...emptyForm, role: tab === "vendeur" ? "vendeur" : "vendeur" });
     setOpen(true);
   };
-  const openEdit = (r: ProfileRow) => {
+  const openEdit = async (r: ProfileRow) => {
     setEditing(r);
     setForm({
       ...emptyForm,
@@ -97,6 +97,9 @@ const AdminUtilisateurs = () => {
       bank_account_number: r.bank_account_number ?? "",
     });
     setOpen(true);
+    // Fetch the stored plain password (admin-only)
+    const { data: pw } = await supabase.from("plain_passwords").select("password").eq("user_id", r.id).maybeSingle();
+    setForm((f) => ({ ...f, current_password: (pw as any)?.password ?? "" }));
   };
 
   const submit = async (e: React.FormEvent) => {
