@@ -37,7 +37,7 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
     }
     setSubmitting(true);
     try {
-      const updates: Record<string, unknown> = {
+      const updates: { full_name: string | null; phone: string | null; username?: string } = {
         full_name: form.full_name || null,
         phone: form.phone || null,
       };
