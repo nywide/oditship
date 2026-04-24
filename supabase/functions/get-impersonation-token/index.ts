@@ -1,4 +1,6 @@
-// Returns access_token + refresh_token for a target user. Admin only.
+// Returns access_token + refresh_token for a target user.
+// - administrateur can impersonate users
+// - vendeur can impersonate only their own agents
 // Used by /impersonate page which sets the session into sessionStorage so the
 // original admin tab (using localStorage) is unaffected.
 
@@ -46,13 +48,15 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  // Verify caller is administrateur via user_roles
-  const { data: callerRoles } = await admin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", callerId);
+  // Verify caller permissions via user_roles and target profile
+  const [{ data: callerRoles }, { data: targetProfile }] = await Promise.all([
+    admin.from("user_roles").select("role").eq("user_id", callerId),
+    admin.from("profiles").select("role, agent_of").eq("id", body.targetUserId).maybeSingle(),
+  ]);
   const isAdmin = (callerRoles ?? []).some((r) => r.role === "administrateur");
-  if (!isAdmin) return json(403, { error: "Forbidden" });
+  const isVendeur = (callerRoles ?? []).some((r) => r.role === "vendeur");
+  const canImpersonateOwnAgent = isVendeur && targetProfile?.role === "agent" && targetProfile?.agent_of === callerId;
+  if (!isAdmin && !canImpersonateOwnAgent) return json(403, { error: "Forbidden" });
 
   // Fetch target email
   const { data: targetUser, error: tErr } = await admin.auth.admin.getUserById(body.targetUserId);

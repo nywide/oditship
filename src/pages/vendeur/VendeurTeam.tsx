@@ -10,7 +10,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Pencil } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Pencil, Trash2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
 interface Agent {
@@ -20,7 +25,7 @@ interface Agent {
   phone: string | null;
   cin: string | null;
   is_active: boolean;
-  agent_pages: Record<string, boolean> | null;
+  agent_pages: Record<string, boolean | string> | null;
 }
 
 const PAGES = [
@@ -28,6 +33,8 @@ const PAGES = [
   { key: "facturation", label: "Facturation" },
   { key: "graphique", label: "Graphique" },
 ];
+
+const defaultPages = { colis: true, colis_scope: "all", facturation: true, graphique: true, graphique_scope: "all" } as Record<string, boolean | string>;
 
 const VendeurTeam = () => {
   const { user } = useAuth();
@@ -37,13 +44,14 @@ const VendeurTeam = () => {
   const [editing, setEditing] = useState<Agent | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
   const [createForm, setCreateForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-    pages: { colis: true, facturation: true, graphique: true } as Record<string, boolean>,
+    pages: { ...defaultPages },
   });
   const [editForm, setEditForm] = useState({
     username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-    pages: { colis: true, facturation: true, graphique: true } as Record<string, boolean>,
+    pages: { ...defaultPages },
   });
 
   const load = () => {
@@ -75,7 +83,7 @@ const VendeurTeam = () => {
       setCreateOpen(false);
       setCreateForm({
         username: "", email: "", password: "", full_name: "", phone: "", cin: "", is_active: true,
-        pages: { colis: true, facturation: true, graphique: true },
+        pages: { ...defaultPages },
       });
       load();
     } catch (e: any) { toast.error(e.message || "Erreur"); }
@@ -88,7 +96,7 @@ const VendeurTeam = () => {
       username: a.username, email: "", password: "",
       full_name: a.full_name ?? "", phone: a.phone ?? "", cin: a.cin ?? "",
       is_active: a.is_active,
-      pages: { colis: true, facturation: true, graphique: true, ...(a.agent_pages ?? {}) },
+      pages: { ...defaultPages, ...(a.agent_pages ?? {}) },
     });
     setEditOpen(true);
     setEmailLoading(true);
@@ -127,6 +135,43 @@ const VendeurTeam = () => {
     finally { setSubmitting(false); }
   };
 
+  const loginAs = async (a: Agent) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("get-impersonation-token", {
+        body: { targetUserId: a.id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const access_token = (data as any)?.access_token;
+      const refresh_token = (data as any)?.refresh_token;
+      if (!access_token || !refresh_token) throw new Error("Jeton de session introuvable");
+      const win = window.open(`/impersonate?access_token=${encodeURIComponent(access_token)}&refresh_token=${encodeURIComponent(refresh_token)}`, "_blank", "noopener,noreferrer");
+      if (!win) toast.error("Veuillez autoriser les popups pour ce site");
+      else toast.success(`Connexion en tant que ${a.username} dans un nouvel onglet`);
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", { body: { targetUserId: deleteTarget.id } });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`Agent ${deleteTarget.username} supprimé`);
+      setDeleteTarget(null);
+      load();
+    } catch (e: any) { toast.error(e.message || "Erreur lors de la suppression"); }
+  };
+
+  const pageBadges = (pages: Record<string, boolean | string> | null) => {
+    const p = { ...defaultPages, ...(pages ?? {}) } as Record<string, boolean | string>;
+    return PAGES.filter((page) => p[page.key] === true).map((page) => {
+      if (page.key === "colis") return `${page.label}: ${p.colis_scope === "own" ? "Agent" : "Tous"}`;
+      if (page.key === "graphique") return `${page.label}: ${p.graphique_scope === "own" ? "Agent" : "Tous"}`;
+      return page.label;
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -158,14 +203,16 @@ const VendeurTeam = () => {
                 <TableCell>{a.cin || "—"}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1 justify-start">
-                    {PAGES.filter((p) => a.agent_pages?.[p.key] === true).map((p) => (
-                      <Badge key={p.key} variant="secondary">{p.label}</Badge>
+                    {pageBadges(a.agent_pages).map((label) => (
+                      <Badge key={label} variant="secondary">{label}</Badge>
                     ))}
                   </div>
                 </TableCell>
                 <TableCell>{a.is_active ? "Actif" : "Inactif"}</TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(a)} title="Modifier"><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => loginAs(a)} title="Se connecter en tant que"><LogIn className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(a)} title="Supprimer"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -196,13 +243,24 @@ const VendeurTeam = () => {
               <Label>Pages autorisées</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {PAGES.map((p) => (
-                  <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <Checkbox
-                      checked={createForm.pages[p.key] !== false}
-                      onCheckedChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [p.key]: !!v } })}
-                    />
-                    {p.label}
-                  </label>
+                  <div key={p.key} className="space-y-2 rounded-md border p-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={createForm.pages[p.key] !== false}
+                        onCheckedChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [p.key]: !!v } })}
+                      />
+                      {p.label}
+                    </label>
+                    {(p.key === "colis" || p.key === "graphique") && createForm.pages[p.key] !== false && (
+                      <Select value={String(createForm.pages[`${p.key}_scope`] ?? "all")} onValueChange={(v) => setCreateForm({ ...createForm, pages: { ...createForm.pages, [`${p.key}_scope`]: v } })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Toutes les commandes du vendeur</SelectItem>
+                          <SelectItem value="own">Seulement les commandes de l'agent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -238,13 +296,24 @@ const VendeurTeam = () => {
               <Label>Pages autorisées</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {PAGES.map((p) => (
-                  <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <Checkbox
-                      checked={editForm.pages[p.key] !== false}
-                      onCheckedChange={(v) => setEditForm({ ...editForm, pages: { ...editForm.pages, [p.key]: !!v } })}
-                    />
-                    {p.label}
-                  </label>
+                  <div key={p.key} className="space-y-2 rounded-md border p-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={editForm.pages[p.key] !== false}
+                        onCheckedChange={(v) => setEditForm({ ...editForm, pages: { ...editForm.pages, [p.key]: !!v } })}
+                      />
+                      {p.label}
+                    </label>
+                    {(p.key === "colis" || p.key === "graphique") && editForm.pages[p.key] !== false && (
+                      <Select value={String(editForm.pages[`${p.key}_scope`] ?? "all")} onValueChange={(v) => setEditForm({ ...editForm, pages: { ...editForm.pages, [`${p.key}_scope`]: v } })}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Toutes les commandes du vendeur</SelectItem>
+                          <SelectItem value="own">Seulement les commandes de l'agent</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -255,6 +324,23 @@ const VendeurTeam = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer l'agent ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. L'agent <strong>{deleteTarget?.username}</strong> sera supprimé définitivement.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
