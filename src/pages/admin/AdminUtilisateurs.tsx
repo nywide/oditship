@@ -270,8 +270,8 @@ const AdminUtilisateurs = () => {
                 <Input required disabled={!!editing} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
               </div>
               <div>
-                <Label>Email *</Label>
-                <Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "(modifier l'email)" : ""} />
+                <Label>Email {!editing && "*"}</Label>
+                <Input required={!editing} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={editing ? "Laisser vide pour ne pas changer" : ""} />
               </div>
             </div>
             <div>
