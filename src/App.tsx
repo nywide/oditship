@@ -34,7 +34,7 @@ import LivreurDashboard from "./pages/livreur/LivreurDashboard";
 import LivreurColis from "./pages/livreur/LivreurColis";
 import LivreurDocApi from "./pages/livreur/LivreurDocApi";
 
-import RamassoireDashboard, { RamassoireList } from "./pages/ramassoire/RamassoireDashboard";
+import RamassoireDashboard, { RamassoireList, ListeRamassage } from "./pages/ramassoire/RamassoireDashboard";
 
 const queryClient = new QueryClient();
 
@@ -92,6 +92,7 @@ const App = () => (
             <Route path="/dashboard/ramassoire" element={<ProtectedRoute allowedRoles={["ramassoire","administrateur"]}><RamassoireDashboard /></ProtectedRoute>}>
               <Route index element={<Navigate to="colis" replace />} />
               <Route path="colis" element={<RamassoireList />} />
+              <Route path="liste-ramassage" element={<ListeRamassage />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

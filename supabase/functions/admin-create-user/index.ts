@@ -25,6 +25,8 @@ interface Body {
   role: string;
   agent_of?: string | null;
   is_active?: boolean;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
 }
 
 const json = (status: number, obj: unknown) =>
@@ -95,6 +97,8 @@ Deno.serve(async (req) => {
     cin: body.cin ?? null,
     agent_of: body.agent_of ?? null,
     is_active: body.is_active ?? true,
+    bank_account_name: isAdmin ? (body.bank_account_name ?? null) : null,
+    bank_account_number: isAdmin ? (body.bank_account_number ?? null) : null,
   }, { onConflict: "id" });
 
   // Ensure role row exists with the requested role
