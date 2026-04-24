@@ -25,7 +25,7 @@ interface Agent {
   phone: string | null;
   cin: string | null;
   is_active: boolean;
-  agent_pages: Record<string, boolean> | null;
+  agent_pages: Record<string, boolean | string> | null;
 }
 
 const PAGES = [
