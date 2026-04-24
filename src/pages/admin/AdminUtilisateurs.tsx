@@ -149,7 +149,6 @@ const AdminUtilisateurs = () => {
 
   const loginAs = async (r: ProfileRow) => {
     if (r.id === user?.id) return toast.error("Vous êtes déjà connecté avec ce compte");
-    if (!confirm(`Se connecter en tant que ${r.username} ? Vous serez déconnecté de votre compte actuel.`)) return;
     try {
       const { data, error } = await supabase.functions.invoke("login-as-user", {
         body: { user_id: r.id, redirect_to: `${window.location.origin}/dashboard` },
@@ -158,9 +157,13 @@ const AdminUtilisateurs = () => {
       if ((data as any)?.error) throw new Error((data as any).error);
       const link = (data as any)?.action_link;
       if (!link) throw new Error("Lien introuvable");
-      // Sign out current admin then open the magic link in same tab
-      await supabase.auth.signOut();
-      window.location.href = link;
+      // Open in a new tab so the admin keeps their current session
+      const win = window.open(link, "_blank", "noopener,noreferrer");
+      if (!win) {
+        toast.error("Veuillez autoriser les popups pour ce site");
+      } else {
+        toast.success(`Connexion en tant que ${r.username} dans un nouvel onglet`);
+      }
     } catch (e: any) {
       toast.error(e.message || "Erreur");
     }
