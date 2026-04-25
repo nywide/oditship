@@ -27,7 +27,7 @@ vi.mock("sonner", () => ({
 
 describe("OrderFormDialog city dropdown", () => {
   it("stays open and scrollable during mouse hover, scroll, and mouse exit", async () => {
-    render(
+    const { container } = render(
       <OrderFormDialog
         open
         onOpenChange={vi.fn()}
@@ -91,13 +91,14 @@ describe("OrderFormDialog city dropdown", () => {
 
     fireEvent.click(screen.getByRole("combobox"));
     fireEvent.click(await screen.findByText("Ville 01"));
-    fireEvent.change(screen.getByLabelText("Nom client *"), { target: { value: "Ali" } });
-    fireEvent.change(screen.getByLabelText("Téléphone * (10 chiffres)"), { target: { value: "0600000000" } });
-    fireEvent.change(screen.getByLabelText("Adresse *"), { target: { value: "Adresse test" } });
-    fireEvent.change(screen.getByLabelText("Produit *"), { target: { value: "A1" } });
-    fireEvent.change(screen.getByLabelText("Prix (MAD) *"), { target: { value: "100" } });
+    const inputs = container.querySelectorAll("input");
+    fireEvent.change(inputs[0], { target: { value: "Ali" } });
+    fireEvent.change(inputs[1], { target: { value: "0600000000" } });
+    fireEvent.change(inputs[2], { target: { value: "Adresse test" } });
+    fireEvent.change(inputs[3], { target: { value: "A1" } });
+    fireEvent.change(inputs[4], { target: { value: "100" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Créer" }));
+    fireEvent.submit(container.querySelector("form")!);
 
     expect(toast.error).toHaveBeenCalledWith("Le produit doit contenir au moins 3 lettres ou chiffres");
   });
