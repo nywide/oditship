@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -255,8 +255,8 @@ const VendeurColis = () => {
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune commande</TableCell></TableRow>
             ) : filtered.map((o) => (
-              <>
-              <TableRow key={o.id} data-state={selected.has(o.id) ? "selected" : undefined}>
+              <Fragment key={o.id}>
+              <TableRow data-state={selected.has(o.id) ? "selected" : undefined}>
                 <TableCell>
                   <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} aria-label={`Sélectionner ${o.id}`} />
                 </TableCell>
@@ -305,7 +305,7 @@ const VendeurColis = () => {
                   </TableCell>
                 </TableRow>
               )}
-              </>
+              </Fragment>
             ))}
           </TableBody>
         </Table>
