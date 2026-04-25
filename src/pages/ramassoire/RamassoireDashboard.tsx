@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Package, PackageCheck, Users, Search } from "lucide-react";
+import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Package, PackageCheck, Users, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -53,6 +55,7 @@ const OrdersTab = ({ status, allowAction }: { status: "Pickup" | "Ramassé"; all
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // filters
