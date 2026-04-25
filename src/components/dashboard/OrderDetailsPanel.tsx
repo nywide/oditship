@@ -35,6 +35,7 @@ interface HistoryItem {
 
 interface DetailsData {
   tracking: string | null;
+  vendeur?: { full_name?: string | null; username?: string | null; company_name?: string | null } | null;
   livreur: { name: string | null; phone: string | null } | null;
   support: { name: string | null; phone: string | null } | null;
   history: HistoryItem[];
@@ -47,6 +48,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const actorName = (item: HistoryItem) => item.actor?.full_name || item.actor?.username || (item.source === "olivraison" ? "Olivraison" : "Système");
+const vendeurName = (vendeur?: DetailsData["vendeur"]) => vendeur?.full_name || vendeur?.username || vendeur?.company_name || "Système";
 const isInternalConfirmed = (item: HistoryItem) =>
   item.source === "odit" && [item.status, item.old_status].some((status) => status?.toLowerCase() === "confirmed");
 const isApiCreatedConfirmed = (item: HistoryItem) =>
@@ -176,7 +178,7 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
               <div className="ml-4 space-y-1">
                 <StatusBadge status={item.status} />
                 <p className="text-sm font-medium">{item.message || `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
-                <p className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{actorName(item)}</p>
+                <p className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{actorName(item) === "Système" ? vendeurName(data?.vendeur) : actorName(item)}</p>
                 <p className="text-xs text-muted-foreground">{formatDate(item.changed_at)}</p>
               </div>
             </div>
