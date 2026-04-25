@@ -49,6 +49,8 @@ const formatDate = (value?: string | null) => {
 const actorName = (item: HistoryItem) => item.actor?.full_name || item.actor?.username || (item.source === "olivraison" ? "Olivraison" : "Système");
 const isInternalConfirmed = (item: HistoryItem) =>
   item.source === "odit" && [item.status, item.old_status].some((status) => status?.toLowerCase() === "confirmed");
+const isApiCreatedConfirmed = (item: HistoryItem) =>
+  item.status?.toLowerCase() === "confirmed" && item.message?.toLowerCase().includes("colis cre") && item.message?.toLowerCase().includes("azizshop") && item.message?.toLowerCase().includes("api");
 const isTransitStatus = (status?: string | null) => status?.toLowerCase().includes("transit") ?? false;
 
 export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; className?: string }) => {
@@ -76,7 +78,7 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
   }, [tracking]);
 
   const history = useMemo(() => {
-    const visibleHistory = (data?.history ?? []).filter((item) => !isInternalConfirmed(item));
+    const visibleHistory = (data?.history ?? []).filter((item) => !isInternalConfirmed(item) && !isApiCreatedConfirmed(item));
     if (visibleHistory.length) return visibleHistory;
     return [{ source: "odit", status: order.status, message: "Statut actuel", changed_at: order.created_at, actor: null }] as HistoryItem[];
   }, [data?.history, order.status, order.created_at]);
