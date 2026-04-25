@@ -91,7 +91,7 @@ describe("OrderFormDialog city dropdown", () => {
 
     fireEvent.click(screen.getByRole("combobox"));
     fireEvent.click(await screen.findByText("Ville 01"));
-    const inputs = container.querySelectorAll("input");
+    const inputs = document.querySelectorAll("input");
     fireEvent.change(inputs[0], { target: { value: "Ali" } });
     fireEvent.change(inputs[1], { target: { value: "0600000000" } });
     fireEvent.change(inputs[2], { target: { value: "Adresse test" } });
