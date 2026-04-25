@@ -35,6 +35,12 @@ function isInternalConfirmed(status?: string | null) {
   return normalized === "confirmed";
 }
 
+function isApiCreatedConfirmed(status?: string | null, message?: string | null) {
+  const normalizedStatus = status?.toLowerCase();
+  const normalizedMessage = message?.toLowerCase() ?? "";
+  return normalizedStatus === "confirmed" && normalizedMessage.includes("colis cre") && normalizedMessage.includes("azizshop") && normalizedMessage.includes("api");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -151,7 +157,7 @@ Deno.serve(async (req) => {
       changed_at: h.changed_at,
       actor: h.changed_by ? actors[h.changed_by] ?? null : null,
     })),
-    ...apiHistory.map((h: any) => ({
+    ...apiHistory.filter((h: any) => !isApiCreatedConfirmed(h.status, h.msg)).map((h: any) => ({
       source: "olivraison",
       status: h.status,
       message: h.msg,
