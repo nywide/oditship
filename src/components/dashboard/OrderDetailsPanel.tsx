@@ -54,6 +54,14 @@ const isInternalConfirmed = (item: HistoryItem) =>
 const isApiCreatedConfirmed = (item: HistoryItem) =>
   item.status?.toLowerCase() === "confirmed" && item.message?.toLowerCase().includes("colis cre") && item.message?.toLowerCase().includes("azizshop") && item.message?.toLowerCase().includes("api");
 const isTransitStatus = (status?: string | null) => status?.toLowerCase().includes("transit") ?? false;
+const historyKey = (item: HistoryItem) => [
+  item.source,
+  item.status?.toLowerCase() ?? "",
+  item.old_status?.toLowerCase() ?? "",
+  item.message?.toLowerCase() ?? "",
+  item.changed_at,
+  item.actor?.username ?? item.actor?.full_name ?? "",
+].join("|");
 
 export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; className?: string }) => {
   const [data, setData] = useState<DetailsData | null>(null);
@@ -80,7 +88,14 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
   }, [tracking]);
 
   const history = useMemo(() => {
-    const visibleHistory = (data?.history ?? []).filter((item) => !isInternalConfirmed(item) && !isApiCreatedConfirmed(item));
+    const seen = new Set<string>();
+    const visibleHistory = (data?.history ?? []).filter((item) => {
+      if (isInternalConfirmed(item) || isApiCreatedConfirmed(item)) return false;
+      const key = historyKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     if (visibleHistory.length) return visibleHistory;
     return [{ source: "odit", status: order.status, message: "Statut actuel", changed_at: order.created_at, actor: null }] as HistoryItem[];
   }, [data?.history, order.status, order.created_at]);
