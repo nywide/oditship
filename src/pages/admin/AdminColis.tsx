@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
+import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { Button } from "@/components/ui/button";
-import { Printer, Search } from "lucide-react";
+import { ChevronDown, Printer, Search } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
+import { cn } from "@/lib/utils";
 
 interface Order {
   id: number;
@@ -38,6 +40,7 @@ const AdminColis = () => {
   const [vendeurFilter, setVendeurFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -136,7 +139,8 @@ const AdminColis = () => {
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune commande</TableCell></TableRow>
             ) : filtered.map((o) => (
-              <TableRow key={o.id}>
+              <Fragment key={o.id}>
+              <TableRow>
                 <TableCell><div className="font-medium">{o.customer_name}</div><div className="text-xs text-muted-foreground">{o.product_name}</div></TableCell>
                 <TableCell className="text-sm">{vendeurMap[o.vendeur_id] || "—"}</TableCell>
                 <TableCell>{o.customer_city}</TableCell>
@@ -149,8 +153,19 @@ const AdminColis = () => {
                       <Printer className="h-4 w-4 mr-1" /> Sticker
                     </Button>
                   )}
+                  <Button variant="ghost" size="icon" onClick={() => setExpandedOrderId(expandedOrderId === o.id ? null : o.id)} aria-label="Voir détails">
+                    <ChevronDown className={cn("h-4 w-4 transition-transform", expandedOrderId === o.id && "rotate-180")} />
+                  </Button>
                 </TableCell>
               </TableRow>
+              {expandedOrderId === o.id && (
+                <TableRow>
+                  <TableCell colSpan={7} className="bg-muted/20 p-0">
+                    <OrderDetailsPanel order={o} />
+                  </TableCell>
+                </TableRow>
+              )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>

@@ -1,0 +1,174 @@
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/StatusBadge";
+import { statusLabel } from "@/lib/orderStatus";
+import { cn } from "@/lib/utils";
+import { Bike, Download, Headphones, Loader2, MapPin, Package, QrCode, RefreshCw, Truck, UserRound } from "lucide-react";
+import QRCode from "qrcode";
+import { toast } from "sonner";
+
+interface OrderSummary {
+  id: number;
+  customer_name: string;
+  customer_phone: string;
+  customer_address: string;
+  customer_city: string;
+  product_name: string;
+  order_value: number;
+  status: string;
+  tracking_number: string | null;
+  external_tracking_number: string | null;
+  comment?: string | null;
+  created_at: string;
+}
+
+interface HistoryItem {
+  source: string;
+  status: string;
+  old_status?: string | null;
+  message?: string | null;
+  changed_at: string;
+  actor?: { full_name?: string | null; username?: string | null; role?: string | null } | null;
+}
+
+interface DetailsData {
+  tracking: string | null;
+  livreur: { name: string | null; phone: string | null } | null;
+  support: { name: string | null; phone: string | null } | null;
+  history: HistoryItem[];
+  package_error?: string | null;
+}
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+};
+
+const actorName = (item: HistoryItem) => item.actor?.full_name || item.actor?.username || (item.source === "olivraison" ? "Olivraison" : "Système");
+
+export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; className?: string }) => {
+  const [data, setData] = useState<DetailsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [qrSrc, setQrSrc] = useState("");
+  const tracking = data?.tracking || order.external_tracking_number || order.tracking_number || `ODiT-${order.id}`;
+
+  const load = async () => {
+    setLoading(true);
+    const { data: result, error } = await supabase.functions.invoke("order-details", { body: { order_id: order.id } });
+    if (error) {
+      toast.error(error.message);
+      setData({ tracking, livreur: null, support: null, history: [], package_error: error.message });
+    } else {
+      setData(result as DetailsData);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [order.id]);
+
+  useEffect(() => {
+    QRCode.toDataURL(tracking, { width: 180, margin: 2 }).then(setQrSrc).catch(() => setQrSrc(""));
+  }, [tracking]);
+
+  const history = useMemo(() => {
+    if (data?.history?.length) return data.history;
+    return [{ source: "odit", status: order.status, message: "Statut actuel", changed_at: order.created_at, actor: null }] as HistoryItem[];
+  }, [data?.history, order.status, order.created_at]);
+
+  return (
+    <div className={cn("grid gap-4 p-4 lg:grid-cols-[1fr_1fr]", className)}>
+      <Card className="p-5 shadow-card">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+          <div>
+            <h3 className="text-lg font-bold">{order.customer_name}</h3>
+            <p className="text-sm font-semibold text-foreground/80">{order.customer_phone} · {order.product_name}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{order.customer_address} - {order.customer_city}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={order.status} />
+            <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">{tracking}</span>
+          </div>
+        </div>
+
+        <div className="grid gap-4 py-5 md:grid-cols-[1fr_auto]">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-lg border border-border p-3">
+              <Package className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Montant</p>
+                <p className="font-semibold">{Number(order.order_value).toFixed(2)} MAD</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-border p-3">
+              <MapPin className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Destination</p>
+                <p className="font-semibold">{order.customer_city}</p>
+              </div>
+            </div>
+            {order.comment && (
+              <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">{order.comment}</p>
+            )}
+          </div>
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-border p-3">
+            {qrSrc ? <img src={qrSrc} alt={`QR code ${tracking}`} className="h-36 w-36" /> : <QrCode className="h-24 w-24 text-muted-foreground" />}
+            <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground"><QrCode className="h-3.5 w-3.5" />{tracking}</div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <h4 className="text-base font-bold">Actions:</h4>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+            <div className="flex items-center gap-3">
+              <Download className="h-5 w-5 text-muted-foreground" />
+              <div><p className="text-sm font-semibold">Facture client</p><p className="text-xs text-muted-foreground">Disponible après facturation</p></div>
+            </div>
+            <Button size="sm" variant="outline" disabled>Télécharger</Button>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+            <div className="flex items-center gap-3">
+              <Bike className="h-5 w-5 text-foreground" />
+              <div><p className="text-sm font-semibold">Livreur</p><p className="text-xs text-muted-foreground">{loading ? "Chargement..." : data?.livreur?.name || "Non assigné"}</p></div>
+            </div>
+            <span className="font-mono text-sm">{data?.livreur?.phone || "—"}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+            <div className="flex items-center gap-3">
+              <Headphones className="h-5 w-5 text-foreground" />
+              <div><p className="text-sm font-semibold">Support</p><p className="text-xs text-muted-foreground">Zone support</p></div>
+            </div>
+            <span className="font-mono text-sm">—</span>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-5 shadow-card">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <h3 className="text-lg font-bold">Chronologie d'activité</h3>
+          <Button variant="ghost" size="icon" onClick={load} disabled={loading} aria-label="Actualiser la chronologie">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+        </div>
+        {data?.package_error && <p className="mb-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Tracking externe indisponible: {data.package_error}</p>}
+        <div className="relative space-y-0 pl-7">
+          <div className="absolute left-[15px] top-2 h-[calc(100%-1rem)] w-px bg-border" />
+          {history.map((item, index) => (
+            <div key={`${item.changed_at}-${index}`} className="relative pb-5 last:pb-0">
+              <div className="absolute -left-7 top-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-card">
+                <Truck className="h-4 w-4" />
+              </div>
+              <div className="ml-4 space-y-1">
+                <StatusBadge status={item.status} />
+                <p className="text-sm font-medium">{item.message || `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
+                <p className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{actorName(item)}</p>
+                <p className="text-xs text-muted-foreground">{formatDate(item.changed_at)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+};

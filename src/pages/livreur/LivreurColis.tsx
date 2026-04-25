@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Printer } from "lucide-react";
+import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
+import { cn } from "@/lib/utils";
+import { ChevronDown, Printer } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 
 const LivreurColis = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     supabase.from("orders").select("*").order("created_at", { ascending: false })
@@ -38,7 +41,8 @@ const LivreurColis = () => {
             ) : orders.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun colis assigné</TableCell></TableRow>
             ) : orders.map((o) => (
-              <TableRow key={o.id}>
+              <Fragment key={o.id}>
+              <TableRow>
                 <TableCell className="font-mono text-xs">{o.external_tracking_number || o.tracking_number || `ODiT-${o.id}`}</TableCell>
                 <TableCell><div className="font-medium">{o.customer_name}</div><div className="text-xs text-muted-foreground">{o.product_name}</div></TableCell>
                 <TableCell>{o.customer_city}</TableCell>
@@ -51,8 +55,19 @@ const LivreurColis = () => {
                       <Printer className="h-4 w-4 mr-1" /> Sticker
                     </Button>
                   )}
+                  <Button variant="ghost" size="icon" onClick={() => setExpandedOrderId(expandedOrderId === o.id ? null : o.id)} aria-label="Voir détails">
+                    <ChevronDown className={cn("h-4 w-4 transition-transform", expandedOrderId === o.id && "rotate-180")} />
+                  </Button>
                 </TableCell>
               </TableRow>
+              {expandedOrderId === o.id && (
+                <TableRow>
+                  <TableCell colSpan={7} className="bg-muted/20 p-0">
+                    <OrderDetailsPanel order={o} />
+                  </TableCell>
+                </TableRow>
+              )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
