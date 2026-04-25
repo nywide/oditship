@@ -24,6 +24,8 @@ export interface OrderFormValues {
   comment: string;
 }
 
+const countProductCharacters = (value: string) => value.replace(/[^\p{L}\p{N}]/gu, "").length;
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -74,7 +76,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
     if (submitting) return;
     if (!values.customer_city) return toast.error("Choisissez une ville");
     if (values.customer_name.trim().length < 2) return toast.error("Le nom doit contenir au moins 2 caractères");
-    if (values.product_name.trim().length < 2) return toast.error("Le produit doit contenir au moins 2 caractères");
+    if (countProductCharacters(values.product_name) < 3) return toast.error("Le produit doit contenir au moins 3 lettres ou chiffres");
     if (values.customer_address.trim().length < 2) return toast.error("L'adresse doit contenir au moins 2 caractères");
     const phoneDigits = values.customer_phone.replace(/\D/g, "");
     if (phoneDigits.length !== 10) return toast.error("Le téléphone doit contenir exactement 10 chiffres");
@@ -191,7 +193,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Produit *</Label>
-              <Input required minLength={2} value={values.product_name} onChange={(e) => setValues({ ...values, product_name: e.target.value })} />
+              <Input required minLength={3} value={values.product_name} onChange={(e) => setValues({ ...values, product_name: e.target.value })} />
             </div>
             <div>
               <Label>Prix (MAD) *</Label>
