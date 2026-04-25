@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { statusLabel } from "@/lib/orderStatus";
 import { cn } from "@/lib/utils";
 import { Bike, Download, Headphones, Loader2, MapPin, Package, QrCode, RefreshCw, Truck, UserRound } from "lucide-react";
+import QRCode from "qrcode";
 import { toast } from "sonner";
 
 interface OrderSummary {
@@ -45,13 +46,12 @@ const formatDate = (value?: string | null) => {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 };
 
-const qrUrl = (value: string) => `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(value)}`;
-
 const actorName = (item: HistoryItem) => item.actor?.full_name || item.actor?.username || (item.source === "olivraison" ? "Olivraison" : "Système");
 
 export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; className?: string }) => {
   const [data, setData] = useState<DetailsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [qrSrc, setQrSrc] = useState("");
   const tracking = data?.tracking || order.external_tracking_number || order.tracking_number || `ODiT-${order.id}`;
 
   const load = async () => {
@@ -67,6 +67,10 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
   };
 
   useEffect(() => { load(); }, [order.id]);
+
+  useEffect(() => {
+    QRCode.toDataURL(tracking, { width: 180, margin: 2 }).then(setQrSrc).catch(() => setQrSrc(""));
+  }, [tracking]);
 
   const history = useMemo(() => {
     if (data?.history?.length) return data.history;
@@ -109,7 +113,7 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
             )}
           </div>
           <div className="flex flex-col items-center gap-2 rounded-lg border border-border p-3">
-            <img src={qrUrl(tracking)} alt={`QR code ${tracking}`} className="h-36 w-36" loading="lazy" />
+            {qrSrc ? <img src={qrSrc} alt={`QR code ${tracking}`} className="h-36 w-36" /> : <QrCode className="h-24 w-24 text-muted-foreground" />}
             <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground"><QrCode className="h-3.5 w-3.5" />{tracking}</div>
           </div>
         </div>
