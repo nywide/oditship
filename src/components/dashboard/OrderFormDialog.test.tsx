@@ -98,7 +98,7 @@ describe("OrderFormDialog city dropdown", () => {
     fireEvent.change(inputs[3], { target: { value: "A1" } });
     fireEvent.change(inputs[4], { target: { value: "100" } });
 
-    fireEvent.submit(container.querySelector("form")!);
+    fireEvent.submit(document.querySelector("form")!);
 
     expect(toast.error).toHaveBeenCalledWith("Le produit doit contenir au moins 3 lettres ou chiffres");
   });
