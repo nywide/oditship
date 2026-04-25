@@ -79,7 +79,7 @@ describe("OrderFormDialog city dropdown", () => {
   });
 
   it("requires product to contain at least three letters or digits", async () => {
-    render(
+    const { container } = render(
       <OrderFormDialog
         open
         onOpenChange={vi.fn()}
