@@ -32,7 +32,7 @@ async function getOlivraisonPackage(token: string, trackingID: string) {
 
 function isInternalConfirmed(status?: string | null) {
   const normalized = status?.toLowerCase();
-  return normalized === "confirmé" || normalized === "confirmed";
+  return normalized === "confirmed";
 }
 
 Deno.serve(async (req) => {
