@@ -156,7 +156,7 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
                 <Truck className="h-4 w-4" />
               </div>
               <div className="ml-4 space-y-1">
-                <StatusBadge status={statusLabel(item.status)} />
+                <StatusBadge status={item.status} />
                 <p className="text-sm font-medium">{item.message || `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
                 <p className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{actorName(item)}</p>
                 <p className="text-xs text-muted-foreground">{formatDate(item.changed_at)}</p>
