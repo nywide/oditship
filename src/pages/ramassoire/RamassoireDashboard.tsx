@@ -161,17 +161,19 @@ const OrdersTab = ({ status, allowAction }: { status: "Pickup" | "Ramassé"; all
               <TableHead>Ville</TableHead>
               <TableHead>Adresse</TableHead>
               <TableHead>Statut</TableHead>
+              <TableHead className="text-right">Détails</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={allowAction ? 7 : 6} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={allowAction ? 8 : 7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={allowAction ? 7 : 6} className="text-center py-8 text-muted-foreground">Aucun colis</TableCell></TableRow>
+              <TableRow><TableCell colSpan={allowAction ? 8 : 7} className="text-center py-8 text-muted-foreground">Aucun colis</TableCell></TableRow>
             ) : filtered.map((o) => {
               const v = vendeurs[o.vendeur_id];
               return (
-                <TableRow key={o.id} data-state={selected.has(o.id) ? "selected" : undefined}>
+                <Fragment key={o.id}>
+                <TableRow data-state={selected.has(o.id) ? "selected" : undefined}>
                   {allowAction && (
                     <TableCell>
                       <Checkbox checked={selected.has(o.id)} onCheckedChange={(val) => toggleOne(o.id, !!val)} />
@@ -186,7 +188,20 @@ const OrdersTab = ({ status, allowAction }: { status: "Pickup" | "Ramassé"; all
                   <TableCell>{o.customer_city}</TableCell>
                   <TableCell className="text-sm">{o.customer_address}</TableCell>
                   <TableCell><StatusBadge status={o.status} /></TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={() => setExpandedOrderId(expandedOrderId === o.id ? null : o.id)} aria-label="Voir détails">
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", expandedOrderId === o.id && "rotate-180")} />
+                    </Button>
+                  </TableCell>
                 </TableRow>
+                {expandedOrderId === o.id && (
+                  <TableRow>
+                    <TableCell colSpan={allowAction ? 8 : 7} className="bg-muted/20 p-0">
+                      <OrderDetailsPanel order={{ ...o, order_value: 0 }} />
+                    </TableCell>
+                  </TableRow>
+                )}
+                </Fragment>
               );
             })}
           </TableBody>
