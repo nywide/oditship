@@ -48,7 +48,7 @@ const formatDate = (value?: string | null) => {
 
 const actorName = (item: HistoryItem) => item.actor?.full_name || item.actor?.username || (item.source === "olivraison" ? "Olivraison" : "Système");
 const isInternalConfirmed = (item: HistoryItem) =>
-  item.source === "odit" && [item.status, item.old_status].some((status) => status?.toLowerCase() === "confirmé" || status?.toLowerCase() === "confirmed");
+  item.source === "odit" && [item.status, item.old_status].some((status) => status?.toLowerCase() === "confirmed");
 const isTransitStatus = (status?: string | null) => status?.toLowerCase().includes("transit") ?? false;
 
 export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; className?: string }) => {
@@ -142,7 +142,7 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
             <div className="flex items-center gap-3">
               <Bike className="h-5 w-5 text-foreground" />
-              <div><p className="text-sm font-semibold">Livreur / transport</p><p className="text-xs text-muted-foreground">{livreurText}</p></div>
+              <div><p className="text-sm font-semibold">Livreur</p><p className="text-xs text-muted-foreground">{livreurText}</p></div>
             </div>
             <span className="font-mono text-sm">{hasLivreur ? data?.livreur?.phone || "—" : "—"}</span>
           </div>
