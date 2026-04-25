@@ -30,6 +30,11 @@ async function getOlivraisonPackage(token: string, trackingID: string) {
   return parsed;
 }
 
+function isInternalConfirmed(status?: string | null) {
+  const normalized = status?.toLowerCase();
+  return normalized === "confirmé" || normalized === "confirmed";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -138,7 +143,7 @@ Deno.serve(async (req) => {
 
   const apiHistory = Array.isArray(packageDetails?.history) ? packageDetails.history : [];
   const mergedHistory = [
-    ...(history ?? []).map((h: any) => ({
+    ...(history ?? []).filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status)).map((h: any) => ({
       source: "odit",
       status: h.new_status,
       old_status: h.old_status,

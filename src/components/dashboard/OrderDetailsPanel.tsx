@@ -47,6 +47,9 @@ const formatDate = (value?: string | null) => {
 };
 
 const actorName = (item: HistoryItem) => item.actor?.full_name || item.actor?.username || (item.source === "olivraison" ? "Olivraison" : "Système");
+const isInternalConfirmed = (item: HistoryItem) =>
+  item.source === "odit" && [item.status, item.old_status].some((status) => status?.toLowerCase() === "confirmé" || status?.toLowerCase() === "confirmed");
+const isTransitStatus = (status?: string | null) => status?.toLowerCase().includes("transit") ?? false;
 
 export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; className?: string }) => {
   const [data, setData] = useState<DetailsData | null>(null);
@@ -73,9 +76,18 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
   }, [tracking]);
 
   const history = useMemo(() => {
-    if (data?.history?.length) return data.history;
+    const visibleHistory = (data?.history ?? []).filter((item) => !isInternalConfirmed(item));
+    if (visibleHistory.length) return visibleHistory;
     return [{ source: "odit", status: order.status, message: "Statut actuel", changed_at: order.created_at, actor: null }] as HistoryItem[];
   }, [data?.history, order.status, order.created_at]);
+  const hasLivreur = Boolean(data?.livreur?.name || data?.livreur?.phone);
+  const livreurText = loading
+    ? "Chargement..."
+    : hasLivreur
+      ? data?.livreur?.name || "Livreur assigné"
+      : isTransitStatus(order.status)
+        ? "Informations transport en attente"
+        : "Disponible après passage en transit";
 
   return (
     <div className={cn("grid gap-4 p-4 lg:grid-cols-[1fr_1fr]", className)}>
@@ -123,16 +135,16 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
             <div className="flex items-center gap-3">
               <Download className="h-5 w-5 text-muted-foreground" />
-              <div><p className="text-sm font-semibold">Facture client</p><p className="text-xs text-muted-foreground">Disponible après facturation</p></div>
+              <div><p className="text-sm font-semibold">Facture client</p><p className="text-xs text-muted-foreground">Disponible après la fin du trajet</p></div>
             </div>
             <Button size="sm" variant="outline" disabled>Télécharger</Button>
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
             <div className="flex items-center gap-3">
               <Bike className="h-5 w-5 text-foreground" />
-              <div><p className="text-sm font-semibold">Livreur</p><p className="text-xs text-muted-foreground">{loading ? "Chargement..." : data?.livreur?.name || "Non assigné"}</p></div>
+              <div><p className="text-sm font-semibold">Livreur / transport</p><p className="text-xs text-muted-foreground">{livreurText}</p></div>
             </div>
-            <span className="font-mono text-sm">{data?.livreur?.phone || "—"}</span>
+            <span className="font-mono text-sm">{hasLivreur ? data?.livreur?.phone || "—" : "—"}</span>
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
             <div className="flex items-center gap-3">
