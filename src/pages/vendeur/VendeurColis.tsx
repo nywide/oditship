@@ -12,6 +12,7 @@ import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { OrderFormDialog, OrderFormValues } from "@/components/dashboard/OrderFormDialog";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
 import { printSticker, printStickers } from "@/lib/printSticker";
+import { cn } from "@/lib/utils";
 import { ChevronDown, Pencil, Trash2, Printer, Plus, Search, CheckCircle2, PackageCheck, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
