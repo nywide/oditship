@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/StatusBadge";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { OrderFormDialog, OrderFormValues } from "@/components/dashboard/OrderFormDialog";
+import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
 import { printSticker, printStickers } from "@/lib/printSticker";
-import { Pencil, Trash2, Printer, Plus, Search, CheckCircle2, PackageCheck, Loader2, X } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, Printer, Plus, Search, CheckCircle2, PackageCheck, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -54,6 +55,7 @@ const VendeurColis = () => {
 
   const [agents, setAgents] = useState<{ id: string; full_name: string | null; username: string }[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
   const [confirming, setConfirming] = useState(false);
   const [pickingUp, setPickingUp] = useState(false);
@@ -252,6 +254,7 @@ const VendeurColis = () => {
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune commande</TableCell></TableRow>
             ) : filtered.map((o) => (
+              <>
               <TableRow key={o.id} data-state={selected.has(o.id) ? "selected" : undefined}>
                 <TableCell>
                   <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} aria-label={`Sélectionner ${o.id}`} />
@@ -288,9 +291,20 @@ const VendeurColis = () => {
                         <Printer className="h-4 w-4 mr-1" /> Sticker
                       </Button>
                     )}
+                    <Button variant="ghost" size="icon" onClick={() => setExpandedOrderId(expandedOrderId === o.id ? null : o.id)} aria-label="Voir détails">
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", expandedOrderId === o.id && "rotate-180")} />
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
+              {expandedOrderId === o.id && (
+                <TableRow key={`${o.id}-details`}>
+                  <TableCell colSpan={7} className="bg-muted/20 p-0">
+                    <OrderDetailsPanel order={o} />
+                  </TableCell>
+                </TableRow>
+              )}
+              </>
             ))}
           </TableBody>
         </Table>
