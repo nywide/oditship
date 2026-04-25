@@ -58,7 +58,7 @@ describe("OrderFormDialog city dropdown", () => {
   });
 
   it("keeps the dropdown open when using the mouse wheel inside the city list", async () => {
-    render(
+    const { container } = render(
       <OrderFormDialog
         open
         onOpenChange={vi.fn()}
