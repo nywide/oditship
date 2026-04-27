@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { OrderFormDialog } from "./OrderFormDialog";
-import { toast } from "sonner";
 
 const { cityRows, cityNames, invokeMock } = vi.hoisted(() => {
   const rows = Array.from({ length: 40 }, (_, index) => ({
@@ -16,7 +15,7 @@ const { cityRows, cityNames, invokeMock } = vi.hoisted(() => {
 });
 invokeMock.mockImplementation((_name, { body } = {}) => {
   if (body?.action === "list_cities") return Promise.resolve({ data: { ok: true, cities: cityNames }, error: null });
-  if (body?.order?.product_name === "A1") return Promise.resolve({ data: { error: "Produit: minimum 3 lettres ou chiffres", code: "VALIDATION_ERROR" }, error: null });
+  if (body?.order?.product_name === "A1") return Promise.resolve({ data: { error: "Produit: minimum 3 lettres ou chiffres", code: "VALIDATION_ERROR", field: "product_name" }, error: null });
   return Promise.resolve({ data: { ok: true, livreur_name: "Livreur test" }, error: null });
 });
 
@@ -93,7 +92,7 @@ describe("OrderFormDialog city dropdown", () => {
     expect(screen.getByText("Ville 40")).toBeInTheDocument();
   });
 
-  it("shows validation rule errors returned by the preflight check", async () => {
+  it("shows one validation rule error under the field returned by the preflight check", async () => {
     const { container } = render(
       <OrderFormDialog
         open
@@ -116,7 +115,7 @@ describe("OrderFormDialog city dropdown", () => {
     fireEvent.submit(document.querySelector("form")!);
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Produit: minimum 3 lettres ou chiffres");
+      expect(screen.getByText("minimum 3 lettres ou chiffres")).toBeInTheDocument();
     });
   });
 });

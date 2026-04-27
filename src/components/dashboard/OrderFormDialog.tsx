@@ -25,7 +25,18 @@ export interface OrderFormValues {
 }
 
 const GENERIC_SYSTEM_ERROR = "Un problème système est survenu. Veuillez contacter le support.";
-const REQUIRED_FIELD_ERROR = "Veuillez remplir tous les champs obligatoires.";
+const REQUIRED_FIELD_ERROR = "Ce champ est obligatoire.";
+
+type FieldName = keyof OrderFormValues;
+
+const FIELD_LABEL_PREFIXES: Partial<Record<FieldName, string>> = {
+  customer_name: "Nom client",
+  customer_phone: "Téléphone",
+  customer_address: "Adresse",
+  customer_city: "Ville",
+  product_name: "Produit",
+  order_value: "Prix",
+};
 
 interface Props {
   open: boolean;
@@ -52,11 +63,24 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
   const [cities, setCities] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
-  const [preflightLoading, setPreflightLoading] = useState(false);
-  const [resolvedLivreur, setResolvedLivreur] = useState<string | null>(null);
-  const [cityChecked, setCityChecked] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
   const editing = Boolean(initial?.id);
+
+  const clearError = (field: FieldName) => {
+    setFormError(null);
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const fieldMessage = (field: FieldName, message: string) => {
+    const prefix = FIELD_LABEL_PREFIXES[field];
+    return prefix ? message.replace(new RegExp(`^${prefix}\\s*:\\s*`, "i"), "") : message;
+  };
 
   useEffect(() => {
     if (open) {
@@ -69,10 +93,11 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
       }
       setValues(init);
       setFormError(null);
+      setFieldErrors({});
       supabase.functions.invoke("order-preflight", { body: { action: "list_cities" } }).then(({ data, error }) => {
         if (error || (data as any)?.error) {
           setCities([]);
-          toast.error(GENERIC_SYSTEM_ERROR);
+          setFormError(GENERIC_SYSTEM_ERROR);
           return;
         }
         setCities(((data as any)?.cities ?? []) as string[]);
@@ -82,41 +107,26 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
 
   const filteredCities = useMemo(() => cities, [cities]);
 
-  useEffect(() => {
-    if (!open || !values.customer_city) {
-      setResolvedLivreur(null);
-      setCityChecked(false);
-      return;
-    }
-
-    let cancelled = false;
-    setPreflightLoading(true);
-    supabase.functions.invoke("order-preflight", {
-      body: { city: values.customer_city },
-    }).then(({ data, error }) => {
-      if (cancelled) return;
-      if (error || (data as any)?.error) setResolvedLivreur(null);
-      else setResolvedLivreur((data as any)?.livreur_name ?? null);
-      setCityChecked(true);
-    }).finally(() => {
-      if (!cancelled) setPreflightLoading(false);
-    });
-
-    return () => { cancelled = true; };
-  }, [open, values.customer_city]);
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
     setFormError(null);
-    if (!values.customer_city || !values.customer_name.trim() || !values.customer_phone.trim() || !values.customer_address.trim() || !values.product_name.trim() || values.order_value === "") {
-      setFormError(REQUIRED_FIELD_ERROR);
-      return toast.error(REQUIRED_FIELD_ERROR);
+    setFieldErrors({});
+    const requiredErrors: Partial<Record<FieldName, string>> = {};
+    if (!values.customer_city) requiredErrors.customer_city = REQUIRED_FIELD_ERROR;
+    if (!values.customer_name.trim()) requiredErrors.customer_name = REQUIRED_FIELD_ERROR;
+    if (!values.customer_phone.trim()) requiredErrors.customer_phone = REQUIRED_FIELD_ERROR;
+    if (!values.customer_address.trim()) requiredErrors.customer_address = REQUIRED_FIELD_ERROR;
+    if (!values.product_name.trim()) requiredErrors.product_name = REQUIRED_FIELD_ERROR;
+    if (values.order_value === "") requiredErrors.order_value = REQUIRED_FIELD_ERROR;
+    if (Object.keys(requiredErrors).length > 0) {
+      setFieldErrors(requiredErrors);
+      return;
     }
     const priceNum = typeof values.order_value === "number" ? values.order_value : parseFloat(String(values.order_value));
     if (!Number.isFinite(priceNum)) {
-      setFormError("Le prix est invalide.");
-      return toast.error("Le prix est invalide.");
+      setFieldErrors({ order_value: "Le prix est invalide." });
+      return;
     }
     setSubmitting(true);
     try {
@@ -127,8 +137,9 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         if (preflightError || (preflight as any)?.error) {
           const message = (preflight as any)?.error || GENERIC_SYSTEM_ERROR;
           const safeMessage = (preflight as any)?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR;
-          setFormError(safeMessage);
-          toast.error(safeMessage);
+          const field = (preflight as any)?.field as FieldName | undefined;
+          if (field && Object.prototype.hasOwnProperty.call(empty, field)) setFieldErrors({ [field]: fieldMessage(field, safeMessage) });
+          else setFormError(safeMessage);
           return;
         }
       }
@@ -167,7 +178,6 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
       onSaved();
     } catch {
       setFormError(GENERIC_SYSTEM_ERROR);
-      toast.error(GENERIC_SYSTEM_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -179,7 +189,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         <DialogHeader>
           <DialogTitle>{editing ? "Modifier la commande" : "Nouvelle commande"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} className="space-y-3" noValidate>
           <div>
             <Label>Ville *</Label>
             <Popover open={cityOpen} onOpenChange={setCityOpen} modal>
@@ -206,7 +216,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                           value={c}
                           onSelect={() => {
                             setValues({ ...values, customer_city: c });
-                            setFormError(null);
+                            clearError("customer_city");
                             setCityOpen(false);
                           }}
                         >
@@ -219,40 +229,38 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                 </Command>
               </PopoverContent>
             </Popover>
-            {values.customer_city && (preflightLoading || resolvedLivreur) && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {preflightLoading ? "Vérification du livreur..." : cityChecked && resolvedLivreur ? `Livreur: ${resolvedLivreur}` : null}
-              </p>
-            )}
+            {fieldErrors.customer_city && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_city}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Nom client *</Label>
-              <Input required value={values.customer_name} onChange={(e) => { setValues({ ...values, customer_name: e.target.value }); setFormError(null); }} />
+              <Input value={values.customer_name} onChange={(e) => { setValues({ ...values, customer_name: e.target.value }); clearError("customer_name"); }} />
+              {fieldErrors.customer_name && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_name}</p>}
             </div>
             <div>
-              <Label>Téléphone * (10 chiffres)</Label>
+              <Label>Téléphone *</Label>
               <Input
-                required
                 inputMode="numeric"
                 value={values.customer_phone}
-                onChange={(e) => { setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "") }); setFormError(null); }}
+                onChange={(e) => { setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "") }); clearError("customer_phone"); }}
               />
+              {fieldErrors.customer_phone && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_phone}</p>}
             </div>
           </div>
           <div>
             <Label>Adresse *</Label>
-            <Input required value={values.customer_address} onChange={(e) => { setValues({ ...values, customer_address: e.target.value }); setFormError(null); }} />
+            <Input value={values.customer_address} onChange={(e) => { setValues({ ...values, customer_address: e.target.value }); clearError("customer_address"); }} />
+            {fieldErrors.customer_address && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_address}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Produit *</Label>
-              <Input required value={values.product_name} onChange={(e) => { setValues({ ...values, product_name: e.target.value }); setFormError(null); }} />
+              <Input value={values.product_name} onChange={(e) => { setValues({ ...values, product_name: e.target.value }); clearError("product_name"); }} />
+              {fieldErrors.product_name && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.product_name}</p>}
             </div>
             <div>
               <Label>Prix (MAD) *</Label>
               <Input
-                required
                 type="number"
                 min={0}
                 step="0.01"
@@ -261,9 +269,10 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                 onChange={(e) => {
                   const v = e.target.value;
                   setValues({ ...values, order_value: v === "" ? "" : parseFloat(v) });
-                  setFormError(null);
+                  clearError("order_value");
                 }}
               />
+              {fieldErrors.order_value && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.order_value}</p>}
             </div>
           </div>
           <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
