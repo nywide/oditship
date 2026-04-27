@@ -92,6 +92,34 @@ function buildMappedPayload(order: Record<string, any>, mapping: Record<string, 
   return payload;
 }
 
+function resolveTemplateValue(order: Record<string, any>, source: unknown) {
+  const value = String(source ?? "");
+  if (value.startsWith("secret:")) return Deno.env.get(value.slice(7)) ?? "";
+  return getPath(order, value);
+}
+
+function buildMappedPayloadWithSecrets(order: Record<string, any>, mapping: Record<string, string>) {
+  const payload: Record<string, any> = {};
+  Object.entries(mapping ?? {}).forEach(([target, source]) => setPath(payload, target, resolveTemplateValue(order, source)));
+  return payload;
+}
+
+async function applyAuthentication(order: Record<string, any>, headers: Record<string, string>, authConfig: Record<string, any> | null) {
+  if (!authConfig || authConfig.type === "none" || !authConfig.url) return headers;
+  const r = await fetch(authConfig.url, {
+    method: authConfig.method || "POST",
+    headers: { "Content-Type": "application/json", ...(authConfig.headers ?? {}) },
+    body: JSON.stringify(buildMappedPayloadWithSecrets(order, authConfig.payload_mapping ?? {})),
+  });
+  const text = await r.text();
+  let parsed: any = {};
+  try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+  if (!r.ok) throw new Error(`Authentication ${r.status}: ${parsed?.description || parsed?.message || text}`);
+  const token = getPath(parsed, authConfig.response_token_path || "token");
+  if (!token) throw new Error("Authentication: missing token in response");
+  return { ...headers, [authConfig.token_header || "Authorization"]: `${authConfig.token_prefix ?? "Bearer "}${token}` };
+}
+
 async function genericCreatePackage(url: string, method: string, headers: Record<string, string>, body: Record<string, unknown>) {
   const r = await fetch(url, {
     method: method || "POST",
@@ -105,6 +133,22 @@ async function genericCreatePackage(url: string, method: string, headers: Record
   const trackingID = parsed?.trackingID || parsed?.tracking_id || parsed?.trackingNumber || parsed?.tracking_number || parsed?.id;
   if (!trackingID) throw new Error("Create package: missing tracking id in response");
   return { trackingID: String(trackingID), raw: parsed };
+}
+
+async function runApiOperations(order: Record<string, any>, operations: Array<Record<string, any>>, headers: Record<string, string>, rateLimit: number) {
+  const delayMs = Math.ceil(1000 / Math.max(Number(rateLimit) || 5, 0.1));
+  for (const op of operations ?? []) {
+    if (!op?.enabled || !op?.url) continue;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    const method = String(op.method || "POST").toUpperCase();
+    const mappedBody = buildMappedPayloadWithSecrets(order, op.payload_mapping ?? {});
+    const r = await fetch(op.url, {
+      method,
+      headers: { "Content-Type": "application/json", ...headers, ...(op.headers ?? {}) },
+      body: method === "GET" ? undefined : JSON.stringify(mappedBody),
+    });
+    if (!r.ok && op.required !== false) throw new Error(`Operation ${op.name || op.url} failed (${r.status}): ${await r.text()}`);
+  }
 }
 
 async function olivraisonUpdatePackage(token: string, trackingID: string, noOpen: boolean) {
@@ -321,12 +365,13 @@ Deno.serve(async (req) => {
 
     const partnerTrackingID = `ODiT-${order.id}`;
     const noOpenValue = order.open_package === true;
+    const authenticatedHeaders = await applyAuthentication(order, settings?.create_package_headers ?? {}, settings?.auth_config ?? null);
     const result = settings?.create_package_url
       ? await genericCreatePackage(
           settings.create_package_url,
           settings.create_package_method,
-          settings.create_package_headers ?? {},
-          buildMappedPayload(order, settings.create_package_mapping ?? {})
+          authenticatedHeaders,
+          buildMappedPayloadWithSecrets(order, settings.create_package_mapping ?? {})
         )
       : await (async () => {
           const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
@@ -347,6 +392,8 @@ Deno.serve(async (req) => {
           await olivraisonUpdatePackage(token, created.trackingID, noOpenValue);
           return created;
         })();
+
+    await runApiOperations(order, settings?.api_operations ?? [], authenticatedHeaders, settings?.rate_limit_per_second ?? 5);
 
     const { error: updErr } = await admin.from("orders").update({
       external_tracking_number: result.trackingID,

@@ -39,6 +39,7 @@ interface LivreurApiSettings {
   polling_tracking_field: string;
   polling_status_field: string;
   polling_message_field: string;
+  rate_limit_per_second: number;
   is_active: boolean;
 }
 
@@ -101,6 +102,7 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   polling_tracking_field: "trackingID",
   polling_status_field: "status",
   polling_message_field: "message",
+  rate_limit_per_second: 5,
   is_active: true,
 });
 
@@ -118,6 +120,15 @@ const parseJson = (label: string, value: string) => {
     return parsed;
   } catch {
     throw new Error(`${label}: JSON invalide`);
+  }
+};
+const parseJsonArray = (label: string, value: string) => {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed)) throw new Error();
+    return parsed;
+  } catch {
+    throw new Error(`${label}: JSON array invalide`);
   }
 };
 
@@ -151,6 +162,7 @@ const AdminLivreurs = () => {
     polling_tracking_field: "trackingID",
     polling_status_field: "status",
     polling_message_field: "message",
+    rate_limit_per_second: 5,
     is_active: true,
   });
 
@@ -193,6 +205,7 @@ const AdminLivreurs = () => {
       polling_tracking_field: activeSettings.polling_tracking_field || "trackingID",
       polling_status_field: activeSettings.polling_status_field || "status",
       polling_message_field: activeSettings.polling_message_field || "message",
+      rate_limit_per_second: activeSettings.rate_limit_per_second ?? 5,
       is_active: activeSettings.is_active,
     });
   }, [activeSettings]);
@@ -241,11 +254,23 @@ const AdminLivreurs = () => {
         create_package_method: settingsForm.create_package_method.trim().toUpperCase() || "POST",
         create_package_headers: parseJson("Headers", settingsForm.create_package_headers),
         create_package_mapping: parseJson("Mapping create package", settingsForm.create_package_mapping),
+        auth_config: parseJson("Authentication", settingsForm.auth_config),
+        api_operations: parseJsonArray("Payloads API", settingsForm.api_operations),
         validation_rules: parseJson("Validation", settingsForm.validation_rules),
         status_mapping: parseJson("Mapping status", settingsForm.status_mapping),
         webhook_updates_current_status: settingsForm.webhook_updates_current_status,
         webhook_status_field: settingsForm.webhook_status_field.trim() || "status",
         webhook_tracking_field: settingsForm.webhook_tracking_field.trim() || "trackingID",
+        polling_enabled: settingsForm.polling_enabled,
+        polling_interval_minutes: Number(settingsForm.polling_interval_minutes) || 15,
+        polling_status_url: settingsForm.polling_status_url.trim() || null,
+        polling_status_method: settingsForm.polling_status_method.trim().toUpperCase() || "GET",
+        polling_status_headers: parseJson("Polling headers", settingsForm.polling_status_headers),
+        polling_status_payload_mapping: parseJson("Polling payload", settingsForm.polling_status_payload_mapping),
+        polling_tracking_field: settingsForm.polling_tracking_field.trim() || "trackingID",
+        polling_status_field: settingsForm.polling_status_field.trim() || "status",
+        polling_message_field: settingsForm.polling_message_field.trim() || "message",
+        rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
         is_active: settingsForm.is_active,
       };
       const { error } = await db.from("livreur_api_settings").upsert(payload, { onConflict: "livreur_id" });
@@ -350,6 +375,12 @@ const AdminLivreurs = () => {
               <div><Label>Payload mapping JSON</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.create_package_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_mapping: e.target.value })} /></div>
             </Card>
             <Card className="p-4 space-y-3">
+              <h3 className="font-semibold">Authentication & Payloads</h3>
+              <div><Label>Authentication JSON</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.auth_config} onChange={(e) => setSettingsForm({ ...settingsForm, auth_config: e.target.value })} /></div>
+              <div><Label>Payloads API JSON array</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.api_operations} onChange={(e) => setSettingsForm({ ...settingsForm, api_operations: e.target.value })} /></div>
+              <div><Label>Rate limit / seconde</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /></div>
+            </Card>
+            <Card className="p-4 space-y-3">
               <h3 className="font-semibold">Validation & Webhook</h3>
               <div><Label>Validation JSON</Label><Textarea rows={7} className="font-mono text-xs" value={settingsForm.validation_rules} onChange={(e) => setSettingsForm({ ...settingsForm, validation_rules: e.target.value })} /></div>
               <div><Label>Status mapping JSON</Label><Textarea rows={7} className="font-mono text-xs" value={settingsForm.status_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, status_mapping: e.target.value })} /></div>
@@ -359,6 +390,22 @@ const AdminLivreurs = () => {
               </div>
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.webhook_updates_current_status} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, webhook_updates_current_status: v })} /> Webhook met à jour le statut actuel</label>
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.is_active} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, is_active: v })} /> Paramètres actifs</label>
+            </Card>
+            <Card className="p-4 space-y-3">
+              <h3 className="font-semibold">Polling statut</h3>
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.polling_enabled} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, polling_enabled: v })} /> Activer polling</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Intervalle minutes</Label><Input type="number" min={1} value={settingsForm.polling_interval_minutes} onChange={(e) => setSettingsForm({ ...settingsForm, polling_interval_minutes: Number(e.target.value) })} /></div>
+                <div><Label>Méthode</Label><Input value={settingsForm.polling_status_method} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_method: e.target.value })} /></div>
+              </div>
+              <div><Label>URL statut</Label><Input value={settingsForm.polling_status_url} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_url: e.target.value })} placeholder="https://..." /></div>
+              <div><Label>Headers polling JSON</Label><Textarea rows={4} className="font-mono text-xs" value={settingsForm.polling_status_headers} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_headers: e.target.value })} /></div>
+              <div><Label>Payload polling JSON</Label><Textarea rows={5} className="font-mono text-xs" value={settingsForm.polling_status_payload_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_payload_mapping: e.target.value })} /></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><Label>Champ tracking</Label><Input value={settingsForm.polling_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_tracking_field: e.target.value })} /></div>
+                <div><Label>Champ status</Label><Input value={settingsForm.polling_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_field: e.target.value })} /></div>
+                <div><Label>Champ message</Label><Input value={settingsForm.polling_message_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_message_field: e.target.value })} /></div>
+              </div>
             </Card>
           </div>
           <DialogFooter>
