@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { ChevronDown, Clock, Eye, EyeOff, HelpCircle, PackageCheck, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
-interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
+interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; authentication_config?: Record<string, unknown> | null; create_package_config?: Record<string, unknown> | null; }
 interface Hub { id: number; name: string; }
 interface HubLivreur { hub_id: number; livreur_id: string; }
 interface LivreurApiSettings {
@@ -191,8 +191,10 @@ const SectionHeader = ({ icon: Icon, title, description, children }: { icon: typ
 );
 
 const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value", primitiveValues = false }: { label: string; help: string; value: string; onChange: (value: string) => void; keyPlaceholder?: string; valuePlaceholder?: string; primitiveValues?: boolean }) => {
-  const pairs = Object.entries(safeRecord(value));
-  const updatePairs = (nextPairs: Array<[string, string]>) => onChange(JSON.stringify(Object.fromEntries(nextPairs.filter(([key]) => key.trim()).map(([key, item]) => [key.trim(), primitiveValues ? toPrimitive(item) : item])), null, 2));
+  const [pairs, setPairs] = useState<Array<[string, string]>>(() => Object.entries(safeRecord(value)));
+  useEffect(() => { setPairs(Object.entries(safeRecord(value))); }, [value]);
+  const emit = (nextPairs: Array<[string, string]>) => onChange(JSON.stringify(Object.fromEntries(nextPairs.filter(([key]) => key.trim()).map(([key, item]) => [key.trim(), primitiveValues ? toPrimitive(item) : item])), null, 2));
+  const updatePairs = (nextPairs: Array<[string, string]>) => { setPairs(nextPairs); emit(nextPairs); };
 
   return (
     <div className="space-y-2">
@@ -203,8 +205,8 @@ const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", 
       <div className="space-y-2">
         {(pairs.length ? pairs : [["", ""]]).map(([key, item], index) => (
           <div key={`${key}-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px]">
-            <Input value={key} placeholder={keyPlaceholder} onChange={(e) => updatePairs(pairs.length ? pairs.map((pair, i) => i === index ? [e.target.value, pair[1]] : pair) : [[e.target.value, item]])} />
-            <Input value={item} placeholder={valuePlaceholder} onChange={(e) => updatePairs(pairs.length ? pairs.map((pair, i) => i === index ? [pair[0], e.target.value] : pair) : [[key, e.target.value]])} />
+            <Input value={key} placeholder={keyPlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""] as [string, string]]).map((pair, i): [string, string] => i === index ? [e.target.value, pair[1]] : pair))} />
+            <Input value={item} placeholder={valuePlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""] as [string, string]]).map((pair, i): [string, string] => i === index ? [pair[0], e.target.value] : pair))} />
             <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => updatePairs(pairs.filter((_, i) => i !== index))} disabled={!pairs.length}>
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -274,7 +276,19 @@ const AdminLivreurs = () => {
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Livreur | null>(null);
-  const activeSettings = useMemo(() => editing ? settings[editing.id] ?? defaultSettings(editing.id) : null, [editing, settings]);
+  const activeSettings = useMemo(() => {
+    if (!editing) return null;
+    const current = settings[editing.id] ?? defaultSettings(editing.id);
+    return {
+      ...current,
+      auth_config: editing.authentication_config ?? current.auth_config,
+      create_package_mapping: (editing.create_package_config as any)?.payload_mapping ?? current.create_package_mapping,
+      create_package_headers: (editing.create_package_config as any)?.headers ?? current.create_package_headers,
+      create_package_url: (editing.create_package_config as any)?.url ?? current.create_package_url,
+      create_package_method: (editing.create_package_config as any)?.method ?? current.create_package_method,
+      api_operations: (editing.create_package_config as any)?.operations ?? current.api_operations,
+    };
+  }, [editing, settings]);
   const [settingsForm, setSettingsForm] = useState({
     create_package_url: "",
     create_package_method: "POST",
@@ -302,7 +316,7 @@ const AdminLivreurs = () => {
 
   const load = async () => {
     const [p, h, hl, s] = await Promise.all([
-      supabase.from("profiles").select("id, username, full_name, api_enabled, api_token").eq("role", "livreur").order("username"),
+      db.from("profiles").select("id, username, full_name, api_enabled, api_token, authentication_config, create_package_config").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
@@ -407,8 +421,20 @@ const AdminLivreurs = () => {
         rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
         is_active: settingsForm.is_active,
       };
+      const authConfig = parseJson("Authentication", settingsForm.auth_config);
+      const createPackageConfig = {
+        url: settingsForm.create_package_url.trim() || null,
+        method: settingsForm.create_package_method.trim().toUpperCase() || "POST",
+        headers: parseJson("Headers", settingsForm.create_package_headers),
+        payload_mapping: parseJson("Mapping create package", settingsForm.create_package_mapping),
+        response_tracking_path: "trackingID",
+        operations: parseJsonArray("Payloads API", settingsForm.api_operations),
+        rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
+      };
       const { error } = await db.from("livreur_api_settings").upsert(payload, { onConflict: "livreur_id" });
       if (error) throw error;
+      const { error: profileError } = await db.from("profiles").update({ authentication_config: authConfig, create_package_config: createPackageConfig }).eq("id", editing.id);
+      if (profileError) throw profileError;
       toast.success("Driver settings saved");
       setEditing(null);
       await load();

@@ -543,10 +543,12 @@ export type Database = {
           agent_pages: Json | null
           api_enabled: boolean
           api_token: string | null
+          authentication_config: Json | null
           bank_account_name: string | null
           bank_account_number: string | null
           cin: string | null
           company_name: string | null
+          create_package_config: Json | null
           created_at: string
           full_name: string | null
           id: string
@@ -562,10 +564,12 @@ export type Database = {
           agent_pages?: Json | null
           api_enabled?: boolean
           api_token?: string | null
+          authentication_config?: Json | null
           bank_account_name?: string | null
           bank_account_number?: string | null
           cin?: string | null
           company_name?: string | null
+          create_package_config?: Json | null
           created_at?: string
           full_name?: string | null
           id: string
@@ -581,10 +585,12 @@ export type Database = {
           agent_pages?: Json | null
           api_enabled?: boolean
           api_token?: string | null
+          authentication_config?: Json | null
           bank_account_name?: string | null
           bank_account_number?: string | null
           cin?: string | null
           company_name?: string | null
+          create_package_config?: Json | null
           created_at?: string
           full_name?: string | null
           id?: string

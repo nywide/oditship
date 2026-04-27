@@ -158,20 +158,42 @@ const VendeurColis = () => {
     }
   };
 
+  const resolveLivreurForOrder = async (order: Order) => {
+    const { data: hubCity, error: hubError } = await supabase
+      .from("hub_cities")
+      .select("hub_id")
+      .eq("city_name", order.customer_city)
+      .limit(1)
+      .maybeSingle();
+    if (hubError) throw hubError;
+    if (!hubCity) throw new Error(`City "${order.customer_city}" is not assigned to any hub`);
+
+    const { data: hubLivreur, error: livreurError } = await supabase
+      .from("hub_livreur")
+      .select("livreur_id")
+      .eq("hub_id", hubCity.hub_id)
+      .maybeSingle();
+    if (livreurError) throw livreurError;
+    if (!hubLivreur?.livreur_id) throw new Error("No delivery person assigned to this hub");
+    return hubLivreur.livreur_id;
+  };
+
   const groupPickup = async () => {
     if (eligiblePickup.length === 0) return;
     setPickingUp(true);
     let success = 0, failed = 0;
     for (const o of eligiblePickup) {
       try {
-        const { data, error } = await supabase.functions.invoke("olivraison-create-order", {
-          body: { order_id: o.id },
+        const livreurId = await resolveLivreurForOrder(o);
+        const { data, error } = await supabase.functions.invoke("livreur-gateway", {
+          body: { order_id: o.id, livreur_id: livreurId },
         });
         if (error) throw error;
         if ((data as any)?.error) throw new Error((data as any).error);
         success++;
-      } catch {
+      } catch (e: any) {
         failed++;
+        toast.error(e.message || `Commande ${o.id} en échec`);
       }
     }
     if (success) toast.success(`${success} commande(s) envoyée(s) au livreur`);
