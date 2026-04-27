@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Activity, BookOpen, ChevronDown, Clock, ExternalLink, Eye, EyeOff, Gauge, HelpCircle, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Webhook } from "lucide-react";
+import { ChevronDown, Clock, Eye, EyeOff, HelpCircle, PackageCheck, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
 interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
@@ -113,6 +113,16 @@ const generateToken = () => {
 };
 
 const formatJson = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
+const safeRecord = (value: string): Record<string, string> => {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
+    return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, String(item ?? "")]));
+  } catch {
+    return {};
+  }
+};
+
 const parseJson = (label: string, value: string) => {
   try {
     const parsed = JSON.parse(value || "{}");
@@ -131,17 +141,6 @@ const parseJsonArray = (label: string, value: string) => {
     throw new Error(`${label}: JSON array invalide`);
   }
 };
-
-const docs = {
-  auth: "https://partners.olivraison.com/docs#tag/auth/POST/auth/login",
-  api: "https://partners.olivraison.com/docs",
-};
-
-const HelpLink = ({ href, children }: { href: string; children: string }) => (
-  <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-    <BookOpen className="h-3.5 w-3.5" /> {children} <ExternalLink className="h-3 w-3" />
-  </a>
-);
 
 const FieldHelp = ({ children }: { children: string }) => (
   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{children}</p>
@@ -169,6 +168,34 @@ const JsonTextarea = ({ label, help, rows, value, onChange }: { label: string; h
     <Textarea rows={rows} className="mt-2 font-mono text-xs leading-relaxed" value={value} onChange={(e) => onChange(e.target.value)} />
   </div>
 );
+
+const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value" }: { label: string; help: string; value: string; onChange: (value: string) => void; keyPlaceholder?: string; valuePlaceholder?: string }) => {
+  const pairs = Object.entries(safeRecord(value));
+  const updatePairs = (nextPairs: Array<[string, string]>) => onChange(JSON.stringify(Object.fromEntries(nextPairs.filter(([key]) => key.trim()).map(([key, item]) => [key.trim(), item])), null, 2));
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label>{label}</Label>
+        <FieldHelp>{help}</FieldHelp>
+      </div>
+      <div className="space-y-2">
+        {(pairs.length ? pairs : [["", ""]]).map(([key, item], index) => (
+          <div key={`${key}-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px]">
+            <Input value={key} placeholder={keyPlaceholder} onChange={(e) => updatePairs(pairs.length ? pairs.map((pair, i) => i === index ? [e.target.value, pair[1]] : pair) : [[e.target.value, item]])} />
+            <Input value={item} placeholder={valuePlaceholder} onChange={(e) => updatePairs(pairs.length ? pairs.map((pair, i) => i === index ? [pair[0], e.target.value] : pair) : [[key, e.target.value]])} />
+            <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => updatePairs(pairs.filter((_, i) => i !== index))} disabled={!pairs.length}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={() => updatePairs([...pairs, ["", ""]])}>
+        <Plus className="mr-1 h-4 w-4" /> Add row
+      </Button>
+    </div>
+  );
+};
 
 const AdminLivreurs = () => {
   const [livreurs, setLivreurs] = useState<Livreur[]>([]);
