@@ -120,6 +120,15 @@ const parseJson = (label: string, value: string) => {
     throw new Error(`${label}: JSON invalide`);
   }
 };
+const parseJsonArray = (label: string, value: string) => {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed)) throw new Error();
+    return parsed;
+  } catch {
+    throw new Error(`${label}: JSON array invalide`);
+  }
+};
 
 const AdminLivreurs = () => {
   const [livreurs, setLivreurs] = useState<Livreur[]>([]);
@@ -241,11 +250,23 @@ const AdminLivreurs = () => {
         create_package_method: settingsForm.create_package_method.trim().toUpperCase() || "POST",
         create_package_headers: parseJson("Headers", settingsForm.create_package_headers),
         create_package_mapping: parseJson("Mapping create package", settingsForm.create_package_mapping),
+        auth_config: parseJson("Authentication", settingsForm.auth_config),
+        api_operations: parseJsonArray("Payloads API", settingsForm.api_operations),
         validation_rules: parseJson("Validation", settingsForm.validation_rules),
         status_mapping: parseJson("Mapping status", settingsForm.status_mapping),
         webhook_updates_current_status: settingsForm.webhook_updates_current_status,
         webhook_status_field: settingsForm.webhook_status_field.trim() || "status",
         webhook_tracking_field: settingsForm.webhook_tracking_field.trim() || "trackingID",
+        polling_enabled: settingsForm.polling_enabled,
+        polling_interval_minutes: Number(settingsForm.polling_interval_minutes) || 15,
+        polling_status_url: settingsForm.polling_status_url.trim() || null,
+        polling_status_method: settingsForm.polling_status_method.trim().toUpperCase() || "GET",
+        polling_status_headers: parseJson("Polling headers", settingsForm.polling_status_headers),
+        polling_status_payload_mapping: parseJson("Polling payload", settingsForm.polling_status_payload_mapping),
+        polling_tracking_field: settingsForm.polling_tracking_field.trim() || "trackingID",
+        polling_status_field: settingsForm.polling_status_field.trim() || "status",
+        polling_message_field: settingsForm.polling_message_field.trim() || "message",
+        rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
         is_active: settingsForm.is_active,
       };
       const { error } = await db.from("livreur_api_settings").upsert(payload, { onConflict: "livreur_id" });
