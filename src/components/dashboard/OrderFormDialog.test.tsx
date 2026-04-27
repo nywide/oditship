@@ -118,4 +118,44 @@ describe("OrderFormDialog city dropdown", () => {
       expect(screen.getByText("minimum 3 lettres ou chiffres")).toBeInTheDocument();
     });
   });
+
+  it("reads validation details from non-2xx function errors and shows them under the matching field", async () => {
+    invokeMock.mockImplementationOnce((_name, { body } = {}) => {
+      if (body?.action === "list_cities") return Promise.resolve({ data: { ok: true, cities: cityNames }, error: null });
+      return Promise.resolve({ data: null, error: null });
+    }).mockImplementationOnce(() => Promise.resolve({
+      data: null,
+      error: {
+        context: {
+          json: () => Promise.resolve({ error: "Adresse: minimum 3 lettres ou chiffres", code: "VALIDATION_ERROR", field: "customer_address" }),
+        },
+      },
+    }));
+
+    render(
+      <OrderFormDialog
+        open
+        onOpenChange={vi.fn()}
+        vendeurId="vendeur-1"
+        agentId={null}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(await screen.findByText("Ville 01"));
+    const inputs = document.querySelectorAll("input");
+    fireEvent.change(inputs[0], { target: { value: "test" } });
+    fireEvent.change(inputs[1], { target: { value: "0626009657" } });
+    fireEvent.change(inputs[2], { target: { value: "aa" } });
+    fireEvent.change(inputs[3], { target: { value: "test" } });
+    fireEvent.change(inputs[4], { target: { value: "1" } });
+
+    fireEvent.submit(document.querySelector("form")!);
+
+    await waitFor(() => {
+      expect(screen.getByText("minimum 3 lettres ou chiffres")).toBeInTheDocument();
+      expect(screen.queryByText("Un problème système est survenu. Veuillez contacter le support.")).not.toBeInTheDocument();
+    });
+  });
 });
