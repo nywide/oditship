@@ -1,7 +1,3 @@
-// Inbound webhook stub for traditional (non-API) livreurs to push status updates back to ODiT.
-// Authenticates the request with the livreur's api_token.
-// Implementation is intentionally minimal — full status sync logic will land later.
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -9,10 +5,26 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function getPath(obj: any, path?: string | null) {
+  if (!path) return undefined;
+  return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
+}
+
+function normalizeStatus(status: unknown, mapping: Record<string, string>) {
+  const raw = String(status ?? "").trim();
+  if (!raw) return null;
+  return mapping[raw] || mapping[raw.toUpperCase()] || mapping[raw.toLowerCase()] || raw;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
-  // URL: /livreur-webhook/{livreur_id}/order-status
   const url = new URL(req.url);
   const parts = url.pathname.split("/").filter(Boolean);
   const idIdx = parts.findIndex((p) => p === "livreur-webhook");
@@ -34,11 +46,10 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, api_token, api_enabled")
-    .eq("id", livreurId)
-    .maybeSingle();
+  const [{ data: profile }, { data: settings }] = await Promise.all([
+    admin.from("profiles").select("id, api_token, api_enabled").eq("id", livreurId).maybeSingle(),
+    admin.from("livreur_api_settings").select("*").eq("livreur_id", livreurId).maybeSingle(),
+  ]);
 
   if (!profile || profile.api_token !== token) {
     return new Response(JSON.stringify({ error: "Invalid credentials" }), {
@@ -47,12 +58,49 @@ Deno.serve(async (req) => {
     });
   }
 
-  let payload: unknown = null;
-  try { payload = await req.json(); } catch { /* ignore */ }
+  let payload: any = {};
+  try { payload = await req.json(); } catch { payload = {}; }
 
-  console.log("livreur-webhook received", { livreurId, payload });
+  const trackingField = settings?.webhook_tracking_field || "trackingID";
+  const statusField = settings?.webhook_status_field || "status";
+  const tracking = getPath(payload, trackingField) || payload.tracking_id || payload.trackingNumber || payload.partnerTrackingID;
+  const mappedStatus = normalizeStatus(getPath(payload, statusField), settings?.status_mapping ?? {});
+  const message = payload.message || payload.msg || payload.description || null;
 
-  return new Response(JSON.stringify({ message: "Not implemented yet", received: true }), {
+  if (!tracking || !mappedStatus) {
+    return new Response(JSON.stringify({ error: "Webhook requires tracking and status" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const { data: order } = await admin
+    .from("orders")
+    .select("id, status")
+    .eq("assigned_livreur_id", livreurId)
+    .or(`external_tracking_number.eq.${tracking},tracking_number.eq.${tracking}`)
+    .maybeSingle();
+
+  if (!order) {
+    return new Response(JSON.stringify({ error: "Order not found for tracking" }), {
+      status: 404,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  await admin.from("order_status_history").insert({
+    order_id: order.id,
+    old_status: order.status,
+    new_status: mappedStatus,
+    changed_by: livreurId,
+    notes: message,
+  });
+
+  if (settings?.webhook_updates_current_status !== false) {
+    await admin.from("orders").update({ status: mappedStatus, status_note: message }).eq("id", order.id);
+  }
+
+  return new Response(JSON.stringify({ ok: true, order_id: order.id, status: mappedStatus }), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
