@@ -138,7 +138,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           const message = (preflight as any)?.error || GENERIC_SYSTEM_ERROR;
           const safeMessage = (preflight as any)?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR;
           const field = (preflight as any)?.field as FieldName | undefined;
-          if (field && field in empty) setFieldErrors({ [field]: fieldMessage(field, safeMessage) });
+          if (field && Object.prototype.hasOwnProperty.call(empty, field)) setFieldErrors({ [field]: fieldMessage(field, safeMessage) });
           else setFormError(safeMessage);
           return;
         }
