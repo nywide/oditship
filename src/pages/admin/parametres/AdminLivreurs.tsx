@@ -39,6 +39,7 @@ interface LivreurApiSettings {
   polling_tracking_field: string;
   polling_status_field: string;
   polling_message_field: string;
+  rate_limit_per_second: number;
   is_active: boolean;
 }
 
@@ -101,6 +102,7 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   polling_tracking_field: "trackingID",
   polling_status_field: "status",
   polling_message_field: "message",
+  rate_limit_per_second: 5,
   is_active: true,
 });
 
@@ -160,6 +162,7 @@ const AdminLivreurs = () => {
     polling_tracking_field: "trackingID",
     polling_status_field: "status",
     polling_message_field: "message",
+    rate_limit_per_second: 5,
     is_active: true,
   });
 
@@ -202,6 +205,7 @@ const AdminLivreurs = () => {
       polling_tracking_field: activeSettings.polling_tracking_field || "trackingID",
       polling_status_field: activeSettings.polling_status_field || "status",
       polling_message_field: activeSettings.polling_message_field || "message",
+      rate_limit_per_second: activeSettings.rate_limit_per_second ?? 5,
       is_active: activeSettings.is_active,
     });
   }, [activeSettings]);
