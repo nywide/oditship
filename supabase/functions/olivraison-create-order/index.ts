@@ -365,12 +365,13 @@ Deno.serve(async (req) => {
 
     const partnerTrackingID = `ODiT-${order.id}`;
     const noOpenValue = order.open_package === true;
+    const authenticatedHeaders = await applyAuthentication(order, settings?.create_package_headers ?? {}, settings?.auth_config ?? null);
     const result = settings?.create_package_url
       ? await genericCreatePackage(
           settings.create_package_url,
           settings.create_package_method,
-          settings.create_package_headers ?? {},
-          buildMappedPayload(order, settings.create_package_mapping ?? {})
+          authenticatedHeaders,
+          buildMappedPayloadWithSecrets(order, settings.create_package_mapping ?? {})
         )
       : await (async () => {
           const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
@@ -391,6 +392,8 @@ Deno.serve(async (req) => {
           await olivraisonUpdatePackage(token, created.trackingID, noOpenValue);
           return created;
         })();
+
+    await runApiOperations(order, settings?.api_operations ?? [], authenticatedHeaders, settings?.rate_limit_per_second ?? 5);
 
     const { error: updErr } = await admin.from("orders").update({
       external_tracking_number: result.trackingID,
