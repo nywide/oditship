@@ -228,6 +228,8 @@ export type Database = {
       }
       livreur_api_settings: {
         Row: {
+          api_operations: Json
+          auth_config: Json
           create_package_headers: Json
           create_package_mapping: Json
           create_package_method: string
@@ -235,6 +237,15 @@ export type Database = {
           created_at: string
           is_active: boolean
           livreur_id: string
+          polling_enabled: boolean
+          polling_interval_minutes: number
+          polling_message_field: string
+          polling_status_field: string
+          polling_status_headers: Json
+          polling_status_method: string
+          polling_status_payload_mapping: Json
+          polling_status_url: string | null
+          polling_tracking_field: string
           status_mapping: Json
           updated_at: string
           validation_rules: Json
@@ -243,6 +254,8 @@ export type Database = {
           webhook_updates_current_status: boolean
         }
         Insert: {
+          api_operations?: Json
+          auth_config?: Json
           create_package_headers?: Json
           create_package_mapping?: Json
           create_package_method?: string
@@ -250,6 +263,15 @@ export type Database = {
           created_at?: string
           is_active?: boolean
           livreur_id: string
+          polling_enabled?: boolean
+          polling_interval_minutes?: number
+          polling_message_field?: string
+          polling_status_field?: string
+          polling_status_headers?: Json
+          polling_status_method?: string
+          polling_status_payload_mapping?: Json
+          polling_status_url?: string | null
+          polling_tracking_field?: string
           status_mapping?: Json
           updated_at?: string
           validation_rules?: Json
@@ -258,6 +280,8 @@ export type Database = {
           webhook_updates_current_status?: boolean
         }
         Update: {
+          api_operations?: Json
+          auth_config?: Json
           create_package_headers?: Json
           create_package_mapping?: Json
           create_package_method?: string
@@ -265,6 +289,15 @@ export type Database = {
           created_at?: string
           is_active?: boolean
           livreur_id?: string
+          polling_enabled?: boolean
+          polling_interval_minutes?: number
+          polling_message_field?: string
+          polling_status_field?: string
+          polling_status_headers?: Json
+          polling_status_method?: string
+          polling_status_payload_mapping?: Json
+          polling_status_url?: string | null
+          polling_tracking_field?: string
           status_mapping?: Json
           updated_at?: string
           validation_rules?: Json
