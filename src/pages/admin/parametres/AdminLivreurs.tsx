@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -147,7 +147,7 @@ const FieldHelp = ({ children }: { children: string }) => (
   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{children}</p>
 );
 
-const SectionHeader = ({ icon: Icon, title, description, children }: { icon: typeof PackageCheck; title: string; description: string; children?: React.ReactNode }) => (
+const SectionHeader = ({ icon: Icon, title, description, children }: { icon: typeof PackageCheck; title: string; description: string; children?: ReactNode }) => (
   <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-start sm:justify-between">
     <div className="flex gap-3">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
