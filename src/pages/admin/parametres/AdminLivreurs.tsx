@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Eye, EyeOff, RefreshCw, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Activity, BookOpen, ChevronDown, Clock, ExternalLink, Eye, EyeOff, Gauge, HelpCircle, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
 interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
@@ -131,6 +131,44 @@ const parseJsonArray = (label: string, value: string) => {
     throw new Error(`${label}: JSON array invalide`);
   }
 };
+
+const docs = {
+  auth: "https://partners.olivraison.com/docs#tag/auth/POST/auth/login",
+  api: "https://partners.olivraison.com/docs",
+};
+
+const HelpLink = ({ href, children }: { href: string; children: string }) => (
+  <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+    <BookOpen className="h-3.5 w-3.5" /> {children} <ExternalLink className="h-3 w-3" />
+  </a>
+);
+
+const FieldHelp = ({ children }: { children: string }) => (
+  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{children}</p>
+);
+
+const SectionHeader = ({ icon: Icon, title, description, children }: { icon: typeof PackageCheck; title: string; description: string; children?: ReactNode }) => (
+  <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div>
+        <h3 className="font-semibold leading-none">{title}</h3>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+      </div>
+    </div>
+    {children}
+  </div>
+);
+
+const JsonTextarea = ({ label, help, rows, value, onChange }: { label: string; help: string; rows: number; value: string; onChange: (value: string) => void }) => (
+  <div>
+    <Label>{label}</Label>
+    <FieldHelp>{help}</FieldHelp>
+    <Textarea rows={rows} className="mt-2 font-mono text-xs leading-relaxed" value={value} onChange={(e) => onChange(e.target.value)} />
+  </div>
+);
 
 const AdminLivreurs = () => {
   const [livreurs, setLivreurs] = useState<Livreur[]>([]);
@@ -364,44 +402,59 @@ const AdminLivreurs = () => {
       </Card>
 
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Paramètres API — {editing?.full_name || editing?.username}</DialogTitle></DialogHeader>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="p-4 space-y-3">
-              <h3 className="font-semibold">Create a package</h3>
-              <div><Label>URL POST</Label><Input value={settingsForm.create_package_url} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_url: e.target.value })} placeholder="https://..." /></div>
-              <div><Label>Méthode</Label><Input value={settingsForm.create_package_method} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_method: e.target.value })} /></div>
-              <div><Label>Headers JSON</Label><Textarea rows={5} className="font-mono text-xs" value={settingsForm.create_package_headers} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_headers: e.target.value })} /></div>
-              <div><Label>Payload mapping JSON</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.create_package_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_mapping: e.target.value })} /></div>
-            </Card>
-            <Card className="p-4 space-y-3">
-              <h3 className="font-semibold">Authentication & Payloads</h3>
-              <div><Label>Authentication JSON</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.auth_config} onChange={(e) => setSettingsForm({ ...settingsForm, auth_config: e.target.value })} /></div>
-              <div><Label>Payloads API JSON array</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.api_operations} onChange={(e) => setSettingsForm({ ...settingsForm, api_operations: e.target.value })} /></div>
-              <div><Label>Rate limit / seconde</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /></div>
-            </Card>
-            <Card className="p-4 space-y-3">
-              <h3 className="font-semibold">Validation & Webhook</h3>
-              <div><Label>Validation JSON</Label><Textarea rows={7} className="font-mono text-xs" value={settingsForm.validation_rules} onChange={(e) => setSettingsForm({ ...settingsForm, validation_rules: e.target.value })} /></div>
-              <div><Label>Status mapping JSON</Label><Textarea rows={7} className="font-mono text-xs" value={settingsForm.status_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, status_mapping: e.target.value })} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Champ status webhook</Label><Input value={settingsForm.webhook_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_status_field: e.target.value })} /></div>
-                <div><Label>Champ tracking webhook</Label><Input value={settingsForm.webhook_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_tracking_field: e.target.value })} /></div>
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Paramètres API — {editing?.full_name || editing?.username}</DialogTitle>
+            <div className="mt-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              <div className="flex gap-3">
+                <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="space-y-2">
+                  <p>هذه الصفحة كتخليك تربط أي livreur مع أي شركة توصيل: الحماية، إنشاء الطلبية، تحديث الحالة، والتحكم في عدد الطلبات في الثانية.</p>
+                  <div className="flex flex-wrap gap-3"><HelpLink href={docs.api}>Documentation API</HelpLink><HelpLink href={docs.auth}>Exemple authentication Olivraison</HelpLink></div>
+                </div>
               </div>
-              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.webhook_updates_current_status} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, webhook_updates_current_status: v })} /> Webhook met à jour le statut actuel</label>
-              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.is_active} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, is_active: v })} /> Paramètres actifs</label>
-            </Card>
-            <Card className="p-4 space-y-3">
-              <h3 className="font-semibold">Polling statut</h3>
-              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.polling_enabled} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, polling_enabled: v })} /> Activer polling</label>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Intervalle minutes</Label><Input type="number" min={1} value={settingsForm.polling_interval_minutes} onChange={(e) => setSettingsForm({ ...settingsForm, polling_interval_minutes: Number(e.target.value) })} /></div>
-                <div><Label>Méthode</Label><Input value={settingsForm.polling_status_method} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_method: e.target.value })} /></div>
+            </div>
+          </DialogHeader>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card className="p-4 space-y-4">
+              <SectionHeader icon={PackageCheck} title="Create a package" description="الإعدادات لي كتسيفط الطلبية لشركة التوصيل أول مرة." />
+              <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+                <div><Label>URL create package</Label><Input value={settingsForm.create_package_url} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_url: e.target.value })} placeholder="https://..." /><FieldHelp>الرابط ديال إنشاء الطلبية عند شركة التوصيل.</FieldHelp></div>
+                <div><Label>Méthode</Label><Input value={settingsForm.create_package_method} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_method: e.target.value })} /><FieldHelp>غالباً POST.</FieldHelp></div>
               </div>
-              <div><Label>URL statut</Label><Input value={settingsForm.polling_status_url} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_url: e.target.value })} placeholder="https://..." /></div>
-              <div><Label>Headers polling JSON</Label><Textarea rows={4} className="font-mono text-xs" value={settingsForm.polling_status_headers} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_headers: e.target.value })} /></div>
-              <div><Label>Payload polling JSON</Label><Textarea rows={5} className="font-mono text-xs" value={settingsForm.polling_status_payload_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_payload_mapping: e.target.value })} /></div>
-              <div className="grid grid-cols-3 gap-3">
+              <JsonTextarea label="Headers JSON" help="Headers اختيارية بحال Content-Type أو Authorization إذا الشركة كتطلبهم مباشرة." rows={5} value={settingsForm.create_package_headers} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_headers: value })} />
+              <JsonTextarea label="Payload mapping JSON" help="ربط أسماء الحقول عند الشركة مع معلومات الطلبية عندنا. مثال: destination.phone = customer_phone." rows={10} value={settingsForm.create_package_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_mapping: value })} />
+            </Card>
+            <Card className="p-4 space-y-4">
+              <SectionHeader icon={ShieldCheck} title="Authentication & payloads" description="الحماية اختيارية. استعملها إلا كانت الشركة كتطلب login/token قبل إرسال الطلبات.">
+                <HelpLink href={docs.auth}>شرح authentication</HelpLink>
+              </SectionHeader>
+              <JsonTextarea label="Authentication JSON" help="type none يعني بلا حماية. إذا كان login، دخل URL/method/payload وكيفاش ناخدو token من response." rows={10} value={settingsForm.auth_config} onChange={(value) => setSettingsForm({ ...settingsForm, auth_config: value })} />
+              <JsonTextarea label="Payloads API JSON array" help="تقدر تزيد بزاف ديال العمليات الإضافية بترتيب التنفيذ إذا شركة كتحتاج أكثر من request." rows={9} value={settingsForm.api_operations} onChange={(value) => setSettingsForm({ ...settingsForm, api_operations: value })} />
+              <div><Label>Rate limit / seconde</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /><FieldHelp>عدد الطلبات المسموح بها في الثانية. Olivraison مثلاً: 5 requests/sec.</FieldHelp></div>
+            </Card>
+            <Card className="p-4 space-y-4">
+              <SectionHeader icon={Webhook} title="Validation & webhook" description="الشروط قبل الإرسال وربط status لي كيرجع من الشركة مع status ديال النظام." />
+              <JsonTextarea label="Validation JSON" help="قواعد التحقق من المدخلات: أقل عدد حروف/أرقام، عدد أرقام الهاتف، أقل ثمن..." rows={7} value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} />
+              <JsonTextarea label="Status mapping JSON" help="حول status الخارجي إلى status الداخلي. مثال: DELIVERED → Livré." rows={7} value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div><Label>Champ status webhook</Label><Input value={settingsForm.webhook_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_status_field: e.target.value })} /><FieldHelp>اسم الحقل لي فيه status فالwebhook.</FieldHelp></div>
+                <div><Label>Champ tracking webhook</Label><Input value={settingsForm.webhook_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_tracking_field: e.target.value })} /><FieldHelp>اسم الحقل لي فيه tracking.</FieldHelp></div>
+              </div>
+              <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><span>Webhook met à jour le statut actuel</span><Switch checked={settingsForm.webhook_updates_current_status} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, webhook_updates_current_status: v })} /></label>
+              <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><span>Paramètres actifs</span><Switch checked={settingsForm.is_active} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, is_active: v })} /></label>
+            </Card>
+            <Card className="p-4 space-y-4">
+              <SectionHeader icon={Clock} title="Polling statut" description="استعمل polling إلا كانت الشركة ماعندهاش webhook، والنظام غادي يسول دورياً على آخر status." />
+              <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><span>Activer polling</span><Switch checked={settingsForm.polling_enabled} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, polling_enabled: v })} /></label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div><Label>Intervalle minutes</Label><Input type="number" min={1} value={settingsForm.polling_interval_minutes} onChange={(e) => setSettingsForm({ ...settingsForm, polling_interval_minutes: Number(e.target.value) })} /><FieldHelp>كل شحال من دقيقة يتحدّث status.</FieldHelp></div>
+                <div><Label>Méthode</Label><Input value={settingsForm.polling_status_method} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_method: e.target.value })} /><FieldHelp>GET أو POST حسب documentation ديال الشركة.</FieldHelp></div>
+              </div>
+              <div><Label>URL statut</Label><Input value={settingsForm.polling_status_url} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_url: e.target.value })} placeholder="https://..." /><FieldHelp>الرابط لي كنطلبو منو آخر status ديال الطلبية.</FieldHelp></div>
+              <JsonTextarea label="Headers polling JSON" help="Headers خاصة بطلب تحديث status إذا كانت مطلوبة." rows={4} value={settingsForm.polling_status_headers} onChange={(value) => setSettingsForm({ ...settingsForm, polling_status_headers: value })} />
+              <JsonTextarea label="Payload polling JSON" help="Mapping ديال tracking/order ID فطلب تحديث status، خصوصاً إذا method هي POST." rows={5} value={settingsForm.polling_status_payload_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, polling_status_payload_mapping: value })} />
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div><Label>Champ tracking</Label><Input value={settingsForm.polling_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_tracking_field: e.target.value })} /></div>
                 <div><Label>Champ status</Label><Input value={settingsForm.polling_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_field: e.target.value })} /></div>
                 <div><Label>Champ message</Label><Input value={settingsForm.polling_message_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_message_field: e.target.value })} /></div>
