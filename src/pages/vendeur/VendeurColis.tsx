@@ -158,14 +158,15 @@ const VendeurColis = () => {
   };
 
   const resolveLivreurForOrder = async (order: Order) => {
+    const city = order.customer_city.trim().replace(/\s+/g, " ");
     const { data: hubCity, error: hubError } = await supabase
       .from("hub_cities")
       .select("hub_id")
-      .eq("city_name", order.customer_city)
+      .ilike("city_name", city)
       .limit(1)
       .maybeSingle();
     if (hubError) throw hubError;
-    if (!hubCity) throw new Error(`City "${order.customer_city}" is not assigned to any hub`);
+    if (!hubCity) throw new Error("Un problème système est survenu. Veuillez contacter le support.");
 
     const { data: hubLivreur, error: livreurError } = await supabase
       .from("hub_livreur")
@@ -173,7 +174,7 @@ const VendeurColis = () => {
       .eq("hub_id", hubCity.hub_id)
       .maybeSingle();
     if (livreurError) throw livreurError;
-    if (!hubLivreur?.livreur_id) throw new Error("No delivery person assigned to this hub");
+    if (!hubLivreur?.livreur_id) throw new Error("Un problème système est survenu. Veuillez contacter le support.");
     return hubLivreur.livreur_id;
   };
 
@@ -190,9 +191,9 @@ const VendeurColis = () => {
         if (error) throw error;
         if ((data as any)?.error) throw new Error((data as any).error);
         success++;
-      } catch (e: any) {
+      } catch {
         failed++;
-        toast.error(e.message || `Commande ${o.id} en échec`);
+        toast.error("Un problème système est survenu. Veuillez contacter le support.");
       }
     }
     if (success) toast.success(`${success} commande(s) envoyée(s) au livreur`);
@@ -208,8 +209,30 @@ const VendeurColis = () => {
 
   return (
     <div className="space-y-4 pb-24">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold">Mes commandes</h2>
+      <div className="sticky top-0 z-30 -mx-1 flex flex-wrap items-center justify-between gap-3 bg-background/95 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-2xl font-bold">Mes commandes</h2>
+          {selected.size > 0 && (
+            <div className="flex max-w-full items-center gap-2 overflow-x-auto rounded-full border border-border bg-background px-3 py-2 shadow-elegant">
+              <span className="whitespace-nowrap px-1 text-sm font-medium">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
+              <Button size="sm" onClick={groupConfirm} disabled={eligibleConfirm.length === 0 || confirming}>
+                {confirming ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                Confirm ({eligibleConfirm.length})
+              </Button>
+              <Button size="sm" variant="default" onClick={groupPickup} disabled={eligiblePickup.length === 0 || pickingUp}>
+                {pickingUp ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackageCheck className="h-4 w-4 mr-1" />}
+                Pickup ({eligiblePickup.length})
+              </Button>
+              <Button size="sm" variant="outline" onClick={groupPrintStickers} disabled={eligibleSticker.length === 0}>
+                <Printer className="h-4 w-4 mr-1" />
+                Sticker ({eligibleSticker.length})
+              </Button>
+              <Button size="icon" variant="ghost" onClick={clearSelection} aria-label="Effacer la sélection">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
         <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Nouvelle commande
         </Button>
@@ -325,27 +348,6 @@ const VendeurColis = () => {
           </TableBody>
         </Table>
       </Card>
-
-      {selected.size > 0 && (
-        <div className="sticky top-3 z-20 bg-background border border-border rounded-full shadow-elegant px-4 py-2 flex items-center gap-2 overflow-x-auto">
-          <span className="text-sm font-medium px-2">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
-          <Button size="sm" onClick={groupConfirm} disabled={eligibleConfirm.length === 0 || confirming}>
-            {confirming ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-            Confirm ({eligibleConfirm.length})
-          </Button>
-          <Button size="sm" variant="default" onClick={groupPickup} disabled={eligiblePickup.length === 0 || pickingUp}>
-            {pickingUp ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackageCheck className="h-4 w-4 mr-1" />}
-            Pickup ({eligiblePickup.length})
-          </Button>
-          <Button size="sm" variant="outline" onClick={groupPrintStickers} disabled={eligibleSticker.length === 0}>
-            <Printer className="h-4 w-4 mr-1" />
-            Sticker ({eligibleSticker.length})
-          </Button>
-          <Button size="icon" variant="ghost" onClick={clearSelection} aria-label="Effacer la sélection">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
 
       {user && (
         <OrderFormDialog
