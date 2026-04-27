@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Eye, EyeOff, RefreshCw, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Activity, BookOpen, ChevronDown, Clock, ExternalLink, Eye, EyeOff, Gauge, HelpCircle, PackageCheck, RefreshCw, ShieldCheck, SlidersHorizontal, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
 interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
@@ -131,6 +131,44 @@ const parseJsonArray = (label: string, value: string) => {
     throw new Error(`${label}: JSON array invalide`);
   }
 };
+
+const docs = {
+  auth: "https://partners.olivraison.com/docs#tag/auth/POST/auth/login",
+  api: "https://partners.olivraison.com/docs",
+};
+
+const HelpLink = ({ href, children }: { href: string; children: string }) => (
+  <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+    <BookOpen className="h-3.5 w-3.5" /> {children} <ExternalLink className="h-3 w-3" />
+  </a>
+);
+
+const FieldHelp = ({ children }: { children: string }) => (
+  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{children}</p>
+);
+
+const SectionHeader = ({ icon: Icon, title, description, children }: { icon: typeof PackageCheck; title: string; description: string; children?: React.ReactNode }) => (
+  <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div>
+        <h3 className="font-semibold leading-none">{title}</h3>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+      </div>
+    </div>
+    {children}
+  </div>
+);
+
+const JsonTextarea = ({ label, help, rows, value, onChange }: { label: string; help: string; rows: number; value: string; onChange: (value: string) => void }) => (
+  <div>
+    <Label>{label}</Label>
+    <FieldHelp>{help}</FieldHelp>
+    <Textarea rows={rows} className="mt-2 font-mono text-xs leading-relaxed" value={value} onChange={(e) => onChange(e.target.value)} />
+  </div>
+);
 
 const AdminLivreurs = () => {
   const [livreurs, setLivreurs] = useState<Livreur[]>([]);
