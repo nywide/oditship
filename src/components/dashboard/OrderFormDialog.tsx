@@ -82,6 +82,20 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
     return prefix ? message.replace(new RegExp(`^${prefix}\\s*:\\s*`, "i"), "") : message;
   };
 
+  const readPreflightPayload = async (data: unknown, error: unknown) => {
+    if (data && typeof data === "object") return data as Record<string, unknown>;
+    const context = (error as { context?: { json?: () => Promise<unknown> } } | null)?.context;
+    if (context?.json) {
+      try {
+        const payload = await context.json();
+        if (payload && typeof payload === "object") return payload as Record<string, unknown>;
+      } catch {
+        // Keep vendor-facing fallback below.
+      }
+    }
+    return error ? { error: GENERIC_SYSTEM_ERROR } : null;
+  };
+
   useEffect(() => {
     if (open) {
       const init = { ...empty, ...(initial ?? {}) } as OrderFormValues;
@@ -134,10 +148,11 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         const { data: preflight, error: preflightError } = await supabase.functions.invoke("order-preflight", {
           body: { city: values.customer_city, order: { ...values, order_value: priceNum } },
         });
-        if (preflightError || (preflight as any)?.error) {
-          const message = (preflight as any)?.error || GENERIC_SYSTEM_ERROR;
-          const safeMessage = (preflight as any)?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR;
-          const field = (preflight as any)?.field as FieldName | undefined;
+        const preflightPayload = await readPreflightPayload(preflight, preflightError);
+        if (preflightError || preflightPayload?.error) {
+          const message = typeof preflightPayload?.error === "string" ? preflightPayload.error : GENERIC_SYSTEM_ERROR;
+          const safeMessage = preflightPayload?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR;
+          const field = preflightPayload?.field as FieldName | undefined;
           if (field && Object.prototype.hasOwnProperty.call(empty, field)) setFieldErrors({ [field]: fieldMessage(field, safeMessage) });
           else setFormError(safeMessage);
           return;
