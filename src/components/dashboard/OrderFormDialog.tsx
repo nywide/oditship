@@ -255,12 +255,12 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Produit *</Label>
-              <Input required value={values.product_name} onChange={(e) => { setValues({ ...values, product_name: e.target.value }); setFormError(null); }} />
+              <Input value={values.product_name} onChange={(e) => { setValues({ ...values, product_name: e.target.value }); clearError("product_name"); }} />
+              {fieldErrors.product_name && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.product_name}</p>}
             </div>
             <div>
               <Label>Prix (MAD) *</Label>
               <Input
-                required
                 type="number"
                 min={0}
                 step="0.01"
@@ -269,9 +269,10 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                 onChange={(e) => {
                   const v = e.target.value;
                   setValues({ ...values, order_value: v === "" ? "" : parseFloat(v) });
-                  setFormError(null);
+                  clearError("order_value");
                 }}
               />
+              {fieldErrors.order_value && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.order_value}</p>}
             </div>
           </div>
           <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
