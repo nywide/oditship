@@ -34,6 +34,39 @@ function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
+function normalizeComparable(value: string) {
+  return normalizeText(value).toLocaleLowerCase();
+}
+
+async function getEligibleCities(admin: any) {
+  const [{ data: hubCities, error: citiesError }, { data: hubLivreurs, error: hubLivreursError }, { data: livreurs, error: livreursError }] = await Promise.all([
+    admin.from("hub_cities").select("hub_id, city_name"),
+    admin.from("hub_livreur").select("hub_id, livreur_id"),
+    admin.from("profiles").select("id, full_name, username, is_active").eq("is_active", true),
+  ]);
+
+  if (citiesError || hubLivreursError || livreursError) throw new Error("configuration lookup failed");
+
+  const activeLivreurIds = new Set((livreurs ?? []).map((livreur: JsonRecord) => livreur.id));
+  const eligibleHubIds = new Set(
+    (hubLivreurs ?? [])
+      .filter((row: JsonRecord) => activeLivreurIds.has(row.livreur_id))
+      .map((row: JsonRecord) => row.hub_id),
+  );
+  const seen = new Set<string>();
+
+  return (hubCities ?? [])
+    .filter((row: JsonRecord) => eligibleHubIds.has(row.hub_id))
+    .map((row: JsonRecord) => normalizeText(String(row.city_name ?? "")))
+    .filter((city: string) => {
+      const key = normalizeComparable(city);
+      if (!city || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+}
+
 function validationError(field: string, message: string) {
   const label = FIELD_LABELS[field] ?? field;
   return Object.assign(new Error(`${label}: ${message}`), { field, label, publicMessage: `${label}: ${message}` });
@@ -65,8 +98,18 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData.user) return jsonResponse({ error: "Session invalide" }, 401);
 
-  let body: { city?: string; order?: JsonRecord } = {};
+  let body: { action?: string; city?: string; order?: JsonRecord } = {};
   try { body = await req.json(); } catch { return jsonResponse({ error: "Invalid JSON body" }, 400); }
+
+  if (body.action === "list_cities") {
+    try {
+      const cities = await getEligibleCities(admin);
+      return jsonResponse({ ok: true, cities });
+    } catch {
+      return jsonResponse({ error: GENERIC_SYSTEM_ERROR, code: "CONFIGURATION_ERROR" }, 500);
+    }
+  }
+
   const city = normalizeText(String(body.city || body.order?.customer_city || ""));
   if (!city) return jsonResponse({ error: "Ville obligatoire" }, 400);
 
@@ -77,13 +120,13 @@ Deno.serve(async (req) => {
   if (!hubLivreur?.livreur_id) return jsonResponse({ error: GENERIC_SYSTEM_ERROR, code: "CONFIGURATION_ERROR" }, 422);
 
   const [{ data: livreur }, { data: settings }] = await Promise.all([
-    admin.from("profiles").select("id, full_name, username, api_enabled").eq("id", hubLivreur.livreur_id).maybeSingle(),
+    admin.from("profiles").select("id, full_name, username, is_active").eq("id", hubLivreur.livreur_id).maybeSingle(),
     admin.from("livreur_api_settings").select("validation_rules, is_active").eq("livreur_id", hubLivreur.livreur_id).maybeSingle(),
   ]);
-  if (!livreur) return jsonResponse({ error: GENERIC_SYSTEM_ERROR, code: "CONFIGURATION_ERROR" }, 422);
+  if (!livreur?.is_active) return jsonResponse({ error: GENERIC_SYSTEM_ERROR, code: "CONFIGURATION_ERROR" }, 422);
 
   try {
-    if (body.order && livreur.api_enabled && settings?.is_active !== false) validateOrder(body.order, settings?.validation_rules ?? {});
+    if (body.order && settings?.is_active !== false) validateOrder(body.order, settings?.validation_rules ?? {});
   } catch (error) {
     const publicMessage = error && typeof error === "object" && "publicMessage" in error ? String((error as any).publicMessage) : "Commande non conforme aux règles du livreur";
     return jsonResponse({ error: publicMessage, code: "VALIDATION_ERROR", field: (error as any)?.field, label: (error as any)?.label }, 422);
