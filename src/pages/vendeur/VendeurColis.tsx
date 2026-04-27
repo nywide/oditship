@@ -208,31 +208,31 @@ const VendeurColis = () => {
   };
 
   return (
-    <div className="space-y-4 pb-24">
-      <div className="sticky top-14 z-30 -mx-4 -mt-4 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:-mx-6 lg:-mt-6 lg:px-6">
+    <div className="space-y-4 pb-24 pt-24 sm:pt-16">
+      <div className="fixed inset-x-0 top-14 z-30 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-64 lg:px-6">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center">
             <h2 className="shrink-0 text-2xl font-bold">Mes commandes</h2>
-          {selected.size > 0 && (
-            <div className="flex max-w-full items-center gap-2 overflow-x-auto rounded-full border border-border bg-card px-3 py-2 shadow-elegant md:min-w-0">
-              <span className="whitespace-nowrap px-1 text-sm font-medium">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
-              <Button size="sm" onClick={groupConfirm} disabled={eligibleConfirm.length === 0 || confirming}>
-                {confirming ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                Confirm ({eligibleConfirm.length})
-              </Button>
-              <Button size="sm" variant="default" onClick={groupPickup} disabled={eligiblePickup.length === 0 || pickingUp}>
-                {pickingUp ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackageCheck className="h-4 w-4 mr-1" />}
-                Pickup ({eligiblePickup.length})
-              </Button>
-              <Button size="sm" variant="outline" onClick={groupPrintStickers} disabled={eligibleSticker.length === 0}>
-                <Printer className="h-4 w-4 mr-1" />
-                Sticker ({eligibleSticker.length})
-              </Button>
-              <Button size="icon" variant="ghost" onClick={clearSelection} aria-label="Effacer la sélection">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+            {selected.size > 0 && (
+              <div className="flex max-w-full items-center gap-2 overflow-x-auto rounded-full border border-border bg-card px-3 py-2 shadow-elegant md:min-w-0">
+                <span className="whitespace-nowrap px-1 text-sm font-medium">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
+                <Button size="sm" onClick={groupConfirm} disabled={eligibleConfirm.length === 0 || confirming}>
+                  {confirming ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                  Confirm ({eligibleConfirm.length})
+                </Button>
+                <Button size="sm" variant="default" onClick={groupPickup} disabled={eligiblePickup.length === 0 || pickingUp}>
+                  {pickingUp ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <PackageCheck className="h-4 w-4 mr-1" />}
+                  Pickup ({eligiblePickup.length})
+                </Button>
+                <Button size="sm" variant="outline" onClick={groupPrintStickers} disabled={eligibleSticker.length === 0}>
+                  <Printer className="h-4 w-4 mr-1" />
+                  Sticker ({eligibleSticker.length})
+                </Button>
+                <Button size="icon" variant="ghost" onClick={clearSelection} aria-label="Effacer la sélection">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
           <Button className="w-full sm:w-auto" onClick={() => { setEditing(null); setFormOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nouvelle commande
