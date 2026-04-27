@@ -286,6 +286,7 @@ const AdminLivreurs = () => {
       create_package_headers: (editing.create_package_config as any)?.headers ?? current.create_package_headers,
       create_package_url: (editing.create_package_config as any)?.url ?? current.create_package_url,
       create_package_method: (editing.create_package_config as any)?.method ?? current.create_package_method,
+      response_tracking_path: (editing.create_package_config as any)?.response_tracking_path ?? "trackingID",
       api_operations: (editing.create_package_config as any)?.operations ?? current.api_operations,
     };
   }, [editing, settings]);
@@ -294,6 +295,7 @@ const AdminLivreurs = () => {
     create_package_method: "POST",
     create_package_headers: "{}",
     create_package_mapping: "{}",
+    response_tracking_path: "trackingID",
     auth_config: "{}",
     api_operations: "[]",
     validation_rules: "{}",
@@ -337,6 +339,7 @@ const AdminLivreurs = () => {
       create_package_method: activeSettings.create_package_method || "POST",
       create_package_headers: formatJson(activeSettings.create_package_headers),
       create_package_mapping: formatJson(activeSettings.create_package_mapping),
+      response_tracking_path: (activeSettings as any).response_tracking_path || "trackingID",
       auth_config: formatJson(activeSettings.auth_config),
       api_operations: JSON.stringify(activeSettings.api_operations ?? [], null, 2),
       validation_rules: formatJson(activeSettings.validation_rules),
@@ -427,7 +430,7 @@ const AdminLivreurs = () => {
         method: settingsForm.create_package_method.trim().toUpperCase() || "POST",
         headers: parseJson("Headers", settingsForm.create_package_headers),
         payload_mapping: parseJson("Mapping create package", settingsForm.create_package_mapping),
-        response_tracking_path: "trackingID",
+        response_tracking_path: settingsForm.response_tracking_path.trim() || "trackingID",
         operations: parseJsonArray("Payloads API", settingsForm.api_operations),
         rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
       };
@@ -544,6 +547,7 @@ const AdminLivreurs = () => {
                 <div><Label>Create package URL</Label><Input value={settingsForm.create_package_url} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_url: e.target.value })} placeholder="https://..." /><FieldHelp>Endpoint provided by the delivery company to create a new package.</FieldHelp></div>
                 <div><Label>Method</Label><Input value={settingsForm.create_package_method} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_method: e.target.value })} /><FieldHelp>Usually POST.</FieldHelp></div>
               </div>
+              <div><Label>Response tracking path</Label><Input value={settingsForm.response_tracking_path} onChange={(e) => setSettingsForm({ ...settingsForm, response_tracking_path: e.target.value })} placeholder="trackingID" /><FieldHelp>Where the tracking number is found in the create package response. Use nested paths like data.trackingID when needed.</FieldHelp></div>
               <KeyValueEditor label="Headers" help="Optional headers sent with the package creation request. Add one key/value per row." value={settingsForm.create_package_headers} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_headers: value })} keyPlaceholder="Content-Type" valuePlaceholder="application/json" />
               <KeyValueEditor label="Payload mapping" help="Left side is the provider field name. Right side is our order field, for example customer_phone or order_value." value={settingsForm.create_package_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_mapping: value })} keyPlaceholder="Provider field" valuePlaceholder="Order field" />
             </Card>
