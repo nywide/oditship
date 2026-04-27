@@ -226,6 +226,39 @@ export type Database = {
           },
         ]
       }
+      livreur_api_logs: {
+        Row: {
+          created_at: string
+          details: Json
+          event_type: string
+          id: number
+          livreur_id: string | null
+          message: string | null
+          order_id: number | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          event_type: string
+          id?: number
+          livreur_id?: string | null
+          message?: string | null
+          order_id?: number | null
+          status: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          event_type?: string
+          id?: number
+          livreur_id?: string | null
+          message?: string | null
+          order_id?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
       livreur_api_settings: {
         Row: {
           api_operations: Json

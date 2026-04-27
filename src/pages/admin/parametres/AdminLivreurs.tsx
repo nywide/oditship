@@ -276,6 +276,7 @@ const AdminLivreurs = () => {
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Livreur | null>(null);
+  const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; created_at: string }>>([]);
   const activeSettings = useMemo(() => {
     if (!editing) return null;
     const current = settings[editing.id] ?? defaultSettings(editing.id);
@@ -317,11 +318,12 @@ const AdminLivreurs = () => {
   });
 
   const load = async () => {
-    const [p, h, hl, s] = await Promise.all([
+    const [p, h, hl, s, logs] = await Promise.all([
       db.from("profiles").select("id, username, full_name, api_enabled, api_token, authentication_config, create_package_config").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
+      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, created_at").order("created_at", { ascending: false }).limit(50),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
     setHubs((h.data ?? []) as Hub[]);
@@ -329,6 +331,7 @@ const AdminLivreurs = () => {
     const byLivreur: Record<string, LivreurApiSettings> = {};
     (s.data ?? []).forEach((row: LivreurApiSettings) => { byLivreur[row.livreur_id] = row; });
     setSettings(byLivreur);
+    setApiLogs(logs.data ?? []);
   };
   useEffect(() => { load(); }, []);
 
@@ -526,6 +529,25 @@ const AdminLivreurs = () => {
         </Table>
       </Card>
 
+      <Card className="mt-4 overflow-x-auto p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold">Driver API logs</h3>
+            <p className="text-sm text-muted-foreground">Internal errors and provider responses for package creation.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
+        </div>
+        <Table>
+          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {apiLogs.length === 0 ? <TableRow><TableCell colSpan={6} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : apiLogs.map((log) => {
+              const livreur = livreurs.find((item) => item.id === log.livreur_id);
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}</TableCell><TableCell><Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell></TableRow>;
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
@@ -561,6 +583,7 @@ const AdminLivreurs = () => {
               <SectionHeader icon={Webhook} title="Validation & webhook" description="Rules checked before sending, plus status mapping for incoming webhook updates." />
               <KeyValueEditor label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value. Values can be plain text, numbers, true/false, or small JSON objects." value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} keyPlaceholder="Order field" valuePlaceholder='Rule, e.g. {"min_alnum":3}' primitiveValues />
               <KeyValueEditor label="Status mapping" help="Left side is the provider status. Right side is the internal status used in this app." value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
+              <div><Label>Webhook URL</Label><Input readOnly value={editing ? `${window.location.origin}/functions/v1/livreur-webhook/${editing.id}` : ""} /><FieldHelp>Give this URL to the provider with this driver's API token as a Bearer token.</FieldHelp></div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div><Label>Webhook status field</Label><Input value={settingsForm.webhook_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_status_field: e.target.value })} /><FieldHelp>Field name that contains the provider status in the webhook body.</FieldHelp></div>
                 <div><Label>Webhook tracking field</Label><Input value={settingsForm.webhook_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_tracking_field: e.target.value })} /><FieldHelp>Field name that contains the tracking number in the webhook body.</FieldHelp></div>
