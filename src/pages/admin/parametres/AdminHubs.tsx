@@ -42,6 +42,8 @@ const AdminHubs = () => {
   useEffect(() => { load(); }, []);
 
   const cityCount = (hubId: number) => hubCities.filter((x) => x.hub_id === hubId).length;
+  const cityOwner = (cityName: string) => hubCities.find((x) => x.city_name === cityName)?.hub_id;
+  const hubName = (hubId?: number) => hubs.find((h) => h.id === hubId)?.name ?? "hub existant";
 
   const openCreate = () => { setEditing(null); setForm({ name: "", description: "" }); setSelected(new Set()); setOpen(true); };
   const openEdit = (h: Hub) => {
@@ -63,6 +65,12 @@ const AdminHubs = () => {
       if (error) return toast.error(error.message);
       hubId = data.id;
     }
+    const cityTaken = Array.from(selected).find((city) => {
+      const owner = cityOwner(city);
+      return owner && owner !== hubId;
+    });
+    if (cityTaken) return toast.error(`${cityTaken} est déjà assignée à ${hubName(cityOwner(cityTaken))}`);
+
     // sync hub_cities
     await supabase.from("hub_cities").delete().eq("hub_id", hubId);
     if (selected.size > 0) {
@@ -84,6 +92,11 @@ const AdminHubs = () => {
   };
 
   const toggleCity = (name: string) => {
+    const owner = cityOwner(name);
+    if (owner && owner !== editing?.id) {
+      toast.error(`${name} est déjà assignée à ${hubName(owner)}`);
+      return;
+    }
     const next = new Set(selected);
     if (next.has(name)) next.delete(name); else next.add(name);
     setSelected(next);
@@ -124,12 +137,17 @@ const AdminHubs = () => {
               <Label>Villes assignées ({selected.size})</Label>
               <Input className="mt-1" placeholder="Filtrer" value={filter} onChange={(e) => setFilter(e.target.value)} />
               <div className="mt-2 max-h-64 overflow-y-auto border border-border rounded-md p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
-                {cities.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase())).map((c) => (
-                  <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-secondary rounded px-2 py-1">
-                    <Checkbox checked={selected.has(c.name)} onCheckedChange={() => toggleCity(c.name)} />
-                    <span className="truncate">{c.name}</span>
-                  </label>
-                ))}
+                {cities.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase())).map((c) => {
+                  const owner = cityOwner(c.name);
+                  const takenByOther = !!owner && owner !== editing?.id;
+                  return (
+                    <label key={c.id} className={`flex items-center gap-2 text-sm cursor-pointer hover:bg-secondary rounded px-2 py-1 ${takenByOther ? "opacity-50" : ""}`}>
+                      <Checkbox checked={selected.has(c.name)} disabled={takenByOther} onCheckedChange={() => toggleCity(c.name)} />
+                      <span className="truncate flex-1">{c.name}</span>
+                      {takenByOther && <span className="text-xs text-muted-foreground">{hubName(owner)}</span>}
+                    </label>
+                  );
+                })}
               </div>
             </div>
             <DialogFooter>

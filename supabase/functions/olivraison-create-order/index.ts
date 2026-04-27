@@ -56,6 +56,57 @@ async function olivraisonCreatePackage(token: string, body: Record<string, unkno
   return parsed as { trackingID: string; status?: string; partnerTrackingID?: string };
 }
 
+
+function getPath(obj: Record<string, any>, path: string) {
+  if (path === "partner_tracking_id") return `ODiT-${obj.id}`;
+  return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
+}
+
+function setPath(obj: Record<string, any>, path: string, value: unknown) {
+  const keys = path.split(".");
+  let cur = obj;
+  keys.slice(0, -1).forEach((key) => {
+    if (!cur[key] || typeof cur[key] !== "object") cur[key] = {};
+    cur = cur[key];
+  });
+  cur[keys[keys.length - 1]] = value ?? "";
+}
+
+function alnumCount(value: unknown) {
+  return String(value ?? "").replace(/[^\p{L}\p{N}]/gu, "").length;
+}
+
+function validateOrder(order: Record<string, any>, rules: Record<string, any>) {
+  for (const [field, rule] of Object.entries(rules ?? {})) {
+    const value = getPath(order, field);
+    if (rule?.min_alnum && alnumCount(value) < Number(rule.min_alnum)) throw new Error(`${field} doit contenir au moins ${rule.min_alnum} lettres ou chiffres`);
+    if (rule?.min_length && String(value ?? "").trim().length < Number(rule.min_length)) throw new Error(`${field} doit contenir au moins ${rule.min_length} caractères`);
+    if (rule?.digits && String(value ?? "").replace(/\D/g, "").length !== Number(rule.digits)) throw new Error(`${field} doit contenir ${rule.digits} chiffres`);
+    if (rule?.min !== undefined && Number(value) < Number(rule.min)) throw new Error(`${field} doit être supérieur ou égal à ${rule.min}`);
+  }
+}
+
+function buildMappedPayload(order: Record<string, any>, mapping: Record<string, string>) {
+  const payload: Record<string, any> = {};
+  Object.entries(mapping ?? {}).forEach(([target, source]) => setPath(payload, target, getPath(order, source)));
+  return payload;
+}
+
+async function genericCreatePackage(url: string, method: string, headers: Record<string, string>, body: Record<string, unknown>) {
+  const r = await fetch(url, {
+    method: method || "POST",
+    headers: { "Content-Type": "application/json", ...(headers ?? {}) },
+    body: JSON.stringify(body),
+  });
+  const text = await r.text();
+  let parsed: any = {};
+  try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+  if (!r.ok) throw new Error(`Create package ${r.status}: ${parsed?.description || parsed?.message || text}`);
+  const trackingID = parsed?.trackingID || parsed?.tracking_id || parsed?.trackingNumber || parsed?.tracking_number || parsed?.id;
+  if (!trackingID) throw new Error("Create package: missing tracking id in response");
+  return { trackingID: String(trackingID), raw: parsed };
+}
+
 async function olivraisonUpdatePackage(token: string, trackingID: string, noOpen: boolean) {
   const r = await fetch(`${OLIVRAISON_BASE}/package/update`, {
     method: "POST",
@@ -217,11 +268,10 @@ Deno.serve(async (req) => {
   }
 
   // Check livreur API enabled
-  const { data: livreurProfile } = await admin
-    .from("profiles")
-    .select("id, api_enabled, full_name")
-    .eq("id", hubLivreur.livreur_id)
-    .single();
+  const [{ data: livreurProfile }, { data: livreurSettings }] = await Promise.all([
+    admin.from("profiles").select("id, api_enabled, full_name").eq("id", hubLivreur.livreur_id).single(),
+    admin.from("livreur_api_settings").select("*").eq("livreur_id", hubLivreur.livreur_id).maybeSingle(),
+  ]);
 
   if (!livreurProfile) {
     return new Response(JSON.stringify({ error: "Livreur profile missing." }), {
@@ -266,32 +316,37 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
+    const settings = livreurSettings && livreurSettings.is_active ? livreurSettings : null;
+    validateOrder(order, settings?.validation_rules ?? { product_name: { min_alnum: 3 }, customer_phone: { digits: 10 }, order_value: { min: 1 } });
 
     const partnerTrackingID = `ODiT-${order.id}`;
     const noOpenValue = order.open_package === true;
-    console.log(JSON.stringify({
-      event: "olivraison-create-order-payload",
-      order_id: order.id,
-      open_package: order.open_package,
-      noOpen: noOpenValue,
-    }));
-    const result = await olivraisonCreatePackage(token, {
-      price: Number(order.order_value),
-      description: order.product_name,
-      name: order.product_name,
-      comment: order.comment ?? "",
-      orderId: String(order.id),
-      partnerTrackingID,
-      destination: {
-        name: order.customer_name,
-        phone: order.customer_phone,
-        city: order.customer_city,
-        streetAddress: order.customer_address,
-      },
-    });
-
-    await olivraisonUpdatePackage(token, result.trackingID, noOpenValue);
+    const result = settings?.create_package_url
+      ? await genericCreatePackage(
+          settings.create_package_url,
+          settings.create_package_method,
+          settings.create_package_headers ?? {},
+          buildMappedPayload(order, settings.create_package_mapping ?? {})
+        )
+      : await (async () => {
+          const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
+          const created = await olivraisonCreatePackage(token, {
+            price: Number(order.order_value),
+            description: order.product_name,
+            name: order.product_name,
+            comment: order.comment ?? "",
+            orderId: String(order.id),
+            partnerTrackingID,
+            destination: {
+              name: order.customer_name,
+              phone: order.customer_phone,
+              city: order.customer_city,
+              streetAddress: order.customer_address,
+            },
+          });
+          await olivraisonUpdatePackage(token, created.trackingID, noOpenValue);
+          return created;
+        })();
 
     const { error: updErr } = await admin.from("orders").update({
       external_tracking_number: result.trackingID,
