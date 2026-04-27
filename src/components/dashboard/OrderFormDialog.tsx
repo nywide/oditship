@@ -25,6 +25,7 @@ export interface OrderFormValues {
 }
 
 const countProductCharacters = (value: string) => value.replace(/[^\p{L}\p{N}]/gu, "").length;
+const GENERIC_SYSTEM_ERROR = "Un problème système est survenu. Veuillez contacter le support.";
 
 interface Props {
   open: boolean;
@@ -53,6 +54,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
   const [cityOpen, setCityOpen] = useState(false);
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [resolvedLivreur, setResolvedLivreur] = useState<string | null>(null);
+  const [cityChecked, setCityChecked] = useState(false);
   const editing = Boolean(initial?.id);
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
   useEffect(() => {
     if (!open || !values.customer_city) {
       setResolvedLivreur(null);
+      setCityChecked(false);
       return;
     }
 
@@ -87,6 +90,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
       if (cancelled) return;
       if (error || (data as any)?.error) setResolvedLivreur(null);
       else setResolvedLivreur((data as any)?.livreur_name ?? null);
+      setCityChecked(true);
     }).finally(() => {
       if (!cancelled) setPreflightLoading(false);
     });
@@ -112,7 +116,8 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           body: { city: values.customer_city, order: { ...values, order_value: priceNum } },
         });
         if (preflightError || (preflight as any)?.error) {
-          throw new Error((preflight as any)?.error || preflightError?.message || "Commande non conforme aux règles du livreur");
+          const message = (preflight as any)?.error || GENERIC_SYSTEM_ERROR;
+          throw new Error((preflight as any)?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR);
         }
       }
 
@@ -149,7 +154,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
       onOpenChange(false);
       onSaved();
     } catch (err: any) {
-      toast.error(err.message || "Erreur");
+      toast.error(err?.message || GENERIC_SYSTEM_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -200,9 +205,9 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                 </Command>
               </PopoverContent>
             </Popover>
-            {values.customer_city && (
+            {values.customer_city && (preflightLoading || resolvedLivreur) && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {preflightLoading ? "Vérification du livreur..." : resolvedLivreur ? `Livreur: ${resolvedLivreur}` : "Aucun livreur configuré pour cette ville"}
+                {preflightLoading ? "Vérification du livreur..." : cityChecked && resolvedLivreur ? `Livreur: ${resolvedLivreur}` : null}
               </p>
             )}
           </div>
