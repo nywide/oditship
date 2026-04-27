@@ -15,7 +15,7 @@ const { cityRows, cityNames, invokeMock } = vi.hoisted(() => {
 });
 invokeMock.mockImplementation((_name, { body } = {}) => {
   if (body?.action === "list_cities") return Promise.resolve({ data: { ok: true, cities: cityNames }, error: null });
-  if (body?.order?.product_name === "A1") return Promise.resolve({ data: { error: "Produit: minimum 3 lettres ou chiffres", code: "VALIDATION_ERROR" }, error: null });
+  if (body?.order?.product_name === "A1") return Promise.resolve({ data: { error: "Produit: minimum 3 lettres ou chiffres", code: "VALIDATION_ERROR", field: "product_name" }, error: null });
   return Promise.resolve({ data: { ok: true, livreur_name: "Livreur test" }, error: null });
 });
 
