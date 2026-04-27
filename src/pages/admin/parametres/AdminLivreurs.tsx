@@ -360,14 +360,14 @@ const AdminLivreurs = () => {
             <TableRow>
               <TableHead>Livreur</TableHead>
               <TableHead>Hubs assignés</TableHead>
-              <TableHead>API activée</TableHead>
+              <TableHead>API enabled</TableHead>
               <TableHead>API Token</TableHead>
-              <TableHead>Paramètres</TableHead>
+              <TableHead>Settings</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {livreurs.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Aucun livreur</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No drivers</TableCell></TableRow>
             ) : livreurs.map((l) => {
               const assigned = hubsOf(l.id);
               return (
@@ -378,7 +378,7 @@ const AdminLivreurs = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {assigned.length === 0 && <span className="text-sm text-muted-foreground">Aucun</span>}
+                      {assigned.length === 0 && <span className="text-sm text-muted-foreground">None</span>}
                       {assigned.map((hid) => {
                         const h = hubs.find((x) => x.id === hid);
                         return <Badge key={hid} variant="secondary">{h?.name ?? `#${hid}`}</Badge>;
@@ -388,8 +388,8 @@ const AdminLivreurs = () => {
                           <Button variant="outline" size="sm" disabled={savingId === l.id}>Modifier <ChevronDown className="h-3 w-3 ml-1" /></Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-64 p-2 max-h-72 overflow-y-auto" align="start">
-                          <div className="text-xs font-medium px-2 py-1 text-muted-foreground">Sélectionner les hubs</div>
-                          {hubs.length === 0 && <div className="text-sm p-2 text-muted-foreground">Aucun hub</div>}
+                          <div className="text-xs font-medium px-2 py-1 text-muted-foreground">Select hubs</div>
+                          {hubs.length === 0 && <div className="text-sm p-2 text-muted-foreground">No hubs</div>}
                           {hubs.map((h) => {
                             const owner = hubAssignedTo(h.id);
                             const isMine = owner === l.id;
@@ -413,12 +413,12 @@ const AdminLivreurs = () => {
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { const n = new Set(show); n.has(l.id) ? n.delete(l.id) : n.add(l.id); setShow(n); }}>
                         {show.has(l.id) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => regenToken(l)}><RefreshCw className="h-4 w-4 mr-1" /> Générer</Button>
+                      <Button variant="outline" size="sm" onClick={() => regenToken(l)}><RefreshCw className="h-4 w-4 mr-1" /> Generate</Button>
                     </div>
                   </TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => setEditing(l)}>
-                      <SlidersHorizontal className="h-4 w-4 mr-1" /> Configurer
+                      <SlidersHorizontal className="h-4 w-4 mr-1" /> Configure
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -431,7 +431,7 @@ const AdminLivreurs = () => {
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Paramètres API — {editing?.full_name || editing?.username}</DialogTitle>
+            <DialogTitle>API Settings — {editing?.full_name || editing?.username}</DialogTitle>
             <div className="mt-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
               <div className="flex gap-3">
                 <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -487,8 +487,8 @@ const AdminLivreurs = () => {
             </Card>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditing(null)}>Annuler</Button>
-            <Button type="button" onClick={saveSettings} disabled={savingId === editing?.id}>{savingId === editing?.id ? "..." : "Enregistrer"}</Button>
+            <Button type="button" variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button type="button" onClick={saveSettings} disabled={savingId === editing?.id}>{savingId === editing?.id ? "..." : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
