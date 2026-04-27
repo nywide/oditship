@@ -205,8 +205,8 @@ const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", 
       <div className="space-y-2">
         {(pairs.length ? pairs : [["", ""]]).map(([key, item], index) => (
           <div key={`${key}-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px]">
-            <Input value={key} placeholder={keyPlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""]]).map((pair, i) => i === index ? [e.target.value, pair[1]] : pair))} />
-            <Input value={item} placeholder={valuePlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""]]).map((pair, i) => i === index ? [pair[0], e.target.value] : pair))} />
+            <Input value={key} placeholder={keyPlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""] as [string, string]]).map((pair, i): [string, string] => i === index ? [e.target.value, pair[1]] : pair))} />
+            <Input value={item} placeholder={valuePlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""] as [string, string]]).map((pair, i): [string, string] => i === index ? [pair[0], e.target.value] : pair))} />
             <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => updatePairs(pairs.filter((_, i) => i !== index))} disabled={!pairs.length}>
               <Trash2 className="h-4 w-4" />
             </Button>
