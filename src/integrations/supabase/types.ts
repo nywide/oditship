@@ -247,7 +247,6 @@ export type Database = {
           polling_status_payload_mapping: Json
           polling_status_url: string | null
           polling_tracking_field: string
-          rate_limit_per_second: number
           status_mapping: Json
           updated_at: string
           validation_rules: Json
@@ -275,7 +274,6 @@ export type Database = {
           polling_status_payload_mapping?: Json
           polling_status_url?: string | null
           polling_tracking_field?: string
-          rate_limit_per_second?: number
           status_mapping?: Json
           updated_at?: string
           validation_rules?: Json
@@ -303,7 +301,6 @@ export type Database = {
           polling_status_payload_mapping?: Json
           polling_status_url?: string | null
           polling_tracking_field?: string
-          rate_limit_per_second?: number
           status_mapping?: Json
           updated_at?: string
           validation_rules?: Json
