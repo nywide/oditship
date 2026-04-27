@@ -189,7 +189,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         <DialogHeader>
           <DialogTitle>{editing ? "Modifier la commande" : "Nouvelle commande"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} className="space-y-3" noValidate>
           <div>
             <Label>Ville *</Label>
             <Popover open={cityOpen} onOpenChange={setCityOpen} modal>
@@ -216,7 +216,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                           value={c}
                           onSelect={() => {
                             setValues({ ...values, customer_city: c });
-                            setFormError(null);
+                            clearError("customer_city");
                             setCityOpen(false);
                           }}
                         >
@@ -229,30 +229,28 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                 </Command>
               </PopoverContent>
             </Popover>
-            {values.customer_city && (preflightLoading || resolvedLivreur) && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {preflightLoading ? "Vérification du livreur..." : cityChecked && resolvedLivreur ? `Livreur: ${resolvedLivreur}` : null}
-              </p>
-            )}
+            {fieldErrors.customer_city && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_city}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Nom client *</Label>
-              <Input required value={values.customer_name} onChange={(e) => { setValues({ ...values, customer_name: e.target.value }); setFormError(null); }} />
+              <Input value={values.customer_name} onChange={(e) => { setValues({ ...values, customer_name: e.target.value }); clearError("customer_name"); }} />
+              {fieldErrors.customer_name && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_name}</p>}
             </div>
             <div>
-              <Label>Téléphone * (10 chiffres)</Label>
+              <Label>Téléphone *</Label>
               <Input
-                required
                 inputMode="numeric"
                 value={values.customer_phone}
-                onChange={(e) => { setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "") }); setFormError(null); }}
+                onChange={(e) => { setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "") }); clearError("customer_phone"); }}
               />
+              {fieldErrors.customer_phone && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_phone}</p>}
             </div>
           </div>
           <div>
             <Label>Adresse *</Label>
-            <Input required value={values.customer_address} onChange={(e) => { setValues({ ...values, customer_address: e.target.value }); setFormError(null); }} />
+            <Input value={values.customer_address} onChange={(e) => { setValues({ ...values, customer_address: e.target.value }); clearError("customer_address"); }} />
+            {fieldErrors.customer_address && <p className="mt-1 text-xs font-medium text-destructive">{fieldErrors.customer_address}</p>}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
