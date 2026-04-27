@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ChevronDown, Clock, Eye, EyeOff, HelpCircle, PackageCheck, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
@@ -113,6 +112,14 @@ const generateToken = () => {
 };
 
 const formatJson = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
+const toPrimitive = (value: string) => {
+  const trimmed = value.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (trimmed !== "" && !Number.isNaN(Number(trimmed))) return Number(trimmed);
+  return value;
+};
+
 const safeRecord = (value: string): Record<string, string> => {
   try {
     const parsed = JSON.parse(value || "{}");
@@ -120,6 +127,25 @@ const safeRecord = (value: string): Record<string, string> => {
     return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, String(item ?? "")]));
   } catch {
     return {};
+  }
+};
+
+const safeObject = (value: string): Record<string, any> => {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
+const safeArray = (value: string): Array<Record<string, any>> => {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === "object") : [];
+  } catch {
+    return [];
   }
 };
 
