@@ -25,7 +25,18 @@ export interface OrderFormValues {
 }
 
 const GENERIC_SYSTEM_ERROR = "Un problème système est survenu. Veuillez contacter le support.";
-const REQUIRED_FIELD_ERROR = "Veuillez remplir tous les champs obligatoires.";
+const REQUIRED_FIELD_ERROR = "Ce champ est obligatoire.";
+
+type FieldName = keyof OrderFormValues;
+
+const FIELD_LABEL_PREFIXES: Partial<Record<FieldName, string>> = {
+  customer_name: "Nom client",
+  customer_phone: "Téléphone",
+  customer_address: "Adresse",
+  customer_city: "Ville",
+  product_name: "Produit",
+  order_value: "Prix",
+};
 
 interface Props {
   open: boolean;
@@ -52,11 +63,24 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
   const [cities, setCities] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
-  const [preflightLoading, setPreflightLoading] = useState(false);
-  const [resolvedLivreur, setResolvedLivreur] = useState<string | null>(null);
-  const [cityChecked, setCityChecked] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldName, string>>>({});
   const editing = Boolean(initial?.id);
+
+  const clearError = (field: FieldName) => {
+    setFormError(null);
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const fieldMessage = (field: FieldName, message: string) => {
+    const prefix = FIELD_LABEL_PREFIXES[field];
+    return prefix ? message.replace(new RegExp(`^${prefix}\\s*:\\s*`, "i"), "") : message;
+  };
 
   useEffect(() => {
     if (open) {
@@ -69,10 +93,11 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
       }
       setValues(init);
       setFormError(null);
+      setFieldErrors({});
       supabase.functions.invoke("order-preflight", { body: { action: "list_cities" } }).then(({ data, error }) => {
         if (error || (data as any)?.error) {
           setCities([]);
-          toast.error(GENERIC_SYSTEM_ERROR);
+          setFormError(GENERIC_SYSTEM_ERROR);
           return;
         }
         setCities(((data as any)?.cities ?? []) as string[]);
@@ -82,41 +107,26 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
 
   const filteredCities = useMemo(() => cities, [cities]);
 
-  useEffect(() => {
-    if (!open || !values.customer_city) {
-      setResolvedLivreur(null);
-      setCityChecked(false);
-      return;
-    }
-
-    let cancelled = false;
-    setPreflightLoading(true);
-    supabase.functions.invoke("order-preflight", {
-      body: { city: values.customer_city },
-    }).then(({ data, error }) => {
-      if (cancelled) return;
-      if (error || (data as any)?.error) setResolvedLivreur(null);
-      else setResolvedLivreur((data as any)?.livreur_name ?? null);
-      setCityChecked(true);
-    }).finally(() => {
-      if (!cancelled) setPreflightLoading(false);
-    });
-
-    return () => { cancelled = true; };
-  }, [open, values.customer_city]);
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
     setFormError(null);
-    if (!values.customer_city || !values.customer_name.trim() || !values.customer_phone.trim() || !values.customer_address.trim() || !values.product_name.trim() || values.order_value === "") {
-      setFormError(REQUIRED_FIELD_ERROR);
-      return toast.error(REQUIRED_FIELD_ERROR);
+    setFieldErrors({});
+    const requiredErrors: Partial<Record<FieldName, string>> = {};
+    if (!values.customer_city) requiredErrors.customer_city = REQUIRED_FIELD_ERROR;
+    if (!values.customer_name.trim()) requiredErrors.customer_name = REQUIRED_FIELD_ERROR;
+    if (!values.customer_phone.trim()) requiredErrors.customer_phone = REQUIRED_FIELD_ERROR;
+    if (!values.customer_address.trim()) requiredErrors.customer_address = REQUIRED_FIELD_ERROR;
+    if (!values.product_name.trim()) requiredErrors.product_name = REQUIRED_FIELD_ERROR;
+    if (values.order_value === "") requiredErrors.order_value = REQUIRED_FIELD_ERROR;
+    if (Object.keys(requiredErrors).length > 0) {
+      setFieldErrors(requiredErrors);
+      return;
     }
     const priceNum = typeof values.order_value === "number" ? values.order_value : parseFloat(String(values.order_value));
     if (!Number.isFinite(priceNum)) {
-      setFormError("Le prix est invalide.");
-      return toast.error("Le prix est invalide.");
+      setFieldErrors({ order_value: "Le prix est invalide." });
+      return;
     }
     setSubmitting(true);
     try {
@@ -127,8 +137,9 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         if (preflightError || (preflight as any)?.error) {
           const message = (preflight as any)?.error || GENERIC_SYSTEM_ERROR;
           const safeMessage = (preflight as any)?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR;
-          setFormError(safeMessage);
-          toast.error(safeMessage);
+          const field = (preflight as any)?.field as FieldName | undefined;
+          if (field && field in empty) setFieldErrors({ [field]: fieldMessage(field, safeMessage) });
+          else setFormError(safeMessage);
           return;
         }
       }
@@ -167,7 +178,6 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
       onSaved();
     } catch {
       setFormError(GENERIC_SYSTEM_ERROR);
-      toast.error(GENERIC_SYSTEM_ERROR);
     } finally {
       setSubmitting(false);
     }
