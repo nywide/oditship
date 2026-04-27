@@ -7,9 +7,18 @@ import { toast } from "sonner";
 const cityRows = Array.from({ length: 40 }, (_, index) => ({
   name: `Ville ${String(index + 1).padStart(2, "0")}`,
 }));
+const cityNames = cityRows.map((city) => city.name);
+const invokeMock = vi.fn(({ body }) => {
+  if (body?.action === "list_cities") return Promise.resolve({ data: { ok: true, cities: cityNames }, error: null });
+  if (body?.order?.product_name === "A1") return Promise.resolve({ data: { error: "Produit: minimum 3 lettres ou chiffres", code: "VALIDATION_ERROR" }, error: null });
+  return Promise.resolve({ data: { ok: true, livreur_name: "Livreur test" }, error: null });
+});
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
+    functions: {
+      invoke: invokeMock,
+    },
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         order: vi.fn(() => Promise.resolve({ data: cityRows, error: null })),
@@ -78,7 +87,7 @@ describe("OrderFormDialog city dropdown", () => {
     expect(screen.getByText("Ville 40")).toBeInTheDocument();
   });
 
-  it("requires product to contain at least three letters or digits", async () => {
+  it("shows validation rule errors returned by the preflight check", async () => {
     const { container } = render(
       <OrderFormDialog
         open
@@ -100,6 +109,8 @@ describe("OrderFormDialog city dropdown", () => {
 
     fireEvent.submit(document.querySelector("form")!);
 
-    expect(toast.error).toHaveBeenCalledWith("Le produit doit contenir au moins 3 lettres ou chiffres");
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("Produit: minimum 3 lettres ou chiffres");
+    });
   });
 });
