@@ -523,13 +523,13 @@ const AdminLivreurs = () => {
             </Card>
             <Card className="p-4 space-y-4">
               <SectionHeader icon={ShieldCheck} title="Authentication & payloads" description="Optional login/token request used before calling protected provider endpoints." />
-              <JsonTextarea label="Authentication settings" help="Use type none when no auth is required. For token APIs, set URL, method, token response path, token header, and payload mapping." rows={9} value={settingsForm.auth_config} onChange={(value) => setSettingsForm({ ...settingsForm, auth_config: value })} />
-              <JsonTextarea label="Extra API operations" help="Advanced optional list of additional API requests executed in order when a provider needs more than one request." rows={8} value={settingsForm.api_operations} onChange={(value) => setSettingsForm({ ...settingsForm, api_operations: value })} />
+              <AuthConfigEditor value={settingsForm.auth_config} onChange={(value) => setSettingsForm({ ...settingsForm, auth_config: value })} />
+              <ApiOperationsEditor value={settingsForm.api_operations} onChange={(value) => setSettingsForm({ ...settingsForm, api_operations: value })} />
               <div><Label>Rate limit / second</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /><FieldHelp>Maximum outgoing requests per second for this provider. Set it according to the provider limit.</FieldHelp></div>
             </Card>
             <Card className="p-4 space-y-4">
               <SectionHeader icon={Webhook} title="Validation & webhook" description="Rules checked before sending, plus status mapping for incoming webhook updates." />
-              <JsonTextarea label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value." rows={7} value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} />
+              <KeyValueEditor label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value. Values can be plain text, numbers, true/false, or small JSON objects." value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} keyPlaceholder="Order field" valuePlaceholder='Rule, e.g. {"min_alnum":3}' primitiveValues />
               <KeyValueEditor label="Status mapping" help="Left side is the provider status. Right side is the internal status used in this app." value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
               <div className="grid gap-3 sm:grid-cols-2">
                 <div><Label>Webhook status field</Label><Input value={settingsForm.webhook_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_status_field: e.target.value })} /><FieldHelp>Field name that contains the provider status in the webhook body.</FieldHelp></div>
