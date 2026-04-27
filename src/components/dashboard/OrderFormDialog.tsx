@@ -51,6 +51,8 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
   const [cities, setCities] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [cityOpen, setCityOpen] = useState(false);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+  const [resolvedLivreur, setResolvedLivreur] = useState<string | null>(null);
   const editing = Boolean(initial?.id);
 
   useEffect(() => {
@@ -71,6 +73,27 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
 
   const filteredCities = useMemo(() => cities, [cities]);
 
+  useEffect(() => {
+    if (!open || !values.customer_city) {
+      setResolvedLivreur(null);
+      return;
+    }
+
+    let cancelled = false;
+    setPreflightLoading(true);
+    supabase.functions.invoke("order-preflight", {
+      body: { city: values.customer_city, order: values },
+    }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error || (data as any)?.error) setResolvedLivreur(null);
+      else setResolvedLivreur((data as any)?.livreur_name ?? null);
+    }).finally(() => {
+      if (!cancelled) setPreflightLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [open, values.customer_city]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -84,6 +107,15 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
     if (!priceNum || priceNum <= 0) return toast.error("Le prix doit être supérieur à 0");
     setSubmitting(true);
     try {
+      if (!editing) {
+        const { data: preflight, error: preflightError } = await supabase.functions.invoke("order-preflight", {
+          body: { city: values.customer_city, order: { ...values, order_value: priceNum } },
+        });
+        if (preflightError || (preflight as any)?.error) {
+          throw new Error((preflight as any)?.error || preflightError?.message || "Commande non conforme aux règles du livreur");
+        }
+      }
+
       if (editing && initial?.id) {
         const { error } = await supabase.from("orders").update({
           customer_name: values.customer_name,
@@ -168,6 +200,11 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                 </Command>
               </PopoverContent>
             </Popover>
+            {values.customer_city && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {preflightLoading ? "Vérification du livreur..." : resolvedLivreur ? `Livreur: ${resolvedLivreur}` : "Aucun livreur configuré pour cette ville"}
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
