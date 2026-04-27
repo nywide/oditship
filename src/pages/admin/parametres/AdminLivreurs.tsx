@@ -129,7 +129,7 @@ const parseJson = (label: string, value: string) => {
     if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error();
     return parsed;
   } catch {
-    throw new Error(`${label}: JSON invalide`);
+    throw new Error(`${label}: invalid JSON`);
   }
 };
 const parseJsonArray = (label: string, value: string) => {
@@ -138,7 +138,7 @@ const parseJsonArray = (label: string, value: string) => {
     if (!Array.isArray(parsed)) throw new Error();
     return parsed;
   } catch {
-    throw new Error(`${label}: JSON array invalide`);
+    throw new Error(`${label}: invalid JSON array`);
   }
 };
 
@@ -299,14 +299,14 @@ const AdminLivreurs = () => {
   const toggleApi = async (l: Livreur, v: boolean) => {
     const { error } = await supabase.from("profiles").update({ api_enabled: v }).eq("id", l.id);
     if (error) toast.error(error.message);
-    else { toast.success(v ? "API activée" : "API désactivée"); load(); }
+    else { toast.success(v ? "API enabled" : "API disabled"); load(); }
   };
 
   const regenToken = async (l: Livreur) => {
     const t = generateToken();
     const { error } = await supabase.from("profiles").update({ api_token: t }).eq("id", l.id);
     if (error) toast.error(error.message);
-    else { toast.success("Token régénéré"); load(); }
+    else { toast.success("Token regenerated"); load(); }
   };
 
   const saveSettings = async () => {
@@ -340,7 +340,7 @@ const AdminLivreurs = () => {
       };
       const { error } = await db.from("livreur_api_settings").upsert(payload, { onConflict: "livreur_id" });
       if (error) throw error;
-      toast.success("Paramètres livreur enregistrés");
+      toast.success("Driver settings saved");
       setEditing(null);
       await load();
     } catch (e: any) {
