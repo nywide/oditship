@@ -529,6 +529,25 @@ const AdminLivreurs = () => {
         </Table>
       </Card>
 
+      <Card className="mt-4 overflow-x-auto p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold">Driver API logs</h3>
+            <p className="text-sm text-muted-foreground">Internal errors and provider responses for package creation.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
+        </div>
+        <Table>
+          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {apiLogs.length === 0 ? <TableRow><TableCell colSpan={6} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : apiLogs.map((log) => {
+              const livreur = livreurs.find((item) => item.id === log.livreur_id);
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}</TableCell><TableCell><Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell></TableRow>;
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
