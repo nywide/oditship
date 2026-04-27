@@ -436,29 +436,27 @@ const AdminLivreurs = () => {
               <div className="flex gap-3">
                 <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="space-y-2">
-                  <p>هذه الصفحة كتخليك تربط أي livreur مع أي شركة توصيل: الحماية، إنشاء الطلبية، تحديث الحالة، والتحكم في عدد الطلبات في الثانية.</p>
-                  <div className="flex flex-wrap gap-3"><HelpLink href={docs.api}>Documentation API</HelpLink><HelpLink href={docs.auth}>Exemple authentication Olivraison</HelpLink></div>
+                  <p>Connect this driver to any delivery provider API. Configure authentication, package creation, status updates, and request limits without editing code.</p>
+                  <p>Tip: start with the provider documentation, then copy each required field into the matching section below.</p>
                 </div>
               </div>
             </div>
           </DialogHeader>
           <div className="grid gap-4 xl:grid-cols-2">
             <Card className="p-4 space-y-4">
-              <SectionHeader icon={PackageCheck} title="Create a package" description="الإعدادات لي كتسيفط الطلبية لشركة التوصيل أول مرة." />
+              <SectionHeader icon={PackageCheck} title="Create a package" description="Main request used to create a delivery package with the selected provider." />
               <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
-                <div><Label>URL create package</Label><Input value={settingsForm.create_package_url} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_url: e.target.value })} placeholder="https://..." /><FieldHelp>الرابط ديال إنشاء الطلبية عند شركة التوصيل.</FieldHelp></div>
-                <div><Label>Méthode</Label><Input value={settingsForm.create_package_method} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_method: e.target.value })} /><FieldHelp>غالباً POST.</FieldHelp></div>
+                <div><Label>Create package URL</Label><Input value={settingsForm.create_package_url} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_url: e.target.value })} placeholder="https://..." /><FieldHelp>Endpoint provided by the delivery company to create a new package.</FieldHelp></div>
+                <div><Label>Method</Label><Input value={settingsForm.create_package_method} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_method: e.target.value })} /><FieldHelp>Usually POST.</FieldHelp></div>
               </div>
-              <JsonTextarea label="Headers JSON" help="Headers اختيارية بحال Content-Type أو Authorization إذا الشركة كتطلبهم مباشرة." rows={5} value={settingsForm.create_package_headers} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_headers: value })} />
-              <JsonTextarea label="Payload mapping JSON" help="ربط أسماء الحقول عند الشركة مع معلومات الطلبية عندنا. مثال: destination.phone = customer_phone." rows={10} value={settingsForm.create_package_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_mapping: value })} />
+              <KeyValueEditor label="Headers" help="Optional headers sent with the package creation request. Add one key/value per row." value={settingsForm.create_package_headers} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_headers: value })} keyPlaceholder="Content-Type" valuePlaceholder="application/json" />
+              <KeyValueEditor label="Payload mapping" help="Left side is the provider field name. Right side is our order field, for example customer_phone or order_value." value={settingsForm.create_package_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, create_package_mapping: value })} keyPlaceholder="Provider field" valuePlaceholder="Order field" />
             </Card>
             <Card className="p-4 space-y-4">
-              <SectionHeader icon={ShieldCheck} title="Authentication & payloads" description="الحماية اختيارية. استعملها إلا كانت الشركة كتطلب login/token قبل إرسال الطلبات.">
-                <HelpLink href={docs.auth}>شرح authentication</HelpLink>
-              </SectionHeader>
-              <JsonTextarea label="Authentication JSON" help="type none يعني بلا حماية. إذا كان login، دخل URL/method/payload وكيفاش ناخدو token من response." rows={10} value={settingsForm.auth_config} onChange={(value) => setSettingsForm({ ...settingsForm, auth_config: value })} />
-              <JsonTextarea label="Payloads API JSON array" help="تقدر تزيد بزاف ديال العمليات الإضافية بترتيب التنفيذ إذا شركة كتحتاج أكثر من request." rows={9} value={settingsForm.api_operations} onChange={(value) => setSettingsForm({ ...settingsForm, api_operations: value })} />
-              <div><Label>Rate limit / seconde</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /><FieldHelp>عدد الطلبات المسموح بها في الثانية. Olivraison مثلاً: 5 requests/sec.</FieldHelp></div>
+              <SectionHeader icon={ShieldCheck} title="Authentication & payloads" description="Optional login/token request used before calling protected provider endpoints." />
+              <JsonTextarea label="Authentication settings" help="Use type none when no auth is required. For token APIs, set URL, method, token response path, token header, and payload mapping." rows={9} value={settingsForm.auth_config} onChange={(value) => setSettingsForm({ ...settingsForm, auth_config: value })} />
+              <JsonTextarea label="Extra API operations" help="Advanced optional list of additional API requests executed in order when a provider needs more than one request." rows={8} value={settingsForm.api_operations} onChange={(value) => setSettingsForm({ ...settingsForm, api_operations: value })} />
+              <div><Label>Rate limit / second</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /><FieldHelp>Maximum outgoing requests per second for this provider. Set it according to the provider limit.</FieldHelp></div>
             </Card>
             <Card className="p-4 space-y-4">
               <SectionHeader icon={Webhook} title="Validation & webhook" description="الشروط قبل الإرسال وربط status لي كيرجع من الشركة مع status ديال النظام." />
