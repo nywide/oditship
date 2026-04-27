@@ -276,7 +276,19 @@ const AdminLivreurs = () => {
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Livreur | null>(null);
-  const activeSettings = useMemo(() => editing ? settings[editing.id] ?? defaultSettings(editing.id) : null, [editing, settings]);
+  const activeSettings = useMemo(() => {
+    if (!editing) return null;
+    const current = settings[editing.id] ?? defaultSettings(editing.id);
+    return {
+      ...current,
+      auth_config: editing.authentication_config ?? current.auth_config,
+      create_package_mapping: (editing.create_package_config as any)?.payload_mapping ?? current.create_package_mapping,
+      create_package_headers: (editing.create_package_config as any)?.headers ?? current.create_package_headers,
+      create_package_url: (editing.create_package_config as any)?.url ?? current.create_package_url,
+      create_package_method: (editing.create_package_config as any)?.method ?? current.create_package_method,
+      api_operations: (editing.create_package_config as any)?.operations ?? current.api_operations,
+    };
+  }, [editing, settings]);
   const [settingsForm, setSettingsForm] = useState({
     create_package_url: "",
     create_package_method: "POST",
@@ -304,7 +316,7 @@ const AdminLivreurs = () => {
 
   const load = async () => {
     const [p, h, hl, s] = await Promise.all([
-      supabase.from("profiles").select("id, username, full_name, api_enabled, api_token").eq("role", "livreur").order("username"),
+      db.from("profiles").select("id, username, full_name, api_enabled, api_token, authentication_config, create_package_config").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
@@ -409,8 +421,20 @@ const AdminLivreurs = () => {
         rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
         is_active: settingsForm.is_active,
       };
+      const authConfig = parseJson("Authentication", settingsForm.auth_config);
+      const createPackageConfig = {
+        url: settingsForm.create_package_url.trim() || null,
+        method: settingsForm.create_package_method.trim().toUpperCase() || "POST",
+        headers: parseJson("Headers", settingsForm.create_package_headers),
+        payload_mapping: parseJson("Mapping create package", settingsForm.create_package_mapping),
+        response_tracking_path: "trackingID",
+        operations: parseJsonArray("Payloads API", settingsForm.api_operations),
+        rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
+      };
       const { error } = await db.from("livreur_api_settings").upsert(payload, { onConflict: "livreur_id" });
       if (error) throw error;
+      const { error: profileError } = await db.from("profiles").update({ authentication_config: authConfig, create_package_config: createPackageConfig }).eq("id", editing.id);
+      if (profileError) throw profileError;
       toast.success("Driver settings saved");
       setEditing(null);
       await load();
