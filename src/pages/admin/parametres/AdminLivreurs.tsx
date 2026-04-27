@@ -286,6 +286,7 @@ const AdminLivreurs = () => {
       create_package_headers: (editing.create_package_config as any)?.headers ?? current.create_package_headers,
       create_package_url: (editing.create_package_config as any)?.url ?? current.create_package_url,
       create_package_method: (editing.create_package_config as any)?.method ?? current.create_package_method,
+      response_tracking_path: (editing.create_package_config as any)?.response_tracking_path ?? "trackingID",
       api_operations: (editing.create_package_config as any)?.operations ?? current.api_operations,
     };
   }, [editing, settings]);
@@ -294,6 +295,7 @@ const AdminLivreurs = () => {
     create_package_method: "POST",
     create_package_headers: "{}",
     create_package_mapping: "{}",
+    response_tracking_path: "trackingID",
     auth_config: "{}",
     api_operations: "[]",
     validation_rules: "{}",
