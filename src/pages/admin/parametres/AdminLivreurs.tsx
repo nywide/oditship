@@ -117,6 +117,9 @@ const toPrimitive = (value: string) => {
   if (trimmed === "true") return true;
   if (trimmed === "false") return false;
   if (trimmed !== "" && !Number.isNaN(Number(trimmed))) return Number(trimmed);
+  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+    try { return JSON.parse(trimmed); } catch { return value; }
+  }
   return value;
 };
 
@@ -124,7 +127,7 @@ const safeRecord = (value: string): Record<string, string> => {
   try {
     const parsed = JSON.parse(value || "{}");
     if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
-    return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, String(item ?? "")]));
+    return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, typeof item === "object" && item !== null ? JSON.stringify(item) : String(item ?? "")]));
   } catch {
     return {};
   }
