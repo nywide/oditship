@@ -291,11 +291,6 @@ const VendeurColis = () => {
                 <TableCell className="font-semibold">{Number(o.order_value).toFixed(2)} MAD</TableCell>
                 <TableCell>
                   <StatusBadge status={o.status} />
-                  {o.api_sync_status === "failed" && (
-                    <div className="text-xs text-destructive mt-1 max-w-[180px] truncate" title={o.api_sync_error || ""}>
-                      {o.api_sync_error}
-                    </div>
-                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
@@ -333,9 +328,8 @@ const VendeurColis = () => {
         </Table>
       </Card>
 
-      {/* Floating action bar */}
       {selected.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-background border border-border rounded-full shadow-elegant px-4 py-2 flex items-center gap-2">
+        <div className="sticky top-3 z-20 bg-background border border-border rounded-full shadow-elegant px-4 py-2 flex items-center gap-2 overflow-x-auto">
           <span className="text-sm font-medium px-2">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
           <Button size="sm" onClick={groupConfirm} disabled={eligibleConfirm.length === 0 || confirming}>
             {confirming ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
