@@ -149,7 +149,6 @@ const VendeurColis = () => {
       const { error } = await supabase.from("orders").update({ status: "Confirmé" }).in("id", ids);
       if (error) throw error;
       toast.success(`${ids.length} commande(s) confirmée(s)`);
-      clearSelection();
       await load();
     } catch (e: any) {
       toast.error(e.message || "Échec de la confirmation");
@@ -198,7 +197,6 @@ const VendeurColis = () => {
     }
     if (success) toast.success(`${success} commande(s) envoyée(s) au livreur`);
     if (failed) toast.error(`${failed} commande(s) en échec`);
-    clearSelection();
     await load();
     setPickingUp(false);
   };
