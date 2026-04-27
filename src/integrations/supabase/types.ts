@@ -226,6 +226,54 @@ export type Database = {
           },
         ]
       }
+      livreur_api_settings: {
+        Row: {
+          create_package_headers: Json
+          create_package_mapping: Json
+          create_package_method: string
+          create_package_url: string | null
+          created_at: string
+          is_active: boolean
+          livreur_id: string
+          status_mapping: Json
+          updated_at: string
+          validation_rules: Json
+          webhook_status_field: string
+          webhook_tracking_field: string
+          webhook_updates_current_status: boolean
+        }
+        Insert: {
+          create_package_headers?: Json
+          create_package_mapping?: Json
+          create_package_method?: string
+          create_package_url?: string | null
+          created_at?: string
+          is_active?: boolean
+          livreur_id: string
+          status_mapping?: Json
+          updated_at?: string
+          validation_rules?: Json
+          webhook_status_field?: string
+          webhook_tracking_field?: string
+          webhook_updates_current_status?: boolean
+        }
+        Update: {
+          create_package_headers?: Json
+          create_package_mapping?: Json
+          create_package_method?: string
+          create_package_url?: string | null
+          created_at?: string
+          is_active?: boolean
+          livreur_id?: string
+          status_mapping?: Json
+          updated_at?: string
+          validation_rules?: Json
+          webhook_status_field?: string
+          webhook_tracking_field?: string
+          webhook_updates_current_status?: boolean
+        }
+        Relationships: []
+      }
       order_status_history: {
         Row: {
           changed_at: string
