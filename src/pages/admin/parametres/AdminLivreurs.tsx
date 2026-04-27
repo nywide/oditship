@@ -375,6 +375,12 @@ const AdminLivreurs = () => {
               <div><Label>Payload mapping JSON</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.create_package_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, create_package_mapping: e.target.value })} /></div>
             </Card>
             <Card className="p-4 space-y-3">
+              <h3 className="font-semibold">Authentication & Payloads</h3>
+              <div><Label>Authentication JSON</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.auth_config} onChange={(e) => setSettingsForm({ ...settingsForm, auth_config: e.target.value })} /></div>
+              <div><Label>Payloads API JSON array</Label><Textarea rows={10} className="font-mono text-xs" value={settingsForm.api_operations} onChange={(e) => setSettingsForm({ ...settingsForm, api_operations: e.target.value })} /></div>
+              <div><Label>Rate limit / seconde</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /></div>
+            </Card>
+            <Card className="p-4 space-y-3">
               <h3 className="font-semibold">Validation & Webhook</h3>
               <div><Label>Validation JSON</Label><Textarea rows={7} className="font-mono text-xs" value={settingsForm.validation_rules} onChange={(e) => setSettingsForm({ ...settingsForm, validation_rules: e.target.value })} /></div>
               <div><Label>Status mapping JSON</Label><Textarea rows={7} className="font-mono text-xs" value={settingsForm.status_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, status_mapping: e.target.value })} /></div>
@@ -384,6 +390,22 @@ const AdminLivreurs = () => {
               </div>
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.webhook_updates_current_status} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, webhook_updates_current_status: v })} /> Webhook met à jour le statut actuel</label>
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.is_active} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, is_active: v })} /> Paramètres actifs</label>
+            </Card>
+            <Card className="p-4 space-y-3">
+              <h3 className="font-semibold">Polling statut</h3>
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm"><Switch checked={settingsForm.polling_enabled} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, polling_enabled: v })} /> Activer polling</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Intervalle minutes</Label><Input type="number" min={1} value={settingsForm.polling_interval_minutes} onChange={(e) => setSettingsForm({ ...settingsForm, polling_interval_minutes: Number(e.target.value) })} /></div>
+                <div><Label>Méthode</Label><Input value={settingsForm.polling_status_method} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_method: e.target.value })} /></div>
+              </div>
+              <div><Label>URL statut</Label><Input value={settingsForm.polling_status_url} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_url: e.target.value })} placeholder="https://..." /></div>
+              <div><Label>Headers polling JSON</Label><Textarea rows={4} className="font-mono text-xs" value={settingsForm.polling_status_headers} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_headers: e.target.value })} /></div>
+              <div><Label>Payload polling JSON</Label><Textarea rows={5} className="font-mono text-xs" value={settingsForm.polling_status_payload_mapping} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_payload_mapping: e.target.value })} /></div>
+              <div className="grid grid-cols-3 gap-3">
+                <div><Label>Champ tracking</Label><Input value={settingsForm.polling_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_tracking_field: e.target.value })} /></div>
+                <div><Label>Champ status</Label><Input value={settingsForm.polling_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_field: e.target.value })} /></div>
+                <div><Label>Champ message</Label><Input value={settingsForm.polling_message_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_message_field: e.target.value })} /></div>
+              </div>
             </Card>
           </div>
           <DialogFooter>
