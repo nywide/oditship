@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { AlertCircle, Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface OrderFormValues {
@@ -24,8 +24,8 @@ export interface OrderFormValues {
   comment: string;
 }
 
-const countProductCharacters = (value: string) => value.replace(/[^\p{L}\p{N}]/gu, "").length;
 const GENERIC_SYSTEM_ERROR = "Un problème système est survenu. Veuillez contacter le support.";
+const REQUIRED_FIELD_ERROR = "Veuillez remplir tous les champs obligatoires.";
 
 interface Props {
   open: boolean;
@@ -55,6 +55,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [resolvedLivreur, setResolvedLivreur] = useState<string | null>(null);
   const [cityChecked, setCityChecked] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const editing = Boolean(initial?.id);
 
   useEffect(() => {
@@ -67,8 +68,14 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         init.order_value = "";
       }
       setValues(init);
-      supabase.from("cities").select("name").order("name").then(({ data }) => {
-        setCities((data ?? []).map((c) => c.name));
+      setFormError(null);
+      supabase.functions.invoke("order-preflight", { body: { action: "list_cities" } }).then(({ data, error }) => {
+        if (error || (data as any)?.error) {
+          setCities([]);
+          toast.error(GENERIC_SYSTEM_ERROR);
+          return;
+        }
+        setCities(((data as any)?.cities ?? []) as string[]);
       });
     }
   }, [open, initial]);
@@ -85,7 +92,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
     let cancelled = false;
     setPreflightLoading(true);
     supabase.functions.invoke("order-preflight", {
-      body: { city: values.customer_city, order: values },
+      body: { city: values.customer_city },
     }).then(({ data, error }) => {
       if (cancelled) return;
       if (error || (data as any)?.error) setResolvedLivreur(null);
@@ -101,14 +108,16 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
-    if (!values.customer_city) return toast.error("Choisissez une ville");
-    if (values.customer_name.trim().length < 2) return toast.error("Le nom doit contenir au moins 2 caractères");
-    if (countProductCharacters(values.product_name) < 3) return toast.error("Le produit doit contenir au moins 3 lettres ou chiffres");
-    if (values.customer_address.trim().length < 2) return toast.error("L'adresse doit contenir au moins 2 caractères");
-    const phoneDigits = values.customer_phone.replace(/\D/g, "");
-    if (phoneDigits.length !== 10) return toast.error("Le téléphone doit contenir exactement 10 chiffres");
+    setFormError(null);
+    if (!values.customer_city || !values.customer_name.trim() || !values.customer_phone.trim() || !values.customer_address.trim() || !values.product_name.trim() || values.order_value === "") {
+      setFormError(REQUIRED_FIELD_ERROR);
+      return toast.error(REQUIRED_FIELD_ERROR);
+    }
     const priceNum = typeof values.order_value === "number" ? values.order_value : parseFloat(String(values.order_value));
-    if (!priceNum || priceNum <= 0) return toast.error("Le prix doit être supérieur à 0");
+    if (!Number.isFinite(priceNum)) {
+      setFormError("Le prix est invalide.");
+      return toast.error("Le prix est invalide.");
+    }
     setSubmitting(true);
     try {
       if (!editing) {
@@ -117,7 +126,10 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
         });
         if (preflightError || (preflight as any)?.error) {
           const message = (preflight as any)?.error || GENERIC_SYSTEM_ERROR;
-          throw new Error((preflight as any)?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR);
+          const safeMessage = (preflight as any)?.code === "VALIDATION_ERROR" ? message : GENERIC_SYSTEM_ERROR;
+          setFormError(safeMessage);
+          toast.error(safeMessage);
+          return;
         }
       }
 
@@ -153,8 +165,9 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
       }
       onOpenChange(false);
       onSaved();
-    } catch (err: any) {
-      toast.error(err?.message || GENERIC_SYSTEM_ERROR);
+    } catch {
+      setFormError(GENERIC_SYSTEM_ERROR);
+      toast.error(GENERIC_SYSTEM_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -193,6 +206,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                           value={c}
                           onSelect={() => {
                             setValues({ ...values, customer_city: c });
+                            setFormError(null);
                             setCityOpen(false);
                           }}
                         >
@@ -214,28 +228,26 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Nom client *</Label>
-              <Input required minLength={2} value={values.customer_name} onChange={(e) => setValues({ ...values, customer_name: e.target.value })} />
+              <Input required value={values.customer_name} onChange={(e) => { setValues({ ...values, customer_name: e.target.value }); setFormError(null); }} />
             </div>
             <div>
               <Label>Téléphone * (10 chiffres)</Label>
               <Input
                 required
                 inputMode="numeric"
-                pattern="[0-9]{10}"
-                maxLength={10}
                 value={values.customer_phone}
-                onChange={(e) => setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                onChange={(e) => { setValues({ ...values, customer_phone: e.target.value.replace(/\D/g, "") }); setFormError(null); }}
               />
             </div>
           </div>
           <div>
             <Label>Adresse *</Label>
-            <Input required minLength={2} value={values.customer_address} onChange={(e) => setValues({ ...values, customer_address: e.target.value })} />
+            <Input required value={values.customer_address} onChange={(e) => { setValues({ ...values, customer_address: e.target.value }); setFormError(null); }} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Produit *</Label>
-              <Input required minLength={3} value={values.product_name} onChange={(e) => setValues({ ...values, product_name: e.target.value })} />
+              <Input required value={values.product_name} onChange={(e) => { setValues({ ...values, product_name: e.target.value }); setFormError(null); }} />
             </div>
             <div>
               <Label>Prix (MAD) *</Label>
@@ -249,6 +261,7 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
                 onChange={(e) => {
                   const v = e.target.value;
                   setValues({ ...values, order_value: v === "" ? "" : parseFloat(v) });
+                  setFormError(null);
                 }}
               />
             </div>
@@ -263,6 +276,12 @@ export const OrderFormDialog = ({ open, onOpenChange, initial, vendeurId, agentI
             <Label>Commentaire</Label>
             <Textarea rows={2} value={values.comment} onChange={(e) => setValues({ ...values, comment: e.target.value })} />
           </div>
+          {formError && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{formError}</p>
+            </div>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Annuler</Button>
             <Button type="submit" disabled={submitting || !values.customer_city}>
