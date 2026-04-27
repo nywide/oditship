@@ -66,7 +66,7 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
     url: "",
     method: "POST",
     headers: {},
-    payload_mapping: { apiKey: "secret:OLIVRAISON_API_KEY", secretKey: "secret:OLIVRAISON_SECRET_KEY" },
+    payload_mapping: {},
     response_token_path: "token",
     token_header: "Authorization",
     token_prefix: "Bearer ",
