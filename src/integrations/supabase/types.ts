@@ -239,6 +239,7 @@ export type Database = {
           livreur_id: string
           polling_enabled: boolean
           polling_interval_minutes: number
+          polling_last_run_at: string | null
           polling_message_field: string
           polling_status_field: string
           polling_status_headers: Json
@@ -265,6 +266,7 @@ export type Database = {
           livreur_id: string
           polling_enabled?: boolean
           polling_interval_minutes?: number
+          polling_last_run_at?: string | null
           polling_message_field?: string
           polling_status_field?: string
           polling_status_headers?: Json
@@ -291,6 +293,7 @@ export type Database = {
           livreur_id?: string
           polling_enabled?: boolean
           polling_interval_minutes?: number
+          polling_last_run_at?: string | null
           polling_message_field?: string
           polling_status_field?: string
           polling_status_headers?: Json
