@@ -339,6 +339,7 @@ const AdminLivreurs = () => {
       create_package_method: activeSettings.create_package_method || "POST",
       create_package_headers: formatJson(activeSettings.create_package_headers),
       create_package_mapping: formatJson(activeSettings.create_package_mapping),
+      response_tracking_path: (activeSettings as any).response_tracking_path || "trackingID",
       auth_config: formatJson(activeSettings.auth_config),
       api_operations: JSON.stringify(activeSettings.api_operations ?? [], null, 2),
       validation_rules: formatJson(activeSettings.validation_rules),
@@ -429,7 +430,7 @@ const AdminLivreurs = () => {
         method: settingsForm.create_package_method.trim().toUpperCase() || "POST",
         headers: parseJson("Headers", settingsForm.create_package_headers),
         payload_mapping: parseJson("Mapping create package", settingsForm.create_package_mapping),
-        response_tracking_path: "trackingID",
+        response_tracking_path: settingsForm.response_tracking_path.trim() || "trackingID",
         operations: parseJsonArray("Payloads API", settingsForm.api_operations),
         rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
       };
