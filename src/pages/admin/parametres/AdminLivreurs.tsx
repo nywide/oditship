@@ -23,11 +23,22 @@ interface LivreurApiSettings {
   create_package_method: string;
   create_package_headers: Record<string, string>;
   create_package_mapping: Record<string, string>;
+  auth_config: Record<string, unknown>;
+  api_operations: Array<Record<string, unknown>>;
   validation_rules: Record<string, unknown>;
   status_mapping: Record<string, string>;
   webhook_updates_current_status: boolean;
   webhook_status_field: string;
   webhook_tracking_field: string;
+  polling_enabled: boolean;
+  polling_interval_minutes: number;
+  polling_status_url: string | null;
+  polling_status_method: string;
+  polling_status_headers: Record<string, string>;
+  polling_status_payload_mapping: Record<string, string>;
+  polling_tracking_field: string;
+  polling_status_field: string;
+  polling_message_field: string;
   is_active: boolean;
 }
 
@@ -50,6 +61,18 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
     "destination.city": "customer_city",
     "destination.streetAddress": "customer_address",
   },
+  auth_config: {
+    type: "none",
+    url: "",
+    method: "POST",
+    headers: {},
+    payload_mapping: { apiKey: "secret:OLIVRAISON_API_KEY", secretKey: "secret:OLIVRAISON_SECRET_KEY" },
+    response_token_path: "token",
+    token_header: "Authorization",
+    token_prefix: "Bearer ",
+    expires_in_path: "expiresIn",
+  },
+  api_operations: [],
   validation_rules: {
     product_name: { min_alnum: 3 },
     customer_name: { min_length: 2 },
@@ -69,6 +92,15 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   webhook_updates_current_status: true,
   webhook_status_field: "status",
   webhook_tracking_field: "trackingID",
+  polling_enabled: false,
+  polling_interval_minutes: 15,
+  polling_status_url: "",
+  polling_status_method: "GET",
+  polling_status_headers: {},
+  polling_status_payload_mapping: {},
+  polling_tracking_field: "trackingID",
+  polling_status_field: "status",
+  polling_message_field: "message",
   is_active: true,
 });
 
@@ -103,11 +135,22 @@ const AdminLivreurs = () => {
     create_package_method: "POST",
     create_package_headers: "{}",
     create_package_mapping: "{}",
+    auth_config: "{}",
+    api_operations: "[]",
     validation_rules: "{}",
     status_mapping: "{}",
     webhook_updates_current_status: true,
     webhook_status_field: "status",
     webhook_tracking_field: "trackingID",
+    polling_enabled: false,
+    polling_interval_minutes: 15,
+    polling_status_url: "",
+    polling_status_method: "GET",
+    polling_status_headers: "{}",
+    polling_status_payload_mapping: "{}",
+    polling_tracking_field: "trackingID",
+    polling_status_field: "status",
+    polling_message_field: "message",
     is_active: true,
   });
 
@@ -134,11 +177,22 @@ const AdminLivreurs = () => {
       create_package_method: activeSettings.create_package_method || "POST",
       create_package_headers: formatJson(activeSettings.create_package_headers),
       create_package_mapping: formatJson(activeSettings.create_package_mapping),
+      auth_config: formatJson(activeSettings.auth_config),
+      api_operations: JSON.stringify(activeSettings.api_operations ?? [], null, 2),
       validation_rules: formatJson(activeSettings.validation_rules),
       status_mapping: formatJson(activeSettings.status_mapping),
       webhook_updates_current_status: activeSettings.webhook_updates_current_status,
       webhook_status_field: activeSettings.webhook_status_field || "status",
       webhook_tracking_field: activeSettings.webhook_tracking_field || "trackingID",
+      polling_enabled: activeSettings.polling_enabled ?? false,
+      polling_interval_minutes: activeSettings.polling_interval_minutes ?? 15,
+      polling_status_url: activeSettings.polling_status_url ?? "",
+      polling_status_method: activeSettings.polling_status_method || "GET",
+      polling_status_headers: formatJson(activeSettings.polling_status_headers),
+      polling_status_payload_mapping: formatJson(activeSettings.polling_status_payload_mapping),
+      polling_tracking_field: activeSettings.polling_tracking_field || "trackingID",
+      polling_status_field: activeSettings.polling_status_field || "status",
+      polling_message_field: activeSettings.polling_message_field || "message",
       is_active: activeSettings.is_active,
     });
   }, [activeSettings]);
