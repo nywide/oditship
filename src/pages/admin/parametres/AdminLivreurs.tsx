@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ChevronDown, Clock, Eye, EyeOff, HelpCircle, PackageCheck, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,7 +66,7 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
     url: "",
     method: "POST",
     headers: {},
-    payload_mapping: { apiKey: "secret:OLIVRAISON_API_KEY", secretKey: "secret:OLIVRAISON_SECRET_KEY" },
+    payload_mapping: {},
     response_token_path: "token",
     token_header: "Authorization",
     token_prefix: "Bearer ",
@@ -113,13 +112,43 @@ const generateToken = () => {
 };
 
 const formatJson = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
+const toPrimitive = (value: string) => {
+  const trimmed = value.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (trimmed !== "" && !Number.isNaN(Number(trimmed))) return Number(trimmed);
+  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+    try { return JSON.parse(trimmed); } catch { return value; }
+  }
+  return value;
+};
+
 const safeRecord = (value: string): Record<string, string> => {
   try {
     const parsed = JSON.parse(value || "{}");
     if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
-    return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, String(item ?? "")]));
+    return Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, typeof item === "object" && item !== null ? JSON.stringify(item) : String(item ?? "")]));
   } catch {
     return {};
+  }
+};
+
+const safeObject = (value: string): Record<string, any> => {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+};
+
+const safeArray = (value: string): Array<Record<string, any>> => {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === "object") : [];
+  } catch {
+    return [];
   }
 };
 
@@ -161,17 +190,9 @@ const SectionHeader = ({ icon: Icon, title, description, children }: { icon: typ
   </div>
 );
 
-const JsonTextarea = ({ label, help, rows, value, onChange }: { label: string; help: string; rows: number; value: string; onChange: (value: string) => void }) => (
-  <div>
-    <Label>{label}</Label>
-    <FieldHelp>{help}</FieldHelp>
-    <Textarea rows={rows} className="mt-2 font-mono text-xs leading-relaxed" value={value} onChange={(e) => onChange(e.target.value)} />
-  </div>
-);
-
-const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value" }: { label: string; help: string; value: string; onChange: (value: string) => void; keyPlaceholder?: string; valuePlaceholder?: string }) => {
+const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value", primitiveValues = false }: { label: string; help: string; value: string; onChange: (value: string) => void; keyPlaceholder?: string; valuePlaceholder?: string; primitiveValues?: boolean }) => {
   const pairs = Object.entries(safeRecord(value));
-  const updatePairs = (nextPairs: Array<[string, string]>) => onChange(JSON.stringify(Object.fromEntries(nextPairs.filter(([key]) => key.trim()).map(([key, item]) => [key.trim(), item])), null, 2));
+  const updatePairs = (nextPairs: Array<[string, string]>) => onChange(JSON.stringify(Object.fromEntries(nextPairs.filter(([key]) => key.trim()).map(([key, item]) => [key.trim(), primitiveValues ? toPrimitive(item) : item])), null, 2));
 
   return (
     <div className="space-y-2">
@@ -193,6 +214,54 @@ const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", 
       <Button type="button" variant="outline" size="sm" onClick={() => updatePairs([...pairs, ["", ""]])}>
         <Plus className="mr-1 h-4 w-4" /> Add row
       </Button>
+    </div>
+  );
+};
+
+const AuthConfigEditor = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
+  const auth = safeObject(value);
+  const update = (patch: Record<string, unknown>) => onChange(JSON.stringify({ ...auth, ...patch }, null, 2));
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><Label>Auth type</Label><Input value={String(auth.type ?? "none")} onChange={(e) => update({ type: e.target.value })} placeholder="none or token" /><FieldHelp>Use none if the provider does not require authentication.</FieldHelp></div>
+        <div><Label>Method</Label><Input value={String(auth.method ?? "POST")} onChange={(e) => update({ method: e.target.value })} placeholder="POST" /><FieldHelp>HTTP method used for the authentication request.</FieldHelp></div>
+      </div>
+      <div><Label>Auth URL</Label><Input value={String(auth.url ?? "")} onChange={(e) => update({ url: e.target.value })} placeholder="https://..." /><FieldHelp>Login or token endpoint from the provider.</FieldHelp></div>
+      <KeyValueEditor label="Auth headers" help="Headers sent only with the authentication request." value={formatJson(auth.headers ?? {})} onChange={(headers) => update({ headers: safeRecord(headers) })} keyPlaceholder="Header" valuePlaceholder="Value" />
+      <KeyValueEditor label="Auth payload mapping" help="Left side is the provider auth field. Right side can be an order field or secret:SECRET_NAME." value={formatJson(auth.payload_mapping ?? {})} onChange={(payload_mapping) => update({ payload_mapping: safeRecord(payload_mapping) })} keyPlaceholder="Provider field" valuePlaceholder="Value or secret" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div><Label>Token response path</Label><Input value={String(auth.response_token_path ?? "token")} onChange={(e) => update({ response_token_path: e.target.value })} /><FieldHelp>Where the token is found in the auth response.</FieldHelp></div>
+        <div><Label>Token header</Label><Input value={String(auth.token_header ?? "Authorization")} onChange={(e) => update({ token_header: e.target.value })} /><FieldHelp>Header used later for protected requests.</FieldHelp></div>
+        <div><Label>Token prefix</Label><Input value={String(auth.token_prefix ?? "Bearer ")} onChange={(e) => update({ token_prefix: e.target.value })} /><FieldHelp>Common value is Bearer with a trailing space.</FieldHelp></div>
+        <div><Label>Expires in path</Label><Input value={String(auth.expires_in_path ?? "expiresIn")} onChange={(e) => update({ expires_in_path: e.target.value })} /><FieldHelp>Optional response field for token lifetime.</FieldHelp></div>
+      </div>
+    </div>
+  );
+};
+
+const ApiOperationsEditor = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
+  const operations = safeArray(value);
+  const updateOperation = (index: number, patch: Record<string, unknown>) => onChange(JSON.stringify(operations.map((operation, i) => i === index ? { ...operation, ...patch } : operation), null, 2));
+  const removeOperation = (index: number) => onChange(JSON.stringify(operations.filter((_, i) => i !== index), null, 2));
+  const addOperation = () => onChange(JSON.stringify([...operations, { name: "", url: "", method: "POST", headers: {}, payload_mapping: {} }], null, 2));
+
+  return (
+    <div className="space-y-3">
+      <div><Label>Extra API operations</Label><FieldHelp>Optional requests executed in order when a provider needs more than one API call.</FieldHelp></div>
+      {operations.map((operation, index) => (
+        <div key={index} className="space-y-3 rounded-md border border-border p-3">
+          <div className="grid gap-3 sm:grid-cols-[1fr_120px_40px]">
+            <Input value={String(operation.url ?? "")} onChange={(e) => updateOperation(index, { url: e.target.value })} placeholder="Operation URL" />
+            <Input value={String(operation.method ?? "POST")} onChange={(e) => updateOperation(index, { method: e.target.value })} placeholder="Method" />
+            <Button type="button" variant="ghost" size="icon" onClick={() => removeOperation(index)}><Trash2 className="h-4 w-4" /></Button>
+          </div>
+          <Input value={String(operation.name ?? "")} onChange={(e) => updateOperation(index, { name: e.target.value })} placeholder="Operation name" />
+          <KeyValueEditor label="Operation headers" help="Headers for this operation only." value={formatJson(operation.headers ?? {})} onChange={(headers) => updateOperation(index, { headers: safeRecord(headers) })} />
+          <KeyValueEditor label="Operation payload mapping" help="Provider fields and the values sent for this operation." value={formatJson(operation.payload_mapping ?? {})} onChange={(payload_mapping) => updateOperation(index, { payload_mapping: safeRecord(payload_mapping) })} keyPlaceholder="Provider field" valuePlaceholder="Order field or value" />
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={addOperation}><Plus className="mr-1 h-4 w-4" /> Add operation</Button>
     </div>
   );
 };
@@ -454,13 +523,13 @@ const AdminLivreurs = () => {
             </Card>
             <Card className="p-4 space-y-4">
               <SectionHeader icon={ShieldCheck} title="Authentication & payloads" description="Optional login/token request used before calling protected provider endpoints." />
-              <JsonTextarea label="Authentication settings" help="Use type none when no auth is required. For token APIs, set URL, method, token response path, token header, and payload mapping." rows={9} value={settingsForm.auth_config} onChange={(value) => setSettingsForm({ ...settingsForm, auth_config: value })} />
-              <JsonTextarea label="Extra API operations" help="Advanced optional list of additional API requests executed in order when a provider needs more than one request." rows={8} value={settingsForm.api_operations} onChange={(value) => setSettingsForm({ ...settingsForm, api_operations: value })} />
+              <AuthConfigEditor value={settingsForm.auth_config} onChange={(value) => setSettingsForm({ ...settingsForm, auth_config: value })} />
+              <ApiOperationsEditor value={settingsForm.api_operations} onChange={(value) => setSettingsForm({ ...settingsForm, api_operations: value })} />
               <div><Label>Rate limit / second</Label><Input type="number" min={0.1} step={0.1} value={settingsForm.rate_limit_per_second} onChange={(e) => setSettingsForm({ ...settingsForm, rate_limit_per_second: Number(e.target.value) })} /><FieldHelp>Maximum outgoing requests per second for this provider. Set it according to the provider limit.</FieldHelp></div>
             </Card>
             <Card className="p-4 space-y-4">
               <SectionHeader icon={Webhook} title="Validation & webhook" description="Rules checked before sending, plus status mapping for incoming webhook updates." />
-              <JsonTextarea label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value." rows={7} value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} />
+              <KeyValueEditor label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value. Values can be plain text, numbers, true/false, or small JSON objects." value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} keyPlaceholder="Order field" valuePlaceholder='Rule, e.g. {"min_alnum":3}' primitiveValues />
               <KeyValueEditor label="Status mapping" help="Left side is the provider status. Right side is the internal status used in this app." value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
               <div className="grid gap-3 sm:grid-cols-2">
                 <div><Label>Webhook status field</Label><Input value={settingsForm.webhook_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_status_field: e.target.value })} /><FieldHelp>Field name that contains the provider status in the webhook body.</FieldHelp></div>
