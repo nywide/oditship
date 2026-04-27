@@ -7,6 +7,16 @@ const corsHeaders = {
 
 type JsonRecord = Record<string, any>;
 
+const GENERIC_SYSTEM_ERROR = "Un problème système est survenu. Veuillez contacter le support.";
+const FIELD_LABELS: Record<string, string> = {
+  customer_name: "Nom client",
+  customer_phone: "Téléphone",
+  customer_address: "Adresse",
+  customer_city: "Ville",
+  product_name: "Produit",
+  order_value: "Prix",
+};
+
 function jsonResponse(body: JsonRecord, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -20,13 +30,22 @@ function alnumCount(value: unknown) {
   return String(value ?? "").replace(/[^\p{L}\p{N}]/gu, "").length;
 }
 
+function normalizeText(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function validationError(field: string, message: string) {
+  const label = FIELD_LABELS[field] ?? field;
+  return Object.assign(new Error(`${label}: ${message}`), { field, label, publicMessage: `${label}: ${message}` });
+}
+
 function validateOrder(order: JsonRecord, rules: JsonRecord) {
   for (const [field, rule] of Object.entries(rules ?? {})) {
     const value = getPath(order, field);
-    if (rule?.min_alnum && alnumCount(value) < Number(rule.min_alnum)) throw new Error(`${field}: minimum ${rule.min_alnum} lettres ou chiffres`);
-    if (rule?.min_length && String(value ?? "").trim().length < Number(rule.min_length)) throw new Error(`${field}: minimum ${rule.min_length} caractères`);
-    if (rule?.digits && String(value ?? "").replace(/\D/g, "").length !== Number(rule.digits)) throw new Error(`${field}: doit contenir ${rule.digits} chiffres`);
-    if (rule?.min !== undefined && Number(value) < Number(rule.min)) throw new Error(`${field}: minimum ${rule.min}`);
+    if (rule?.min_alnum && alnumCount(value) < Number(rule.min_alnum)) throw validationError(field, `minimum ${rule.min_alnum} lettres ou chiffres`);
+    if (rule?.min_length && String(value ?? "").trim().length < Number(rule.min_length)) throw validationError(field, `minimum ${rule.min_length} caractères`);
+    if (rule?.digits && String(value ?? "").replace(/\D/g, "").length !== Number(rule.digits)) throw validationError(field, `doit contenir ${rule.digits} chiffres`);
+    if (rule?.min !== undefined && Number(value) < Number(rule.min)) throw validationError(field, `minimum ${rule.min}`);
   }
 }
 
@@ -48,25 +67,26 @@ Deno.serve(async (req) => {
 
   let body: { city?: string; order?: JsonRecord } = {};
   try { body = await req.json(); } catch { return jsonResponse({ error: "Invalid JSON body" }, 400); }
-  const city = String(body.city || body.order?.customer_city || "").trim();
+  const city = normalizeText(String(body.city || body.order?.customer_city || ""));
   if (!city) return jsonResponse({ error: "Ville obligatoire" }, 400);
 
-  const { data: hubCity } = await admin.from("hub_cities").select("hub_id").eq("city_name", city).limit(1).maybeSingle();
-  if (!hubCity) return jsonResponse({ error: "Cette ville n'est assignée à aucun hub" }, 422);
+  const { data: hubCity } = await admin.from("hub_cities").select("hub_id").ilike("city_name", city).limit(1).maybeSingle();
+  if (!hubCity) return jsonResponse({ error: GENERIC_SYSTEM_ERROR, code: "CONFIGURATION_ERROR" }, 422);
 
   const { data: hubLivreur } = await admin.from("hub_livreur").select("livreur_id").eq("hub_id", hubCity.hub_id).maybeSingle();
-  if (!hubLivreur?.livreur_id) return jsonResponse({ error: "Aucun livreur n'est assigné au hub de cette ville" }, 422);
+  if (!hubLivreur?.livreur_id) return jsonResponse({ error: GENERIC_SYSTEM_ERROR, code: "CONFIGURATION_ERROR" }, 422);
 
   const [{ data: livreur }, { data: settings }] = await Promise.all([
     admin.from("profiles").select("id, full_name, username, api_enabled").eq("id", hubLivreur.livreur_id).maybeSingle(),
     admin.from("livreur_api_settings").select("validation_rules, is_active").eq("livreur_id", hubLivreur.livreur_id).maybeSingle(),
   ]);
-  if (!livreur) return jsonResponse({ error: "Livreur introuvable" }, 422);
+  if (!livreur) return jsonResponse({ error: GENERIC_SYSTEM_ERROR, code: "CONFIGURATION_ERROR" }, 422);
 
   try {
-    if (livreur.api_enabled && settings?.is_active !== false) validateOrder(body.order ?? {}, settings?.validation_rules ?? {});
+    if (body.order && livreur.api_enabled && settings?.is_active !== false) validateOrder(body.order, settings?.validation_rules ?? {});
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : "Commande non conforme aux règles du livreur" }, 422);
+    const publicMessage = error && typeof error === "object" && "publicMessage" in error ? String((error as any).publicMessage) : "Commande non conforme aux règles du livreur";
+    return jsonResponse({ error: publicMessage, code: "VALIDATION_ERROR", field: (error as any)?.field, label: (error as any)?.label }, 422);
   }
 
   return jsonResponse({ ok: true, livreur_id: livreur.id, livreur_name: livreur.full_name || livreur.username });
