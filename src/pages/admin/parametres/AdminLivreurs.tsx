@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { ChevronDown, Clock, Eye, EyeOff, HelpCircle, PackageCheck, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
-interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
+interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; authentication_config?: Record<string, unknown> | null; create_package_config?: Record<string, unknown> | null; }
 interface Hub { id: number; name: string; }
 interface HubLivreur { hub_id: number; livreur_id: string; }
 interface LivreurApiSettings {
@@ -191,8 +191,10 @@ const SectionHeader = ({ icon: Icon, title, description, children }: { icon: typ
 );
 
 const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", valuePlaceholder = "Value", primitiveValues = false }: { label: string; help: string; value: string; onChange: (value: string) => void; keyPlaceholder?: string; valuePlaceholder?: string; primitiveValues?: boolean }) => {
-  const pairs = Object.entries(safeRecord(value));
-  const updatePairs = (nextPairs: Array<[string, string]>) => onChange(JSON.stringify(Object.fromEntries(nextPairs.filter(([key]) => key.trim()).map(([key, item]) => [key.trim(), primitiveValues ? toPrimitive(item) : item])), null, 2));
+  const [pairs, setPairs] = useState<Array<[string, string]>>(() => Object.entries(safeRecord(value)));
+  useEffect(() => { setPairs(Object.entries(safeRecord(value))); }, [value]);
+  const emit = (nextPairs: Array<[string, string]>) => onChange(JSON.stringify(Object.fromEntries(nextPairs.filter(([key]) => key.trim()).map(([key, item]) => [key.trim(), primitiveValues ? toPrimitive(item) : item])), null, 2));
+  const updatePairs = (nextPairs: Array<[string, string]>) => { setPairs(nextPairs); emit(nextPairs); };
 
   return (
     <div className="space-y-2">
@@ -203,8 +205,8 @@ const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", 
       <div className="space-y-2">
         {(pairs.length ? pairs : [["", ""]]).map(([key, item], index) => (
           <div key={`${key}-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px]">
-            <Input value={key} placeholder={keyPlaceholder} onChange={(e) => updatePairs(pairs.length ? pairs.map((pair, i) => i === index ? [e.target.value, pair[1]] : pair) : [[e.target.value, item]])} />
-            <Input value={item} placeholder={valuePlaceholder} onChange={(e) => updatePairs(pairs.length ? pairs.map((pair, i) => i === index ? [pair[0], e.target.value] : pair) : [[key, e.target.value]])} />
+            <Input value={key} placeholder={keyPlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""]]).map((pair, i) => i === index ? [e.target.value, pair[1]] : pair))} />
+            <Input value={item} placeholder={valuePlaceholder} onChange={(e) => updatePairs((pairs.length ? pairs : [["", ""]]).map((pair, i) => i === index ? [pair[0], e.target.value] : pair))} />
             <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => updatePairs(pairs.filter((_, i) => i !== index))} disabled={!pairs.length}>
               <Trash2 className="h-4 w-4" />
             </Button>
