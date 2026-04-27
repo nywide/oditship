@@ -127,6 +127,17 @@ async function sendRequest(config: JsonRecord, order: JsonRecord, context: JsonR
   return parsed;
 }
 
+async function logApi(admin: any, entry: JsonRecord) {
+  await admin.from("livreur_api_logs").insert({
+    order_id: entry.order_id ?? null,
+    livreur_id: entry.livreur_id ?? null,
+    event_type: entry.event_type,
+    status: entry.status,
+    message: entry.message ?? null,
+    details: entry.details ?? {},
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
@@ -217,11 +228,13 @@ Deno.serve(async (req) => {
 
     const { error } = await admin.from("orders").update({ external_tracking_number: String(tracking), status: "Pickup", assigned_livreur_id: livreur.id, hub_id: hubCity.hub_id, api_sync_status: "success", api_sync_error: null }).eq("id", order.id);
     if (error) return jsonResponse({ error: `Provider succeeded but database update failed: ${error.message}`, tracking_id: String(tracking) }, 500);
+    await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: `Tracking ${String(tracking)}`, details: { tracking_path: trackingPath } });
 
     return jsonResponse({ ok: true, mode: "external_api", tracking_id: String(tracking) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown delivery API error";
     await admin.from("orders").update({ api_sync_status: "failed", api_sync_error: message }).eq("id", order.id);
-    return jsonResponse({ error: message }, 502);
+    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "create_package", status: "failed", message, details: { customer_city: order.customer_city } });
+    return jsonResponse({ error: "Commande refusée par les règles ou l'API du livreur. Contactez l'administration." }, 502);
   }
 });
