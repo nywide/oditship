@@ -61,6 +61,17 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
   });
 }
 
+async function hasLatestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
+  const { data } = await admin
+    .from("order_status_history")
+    .select("new_status, changed_by")
+    .eq("order_id", orderId)
+    .order("changed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.new_status === mappedStatus && data?.changed_by === livreurId;
+}
+
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
   const since = new Date(Date.now() - 5000).toISOString();
   const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
@@ -73,6 +84,7 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
     .eq("new_status", mappedStatus)
     .is("changed_by", null)
     .gte("changed_at", since);
+  if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) return null;
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
