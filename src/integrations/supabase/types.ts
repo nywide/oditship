@@ -284,6 +284,9 @@ export type Database = {
           status_mapping: Json
           updated_at: string
           validation_rules: Json
+          webhook_driver_name_field: string
+          webhook_driver_phone_field: string
+          webhook_extra_fields_mapping: Json
           webhook_status_field: string
           webhook_tracking_field: string
           webhook_updates_current_status: boolean
@@ -312,6 +315,9 @@ export type Database = {
           status_mapping?: Json
           updated_at?: string
           validation_rules?: Json
+          webhook_driver_name_field?: string
+          webhook_driver_phone_field?: string
+          webhook_extra_fields_mapping?: Json
           webhook_status_field?: string
           webhook_tracking_field?: string
           webhook_updates_current_status?: boolean
@@ -340,6 +346,9 @@ export type Database = {
           status_mapping?: Json
           updated_at?: string
           validation_rules?: Json
+          webhook_driver_name_field?: string
+          webhook_driver_phone_field?: string
+          webhook_extra_fields_mapping?: Json
           webhook_status_field?: string
           webhook_tracking_field?: string
           webhook_updates_current_status?: boolean
