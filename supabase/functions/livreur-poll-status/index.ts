@@ -5,6 +5,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 function getPath(obj: any, path?: string | null) {
   if (!path) return undefined;
   return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
@@ -43,6 +50,39 @@ function buildPayload(order: Record<string, any>, mapping: Record<string, string
   return payload;
 }
 
+async function logApi(admin: any, entry: Record<string, unknown>) {
+  await admin.from("livreur_api_logs").insert({
+    order_id: entry.order_id ?? null,
+    livreur_id: entry.livreur_id ?? null,
+    event_type: entry.event_type,
+    status: entry.status,
+    message: entry.message ?? null,
+    details: entry.details ?? {},
+  });
+}
+
+async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+  const since = new Date(Date.now() - 5000).toISOString();
+  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
+  if (updateError) return updateError;
+  await admin
+    .from("order_status_history")
+    .delete()
+    .eq("order_id", order.id)
+    .eq("old_status", order.status)
+    .eq("new_status", mappedStatus)
+    .is("changed_by", null)
+    .gte("changed_at", since);
+  const { error: historyError } = await admin.from("order_status_history").insert({
+    order_id: order.id,
+    old_status: order.status,
+    new_status: mappedStatus,
+    changed_by: livreurId,
+    notes: message,
+  });
+  return historyError;
+}
+
 async function authenticate(order: Record<string, any>, headers: Record<string, string>, authConfig: Record<string, any> | null) {
   if (!authConfig || authConfig.type === "none" || !authConfig.url) return headers;
   const response = await fetch(authConfig.url, {
@@ -61,7 +101,7 @@ async function authenticate(order: Record<string, any>, headers: Record<string, 
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -73,7 +113,7 @@ Deno.serve(async (req) => {
     .eq("is_active", true)
     .eq("polling_enabled", true)
     .not("polling_status_url", "is", null);
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (error) return jsonResponse({ error: error.message }, 500);
 
   const now = Date.now();
   let checked = 0;
@@ -93,25 +133,49 @@ Deno.serve(async (req) => {
 
     const delayMs = Math.ceil(1000 / Math.max(Number(settings.rate_limit_per_second) || 5, 0.1));
     for (const order of orders ?? []) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      const method = String(settings.polling_status_method || "GET").toUpperCase();
-      const headers = await authenticate(order, settings.polling_status_headers ?? {}, settings.auth_config ?? null);
-      const payload = buildPayload(order, settings.polling_status_payload_mapping ?? { trackingID: "external_tracking" });
-      const url = String(settings.polling_status_url).replace("{tracking}", encodeURIComponent(order.external_tracking_number || order.tracking_number || ""));
-      const response = await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body: method === "GET" ? undefined : JSON.stringify(payload) });
-      checked += 1;
-      if (!response.ok) continue;
-      const body = await response.json().catch(() => ({}));
-      const mappedStatus = mapProviderStatus(getPath(body, settings.polling_status_field), settings.status_mapping ?? {});
-      if (!mappedStatus || mappedStatus === order.status) continue;
-      const message = getPath(body, settings.polling_message_field) ?? null;
-      await admin.from("order_status_history").insert({ order_id: order.id, old_status: order.status, new_status: mappedStatus, changed_by: settings.livreur_id, notes: message });
-      await admin.from("orders").update({ status: mappedStatus, status_note: message }).eq("id", order.id);
-      updated += 1;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        const method = String(settings.polling_status_method || "GET").toUpperCase();
+        const headers = await authenticate(order, settings.polling_status_headers ?? {}, settings.auth_config ?? null);
+        const payload = buildPayload(order, settings.polling_status_payload_mapping ?? {});
+        const tracking = order.external_tracking_number || order.tracking_number || "";
+        const url = String(settings.polling_status_url).replace("{tracking}", encodeURIComponent(tracking));
+        const response = await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body: method === "GET" ? undefined : JSON.stringify(payload) });
+        checked += 1;
+        const text = await response.text();
+        let body: any = {};
+        try { body = JSON.parse(text); } catch { body = { raw: text }; }
+        if (!response.ok) {
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: `Polling ${response.status}`, details: { tracking, response: body } });
+          continue;
+        }
+        const responseTracking = getPath(body, settings.polling_tracking_field);
+        if (responseTracking && String(responseTracking).trim() !== String(tracking).trim()) {
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling response tracking mismatch", details: { expected_tracking: tracking, response_tracking: responseTracking } });
+          continue;
+        }
+        const rawStatus = getPath(body, settings.polling_status_field);
+        const mappedStatus = mapProviderStatus(rawStatus, settings.status_mapping ?? {});
+        if (!mappedStatus) {
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
+          continue;
+        }
+        if (mappedStatus === order.status) continue;
+        const message = getPath(body, settings.polling_message_field) ?? null;
+        const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, message);
+        if (updateError) {
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
+          continue;
+        }
+        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus } });
+        updated += 1;
+      } catch (e) {
+        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: e instanceof Error ? e.message : "Unknown polling error", details: { tracking: order.external_tracking_number || order.tracking_number || null } });
+      }
     }
 
     await admin.from("livreur_api_settings").update({ polling_last_run_at: new Date().toISOString() }).eq("livreur_id", settings.livreur_id);
   }
 
-  return new Response(JSON.stringify({ ok: true, checked, updated }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  return jsonResponse({ ok: true, checked, updated });
 });

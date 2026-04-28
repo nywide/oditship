@@ -5,6 +5,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 function getPath(obj: any, path?: string | null) {
   if (!path) return undefined;
   return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
@@ -20,13 +27,60 @@ function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
 }
 
+async function logApi(admin: any, entry: Record<string, unknown>) {
+  await admin.from("livreur_api_logs").insert({
+    order_id: entry.order_id ?? null,
+    livreur_id: entry.livreur_id ?? null,
+    event_type: entry.event_type,
+    status: entry.status,
+    message: entry.message ?? null,
+    details: entry.details ?? {},
+  });
+}
+
+async function findOrderByTracking(admin: any, livreurId: string, tracking: string) {
+  const baseSelect = "id, status";
+  const external = await admin
+    .from("orders")
+    .select(baseSelect)
+    .eq("assigned_livreur_id", livreurId)
+    .eq("external_tracking_number", tracking)
+    .maybeSingle();
+  if (external.data || external.error) return external;
+  return admin
+    .from("orders")
+    .select(baseSelect)
+    .eq("assigned_livreur_id", livreurId)
+    .eq("tracking_number", tracking)
+    .maybeSingle();
+}
+
+async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+  const since = new Date(Date.now() - 5000).toISOString();
+  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
+  if (updateError) return updateError;
+  await admin
+    .from("order_status_history")
+    .delete()
+    .eq("order_id", order.id)
+    .eq("old_status", order.status)
+    .eq("new_status", mappedStatus)
+    .is("changed_by", null)
+    .gte("changed_at", since);
+  const { error: historyError } = await admin.from("order_status_history").insert({
+    order_id: order.id,
+    old_status: order.status,
+    new_status: mappedStatus,
+    changed_by: livreurId,
+    notes: message,
+  });
+  return historyError;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
   const url = new URL(req.url);
@@ -38,10 +92,7 @@ Deno.serve(async (req) => {
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
 
   if (!livreurId || !token) {
-    return new Response(JSON.stringify({ error: "Missing livreur id or bearer token" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Missing livreur id or bearer token" }, 401);
   }
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -56,10 +107,7 @@ Deno.serve(async (req) => {
   ]);
 
   if (!profile || profile.api_token !== token) {
-    return new Response(JSON.stringify({ error: "Invalid credentials" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Invalid credentials" }, 401);
   }
 
   let payload: any = {};
@@ -73,59 +121,49 @@ Deno.serve(async (req) => {
   const message = payload.message || payload.msg || payload.description || null;
 
   if (!tracking || !String(rawStatus ?? "").trim()) {
-    return new Response(JSON.stringify({ error: "Webhook requires tracking and status" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: { trackingField, statusField, payload } });
+    return jsonResponse({ error: "Webhook requires tracking and status" }, 400);
+  }
+
+  if (!settings || settings.is_active === false) {
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "API settings disabled", details: { tracking, raw_status: rawStatus } });
+    return jsonResponse({ ok: true, ignored: true, reason: "settings_disabled" });
   }
 
   if (!mappedStatus) {
-    return new Response(JSON.stringify({ ok: true, ignored: true, reason: "status_not_mapped" }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Provider status is not mapped", details: { tracking, raw_status: rawStatus, status_mapping: settings?.status_mapping ?? {} } });
+    return jsonResponse({ ok: true, ignored: true, reason: "status_not_mapped" });
   }
 
-  const { data: order } = await admin
-    .from("orders")
-    .select("id, status")
-    .eq("assigned_livreur_id", livreurId)
-    .or(`external_tracking_number.eq.${tracking},tracking_number.eq.${tracking}`)
-    .maybeSingle();
+  const { data: order, error: orderError } = await findOrderByTracking(admin, livreurId, String(tracking).trim());
 
-  if (!order) {
-    return new Response(JSON.stringify({ error: "Order not found for tracking" }), {
-      status: 404,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  if (orderError || !order) {
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Order not found for tracking", details: { tracking, raw_status: rawStatus, error: orderError?.message } });
+    return jsonResponse({ error: "Order not found for tracking" }, 404);
   }
 
-  const { error: historyError } = await admin.from("order_status_history").insert({
-    order_id: order.id,
-    old_status: order.status,
-    new_status: mappedStatus,
-    changed_by: livreurId,
-    notes: message,
-  });
-  if (historyError) {
-    return new Response(JSON.stringify({ error: "Unable to record status history" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  if (settings?.webhook_updates_current_status !== false) {
-    const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message }).eq("id", order.id);
+  const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true;
+  if (shouldUpdateCurrentStatus && mappedStatus !== order.status) {
+    const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, message);
     if (updateError) {
-      return new Response(JSON.stringify({ error: "Unable to update order status" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
+      return jsonResponse({ error: "Unable to update order status" }, 500);
+    }
+  } else {
+    const { error: historyError } = await admin.from("order_status_history").insert({
+      order_id: order.id,
+      old_status: order.status,
+      new_status: mappedStatus,
+      changed_by: livreurId,
+      notes: message,
+    });
+    if (historyError) {
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to record status history", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: historyError.message } });
+      return jsonResponse({ error: "Unable to record status history" }, 500);
     }
   }
 
-  return new Response(JSON.stringify({ ok: true, order_id: order.id, status: mappedStatus }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status } });
+
+  return jsonResponse({ ok: true, order_id: order.id, status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status });
 });
