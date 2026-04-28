@@ -55,6 +55,28 @@ async function findOrderByTracking(admin: any, livreurId: string, tracking: stri
     .maybeSingle();
 }
 
+async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+  const since = new Date(Date.now() - 5000).toISOString();
+  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
+  if (updateError) return updateError;
+  await admin
+    .from("order_status_history")
+    .delete()
+    .eq("order_id", order.id)
+    .eq("old_status", order.status)
+    .eq("new_status", mappedStatus)
+    .is("changed_by", null)
+    .gte("changed_at", since);
+  const { error: historyError } = await admin.from("order_status_history").insert({
+    order_id: order.id,
+    old_status: order.status,
+    new_status: mappedStatus,
+    changed_by: livreurId,
+    notes: message,
+  });
+  return historyError;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -122,23 +144,23 @@ Deno.serve(async (req) => {
 
   const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true;
   if (shouldUpdateCurrentStatus && mappedStatus !== order.status) {
-    const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message }).eq("id", order.id);
+    const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, message);
     if (updateError) {
       await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
       return jsonResponse({ error: "Unable to update order status" }, 500);
     }
-  }
-
-  const { error: historyError } = await admin.from("order_status_history").insert({
-    order_id: order.id,
-    old_status: order.status,
-    new_status: mappedStatus,
-    changed_by: livreurId,
-    notes: message,
-  });
-  if (historyError) {
-    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to record status history", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: historyError.message } });
-    return jsonResponse({ error: "Unable to record status history" }, 500);
+  } else {
+    const { error: historyError } = await admin.from("order_status_history").insert({
+      order_id: order.id,
+      old_status: order.status,
+      new_status: mappedStatus,
+      changed_by: livreurId,
+      notes: message,
+    });
+    if (historyError) {
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to record status history", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: historyError.message } });
+      return jsonResponse({ error: "Unable to record status history" }, 500);
+    }
   }
 
   await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status } });
