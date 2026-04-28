@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
   ].sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime());
 
   return new Response(JSON.stringify({
-    order,
+    order: currentOrder,
     tracking,
     vendeur,
     livreur: {
