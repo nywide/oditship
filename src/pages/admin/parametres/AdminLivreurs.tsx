@@ -29,6 +29,9 @@ interface LivreurApiSettings {
   webhook_updates_current_status: boolean;
   webhook_status_field: string;
   webhook_tracking_field: string;
+  webhook_driver_name_field: string;
+  webhook_driver_phone_field: string;
+  webhook_extra_fields_mapping: Record<string, string>;
   polling_enabled: boolean;
   polling_interval_minutes: number;
   polling_status_url: string | null;
@@ -92,6 +95,9 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   webhook_updates_current_status: true,
   webhook_status_field: "status",
   webhook_tracking_field: "trackingID",
+  webhook_driver_name_field: "transport.currentDriverName",
+  webhook_driver_phone_field: "transport.currentDriverPhone",
+  webhook_extra_fields_mapping: {},
   polling_enabled: false,
   polling_interval_minutes: 15,
   polling_status_url: "",
@@ -304,6 +310,9 @@ const AdminLivreurs = () => {
     webhook_updates_current_status: true,
     webhook_status_field: "status",
     webhook_tracking_field: "trackingID",
+    webhook_driver_name_field: "transport.currentDriverName",
+    webhook_driver_phone_field: "transport.currentDriverPhone",
+    webhook_extra_fields_mapping: "{}",
     polling_enabled: false,
     polling_interval_minutes: 15,
     polling_status_url: "",
@@ -350,6 +359,9 @@ const AdminLivreurs = () => {
       webhook_updates_current_status: activeSettings.webhook_updates_current_status,
       webhook_status_field: activeSettings.webhook_status_field || "status",
       webhook_tracking_field: activeSettings.webhook_tracking_field || "trackingID",
+      webhook_driver_name_field: activeSettings.webhook_driver_name_field || "transport.currentDriverName",
+      webhook_driver_phone_field: activeSettings.webhook_driver_phone_field || "transport.currentDriverPhone",
+      webhook_extra_fields_mapping: formatJson(activeSettings.webhook_extra_fields_mapping),
       polling_enabled: activeSettings.polling_enabled ?? false,
       polling_interval_minutes: activeSettings.polling_interval_minutes ?? 15,
       polling_status_url: activeSettings.polling_status_url ?? "",
@@ -415,6 +427,9 @@ const AdminLivreurs = () => {
         webhook_updates_current_status: settingsForm.webhook_updates_current_status,
         webhook_status_field: settingsForm.webhook_status_field.trim() || "status",
         webhook_tracking_field: settingsForm.webhook_tracking_field.trim() || "trackingID",
+        webhook_driver_name_field: settingsForm.webhook_driver_name_field.trim() || "transport.currentDriverName",
+        webhook_driver_phone_field: settingsForm.webhook_driver_phone_field.trim() || "transport.currentDriverPhone",
+        webhook_extra_fields_mapping: parseJson("Webhook extra fields", settingsForm.webhook_extra_fields_mapping),
         polling_enabled: settingsForm.polling_enabled,
         polling_interval_minutes: Number(settingsForm.polling_interval_minutes) || 15,
         polling_status_url: settingsForm.polling_status_url.trim() || null,
