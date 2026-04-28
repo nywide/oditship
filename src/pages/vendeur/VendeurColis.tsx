@@ -132,6 +132,10 @@ const VendeurColis = () => {
   };
   const clearSelection = () => setSelected(new Set());
 
+  const syncOrderInList = (updated: Order) => {
+    setOrders((current) => current.map((order) => (order.id === updated.id ? { ...order, ...updated } : order)));
+  };
+
   const deleteOrder = async () => {
     if (!deleteId) return;
     const { error } = await supabase.from("orders").delete().eq("id", deleteId);
@@ -341,7 +345,7 @@ const VendeurColis = () => {
               {expandedOrderId === o.id && (
                 <TableRow key={`${o.id}-details`}>
                   <TableCell colSpan={7} className="bg-muted/20 p-0">
-                    <OrderDetailsPanel order={o} />
+                    <OrderDetailsPanel order={o} onOrderSynced={syncOrderInList} />
                   </TableCell>
                 </TableRow>
               )}

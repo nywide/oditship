@@ -65,7 +65,15 @@ const historyKey = (item: HistoryItem) => [
   item.actor?.username ?? item.actor?.full_name ?? "",
 ].join("|");
 
-export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; className?: string }) => {
+export const OrderDetailsPanel = ({
+  order,
+  className,
+  onOrderSynced,
+}: {
+  order: OrderSummary;
+  className?: string;
+  onOrderSynced?: (order: OrderSummary) => void;
+}) => {
   const [data, setData] = useState<DetailsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [qrSrc, setQrSrc] = useState("");
@@ -79,7 +87,9 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
       toast.error(error.message);
       setData({ tracking, livreur: null, support: null, history: [], package_error: error.message });
     } else {
-      setData(result as DetailsData);
+      const details = result as DetailsData;
+      setData(details);
+      if (details.order) onOrderSynced?.(details.order);
     }
     setLoading(false);
   };
