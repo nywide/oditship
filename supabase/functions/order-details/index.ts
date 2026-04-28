@@ -51,6 +51,33 @@ function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
 }
 
+function latestMappedProviderEvent(history: any[], mapping: Record<string, string>) {
+  return history
+    .map((item) => ({ ...item, mappedStatus: mapProviderStatus(item?.status, mapping) }))
+    .filter((item) => item.mappedStatus && item.updateAt && !isApiCreatedConfirmed(item.mappedStatus, item.msg))
+    .sort((a, b) => new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime())[0] ?? null;
+}
+
+async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent: any, livreurId: string) {
+  if (!latestEvent?.mappedStatus || latestEvent.mappedStatus === order.status) return order;
+  const message = latestEvent.msg ?? null;
+  const { data: updated, error } = await admin
+    .from("orders")
+    .update({ status: latestEvent.mappedStatus, status_note: message })
+    .eq("id", order.id)
+    .select("*")
+    .single();
+  if (error || !updated) throw error ?? new Error("Unable to sync current status");
+  await admin.from("order_status_history").insert({
+    order_id: order.id,
+    old_status: order.status,
+    new_status: latestEvent.mappedStatus,
+    changed_by: livreurId,
+    notes: message,
+  });
+  return updated;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -137,7 +164,7 @@ Deno.serve(async (req) => {
       : Promise.resolve({ data: null }),
     admin.from("profiles").select("id, full_name, username, company_name, phone").eq("id", order.vendeur_id).maybeSingle(),
     order.assigned_livreur_id
-      ? admin.from("livreur_api_settings").select("status_mapping").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
+      ? admin.from("livreur_api_settings").select("status_mapping, webhook_updates_current_status").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
@@ -162,6 +189,15 @@ Deno.serve(async (req) => {
 
   const statusMapping = settings?.status_mapping ?? {};
   const apiHistory = Array.isArray(packageDetails?.history) ? packageDetails.history : [];
+  let currentOrder = order;
+  const latestProviderEvent = latestMappedProviderEvent(apiHistory, statusMapping);
+  if (settings?.webhook_updates_current_status === true && order.assigned_livreur_id && latestProviderEvent) {
+    try {
+      currentOrder = await syncCurrentStatusFromProvider(admin, order, latestProviderEvent, order.assigned_livreur_id);
+    } catch (e) {
+      packageError = e instanceof Error ? e.message : "Synchronisation du statut indisponible";
+    }
+  }
   const mergedHistory = [
     ...(history ?? []).filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status)).map((h: any) => ({
       source: "odit",
@@ -182,7 +218,7 @@ Deno.serve(async (req) => {
   ].sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime());
 
   return new Response(JSON.stringify({
-    order,
+    order: currentOrder,
     tracking,
     vendeur,
     livreur: {
