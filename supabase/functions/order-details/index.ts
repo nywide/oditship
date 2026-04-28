@@ -41,6 +41,16 @@ function isApiCreatedConfirmed(status?: string | null, message?: string | null) 
   return normalizedStatus === "confirmed" && normalizedMessage.includes("colis cre") && normalizedMessage.includes("azizshop") && normalizedMessage.includes("api");
 }
 
+function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
+  const raw = String(status ?? "").trim();
+  if (!raw) return null;
+  const direct = mapping[raw];
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const normalizedRaw = raw.toLowerCase();
+  const match = Object.entries(mapping ?? {}).find(([providerStatus]) => providerStatus.trim().toLowerCase() === normalizedRaw);
+  return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
@@ -120,12 +130,15 @@ Deno.serve(async (req) => {
     });
   }
 
-  const [{ data: history }, { data: livreur }, { data: vendeur }] = await Promise.all([
+  const [{ data: history }, { data: livreur }, { data: vendeur }, { data: settings }] = await Promise.all([
     admin.from("order_status_history").select("id, old_status, new_status, changed_at, changed_by, notes").eq("order_id", order.id).order("changed_at", { ascending: true }),
     order.assigned_livreur_id
       ? admin.from("profiles").select("id, full_name, username, phone").eq("id", order.assigned_livreur_id).maybeSingle()
       : Promise.resolve({ data: null }),
     admin.from("profiles").select("id, full_name, username, company_name, phone").eq("id", order.vendeur_id).maybeSingle(),
+    order.assigned_livreur_id
+      ? admin.from("livreur_api_settings").select("status_mapping").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const actorIds = Array.from(new Set((history ?? []).map((h: any) => h.changed_by).filter(Boolean)));
@@ -147,6 +160,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  const statusMapping = settings?.status_mapping ?? {};
   const apiHistory = Array.isArray(packageDetails?.history) ? packageDetails.history : [];
   const mergedHistory = [
     ...(history ?? []).filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status)).map((h: any) => ({
@@ -157,9 +171,9 @@ Deno.serve(async (req) => {
       changed_at: h.changed_at,
       actor: h.changed_by ? actors[h.changed_by] ?? null : null,
     })),
-    ...apiHistory.filter((h: any) => !isApiCreatedConfirmed(h.status, h.msg)).map((h: any) => ({
+    ...apiHistory.filter((h: any) => mapProviderStatus(h.status, statusMapping) && !isApiCreatedConfirmed(mapProviderStatus(h.status, statusMapping), h.msg)).map((h: any) => ({
       source: "olivraison",
-      status: h.status,
+      status: mapProviderStatus(h.status, statusMapping),
       message: h.msg,
       changed_at: h.updateAt,
       actor: h.user ? { username: h.user } : null,
