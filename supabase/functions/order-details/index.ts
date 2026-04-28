@@ -58,6 +58,26 @@ function latestMappedProviderEvent(history: any[], mapping: Record<string, strin
     .sort((a, b) => new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime())[0] ?? null;
 }
 
+function removeSystemDuplicates(history: any[]) {
+  const providerKeys = new Set(
+    (history ?? [])
+      .filter((h: any) => h.changed_by)
+      .map((h: any) => `${h.old_status ?? ""}|${h.new_status ?? ""}`),
+  );
+  return (history ?? []).filter((h: any) => h.changed_by || !providerKeys.has(`${h.old_status ?? ""}|${h.new_status ?? ""}`));
+}
+
+async function hasLatestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
+  const { data } = await admin
+    .from("order_status_history")
+    .select("new_status, changed_by")
+    .eq("order_id", orderId)
+    .order("changed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.new_status === mappedStatus && data?.changed_by === livreurId;
+}
+
 async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent: any, livreurId: string) {
   if (!latestEvent?.mappedStatus || latestEvent.mappedStatus === order.status) return order;
   const message = latestEvent.msg ?? null;
@@ -68,6 +88,15 @@ async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent
     .select("*")
     .single();
   if (error || !updated) throw error ?? new Error("Unable to sync current status");
+  await admin
+    .from("order_status_history")
+    .delete()
+    .eq("order_id", order.id)
+    .eq("old_status", order.status)
+    .eq("new_status", latestEvent.mappedStatus)
+    .is("changed_by", null)
+    .gte("changed_at", new Date(Date.now() - 5000).toISOString());
+  if (await hasLatestDuplicate(admin, order.id, latestEvent.mappedStatus, livreurId)) return updated;
   await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
