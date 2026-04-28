@@ -34,6 +34,7 @@ interface HistoryItem {
 }
 
 interface DetailsData {
+  order?: OrderSummary | null;
   tracking: string | null;
   vendeur?: { full_name?: string | null; username?: string | null; company_name?: string | null } | null;
   livreur: { name: string | null; phone: string | null } | null;
@@ -68,7 +69,8 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
   const [data, setData] = useState<DetailsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [qrSrc, setQrSrc] = useState("");
-  const tracking = data?.tracking || order.external_tracking_number || order.tracking_number || `ODiT-${order.id}`;
+  const displayOrder = data?.order ?? order;
+  const tracking = data?.tracking || displayOrder.external_tracking_number || displayOrder.tracking_number || `ODiT-${displayOrder.id}`;
 
   const load = async () => {
     setLoading(true);
@@ -98,14 +100,14 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
       return true;
     });
     if (visibleHistory.length) return visibleHistory;
-    return [{ source: "odit", status: order.status, message: "Statut actuel", changed_at: order.created_at, actor: null }] as HistoryItem[];
-  }, [data?.history, order.status, order.created_at]);
+    return [{ source: "odit", status: displayOrder.status, message: "Statut actuel", changed_at: displayOrder.created_at, actor: null }] as HistoryItem[];
+  }, [data?.history, displayOrder.status, displayOrder.created_at]);
   const hasLivreur = Boolean(data?.livreur?.name || data?.livreur?.phone);
   const livreurText = loading
     ? "Chargement..."
     : hasLivreur
       ? data?.livreur?.name || "Livreur assigné"
-      : isTransitStatus(order.status)
+      : isTransitStatus(displayOrder.status)
         ? "Informations transport en attente"
         : "Disponible après passage en transit";
 
@@ -119,7 +121,7 @@ export const OrderDetailsPanel = ({ order, className }: { order: OrderSummary; c
             <p className="mt-1 text-sm text-muted-foreground">{order.customer_address} - {order.customer_city}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={order.status} />
+            <StatusBadge status={displayOrder.status} />
             <span className="rounded-full bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">{tracking}</span>
           </div>
         </div>
