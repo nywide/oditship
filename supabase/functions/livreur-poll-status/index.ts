@@ -20,10 +20,14 @@ function setPath(obj: Record<string, any>, path: string, value: unknown) {
   cur[keys[keys.length - 1]] = value ?? "";
 }
 
-function normalizeStatus(status: unknown, mapping: Record<string, string>) {
+function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   const raw = String(status ?? "").trim();
   if (!raw) return null;
-  return mapping[raw] || mapping[raw.toUpperCase()] || mapping[raw.toLowerCase()] || raw;
+  const direct = mapping[raw];
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const normalizedRaw = raw.toLowerCase();
+  const match = Object.entries(mapping ?? {}).find(([providerStatus]) => providerStatus.trim().toLowerCase() === normalizedRaw);
+  return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
 }
 
 function resolveValue(order: Record<string, any>, source: unknown) {
@@ -98,7 +102,7 @@ Deno.serve(async (req) => {
       checked += 1;
       if (!response.ok) continue;
       const body = await response.json().catch(() => ({}));
-      const mappedStatus = normalizeStatus(getPath(body, settings.polling_status_field), settings.status_mapping ?? {});
+      const mappedStatus = mapProviderStatus(getPath(body, settings.polling_status_field), settings.status_mapping ?? {});
       if (!mappedStatus || mappedStatus === order.status) continue;
       const message = getPath(body, settings.polling_message_field) ?? null;
       await admin.from("order_status_history").insert({ order_id: order.id, old_status: order.status, new_status: mappedStatus, changed_by: settings.livreur_id, notes: message });
