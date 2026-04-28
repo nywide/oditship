@@ -10,10 +10,14 @@ function getPath(obj: any, path?: string | null) {
   return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
 }
 
-function normalizeStatus(status: unknown, mapping: Record<string, string>) {
+function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   const raw = String(status ?? "").trim();
   if (!raw) return null;
-  return mapping[raw] || mapping[raw.toUpperCase()] || mapping[raw.toLowerCase()] || raw;
+  const direct = mapping[raw];
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const normalizedRaw = raw.toLowerCase();
+  const match = Object.entries(mapping ?? {}).find(([providerStatus]) => providerStatus.trim().toLowerCase() === normalizedRaw);
+  return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
 }
 
 Deno.serve(async (req) => {
@@ -64,12 +68,20 @@ Deno.serve(async (req) => {
   const trackingField = settings?.webhook_tracking_field || "trackingID";
   const statusField = settings?.webhook_status_field || "status";
   const tracking = getPath(payload, trackingField) || payload.tracking_id || payload.trackingNumber || payload.partnerTrackingID;
-  const mappedStatus = normalizeStatus(getPath(payload, statusField), settings?.status_mapping ?? {});
+  const rawStatus = getPath(payload, statusField);
+  const mappedStatus = mapProviderStatus(rawStatus, settings?.status_mapping ?? {});
   const message = payload.message || payload.msg || payload.description || null;
 
-  if (!tracking || !mappedStatus) {
+  if (!tracking || !String(rawStatus ?? "").trim()) {
     return new Response(JSON.stringify({ error: "Webhook requires tracking and status" }), {
       status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (!mappedStatus) {
+    return new Response(JSON.stringify({ ok: true, ignored: true, reason: "status_not_mapped" }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
@@ -88,16 +100,28 @@ Deno.serve(async (req) => {
     });
   }
 
-  await admin.from("order_status_history").insert({
+  const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
     new_status: mappedStatus,
     changed_by: livreurId,
     notes: message,
   });
+  if (historyError) {
+    return new Response(JSON.stringify({ error: "Unable to record status history" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   if (settings?.webhook_updates_current_status !== false) {
-    await admin.from("orders").update({ status: mappedStatus, status_note: message }).eq("id", order.id);
+    const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message }).eq("id", order.id);
+    if (updateError) {
+      return new Response(JSON.stringify({ error: "Unable to update order status" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   }
 
   return new Response(JSON.stringify({ ok: true, order_id: order.id, status: mappedStatus }), {
