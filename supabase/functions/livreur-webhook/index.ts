@@ -17,6 +17,14 @@ function getPath(obj: any, path?: string | null) {
   return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
 }
 
+function buildCapturedFields(payload: any, mapping: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(mapping ?? {})
+      .map(([key, path]) => [key, getPath(payload, path)])
+      .filter(([key, value]) => String(key).trim() && value !== undefined),
+  );
+}
+
 function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   const raw = String(status ?? "").trim();
   if (!raw) return null;
@@ -55,10 +63,8 @@ async function findOrderByTracking(admin: any, livreurId: string, tracking: stri
     .maybeSingle();
 }
 
-async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+async function removeRecentSystemDuplicate(admin: any, order: any, mappedStatus: string) {
   const since = new Date(Date.now() - 5000).toISOString();
-  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
-  if (updateError) return updateError;
   await admin
     .from("order_status_history")
     .delete()
@@ -67,6 +73,24 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
     .eq("new_status", mappedStatus)
     .is("changed_by", null)
     .gte("changed_at", since);
+}
+
+async function hasLatestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
+  const { data } = await admin
+    .from("order_status_history")
+    .select("new_status, changed_by")
+    .eq("order_id", orderId)
+    .order("changed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.new_status === mappedStatus && data?.changed_by === livreurId;
+}
+
+async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
+  if (updateError) return updateError;
+  await removeRecentSystemDuplicate(admin, order, mappedStatus);
+  if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) return null;
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
@@ -119,6 +143,9 @@ Deno.serve(async (req) => {
   const rawStatus = getPath(payload, statusField);
   const mappedStatus = mapProviderStatus(rawStatus, settings?.status_mapping ?? {});
   const message = payload.message || payload.msg || payload.description || null;
+  const driverName = getPath(payload, settings?.webhook_driver_name_field || "transport.currentDriverName") ?? null;
+  const driverPhone = getPath(payload, settings?.webhook_driver_phone_field || "transport.currentDriverPhone") ?? null;
+  const capturedFields = buildCapturedFields(payload, settings?.webhook_extra_fields_mapping ?? {});
 
   if (!tracking || !String(rawStatus ?? "").trim()) {
     await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: { trackingField, statusField, payload } });
@@ -150,6 +177,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unable to update order status" }, 500);
     }
   } else {
+    if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) {
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status ignored", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+      return jsonResponse({ ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus });
+    }
     const { error: historyError } = await admin.from("order_status_history").insert({
       order_id: order.id,
       old_status: order.status,
@@ -163,7 +194,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status } });
+  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
 
   return jsonResponse({ ok: true, order_id: order.id, status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status });
 });
