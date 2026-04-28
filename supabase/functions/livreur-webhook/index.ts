@@ -143,6 +143,9 @@ Deno.serve(async (req) => {
   const rawStatus = getPath(payload, statusField);
   const mappedStatus = mapProviderStatus(rawStatus, settings?.status_mapping ?? {});
   const message = payload.message || payload.msg || payload.description || null;
+  const driverName = getPath(payload, settings?.webhook_driver_name_field || "transport.currentDriverName") ?? null;
+  const driverPhone = getPath(payload, settings?.webhook_driver_phone_field || "transport.currentDriverPhone") ?? null;
+  const capturedFields = buildCapturedFields(payload, settings?.webhook_extra_fields_mapping ?? {});
 
   if (!tracking || !String(rawStatus ?? "").trim()) {
     await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: { trackingField, statusField, payload } });
@@ -174,6 +177,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unable to update order status" }, 500);
     }
   } else {
+    if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) {
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status ignored", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+      return jsonResponse({ ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus });
+    }
     const { error: historyError } = await admin.from("order_status_history").insert({
       order_id: order.id,
       old_status: order.status,
@@ -187,7 +194,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status } });
+  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
 
   return jsonResponse({ ok: true, order_id: order.id, status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status });
 });
