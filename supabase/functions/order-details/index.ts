@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const [{ data: history }, { data: livreur }, { data: vendeur }, { data: settings }] = await Promise.all([
+  const [{ data: history }, { data: livreur }, { data: vendeur }, { data: settings }, { data: latestWebhookLog }] = await Promise.all([
     admin.from("order_status_history").select("id, old_status, new_status, changed_at, changed_by, notes").eq("order_id", order.id).order("changed_at", { ascending: true }),
     order.assigned_livreur_id
       ? admin.from("profiles").select("id, full_name, username, phone").eq("id", order.assigned_livreur_id).maybeSingle()
@@ -195,6 +195,7 @@ Deno.serve(async (req) => {
     order.assigned_livreur_id
       ? admin.from("livreur_api_settings").select("status_mapping, webhook_updates_current_status").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
       : Promise.resolve({ data: null }),
+    admin.from("livreur_api_logs").select("details").eq("order_id", order.id).eq("event_type", "webhook_status").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   const actorIds = Array.from(new Set((history ?? []).map((h: any) => h.changed_by).filter(Boolean)));
@@ -261,8 +262,8 @@ Deno.serve(async (req) => {
     tracking,
     vendeur,
     livreur: {
-      name: packageDetails?.transport?.currentDriverName || livreur?.full_name || livreur?.username || null,
-      phone: packageDetails?.transport?.currentDriverPhone || livreur?.phone || null,
+      name: packageDetails?.transport?.currentDriverName || latestWebhookLog?.details?.driver_name || livreur?.full_name || livreur?.username || null,
+      phone: packageDetails?.transport?.currentDriverPhone || latestWebhookLog?.details?.driver_phone || livreur?.phone || null,
     },
     support: null,
     destination: packageDetails?.destination ?? null,
