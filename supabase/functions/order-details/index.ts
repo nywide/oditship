@@ -227,8 +227,10 @@ Deno.serve(async (req) => {
       packageError = e instanceof Error ? e.message : "Synchronisation du statut indisponible";
     }
   }
+  const visibleDbHistory = removeSystemDuplicates(history ?? []);
+  const seenTimeline = new Set<string>();
   const mergedHistory = [
-    ...(history ?? []).filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status)).map((h: any) => ({
+    ...visibleDbHistory.filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status)).map((h: any) => ({
       source: "odit",
       status: h.new_status,
       old_status: h.old_status,
@@ -244,7 +246,14 @@ Deno.serve(async (req) => {
       actor: h.user ? { username: h.user } : null,
       reported_to: h.reportedTo ?? null,
     })),
-  ].sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime());
+  ]
+    .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
+    .filter((item: any) => {
+      const key = `${item.status ?? ""}|${item.actor?.username ?? item.actor?.full_name ?? ""}`.toLowerCase();
+      if (seenTimeline.has(key)) return false;
+      seenTimeline.add(key);
+      return true;
+    });
 
   return new Response(JSON.stringify({
     order: currentOrder,
