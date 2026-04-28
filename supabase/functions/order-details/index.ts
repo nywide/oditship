@@ -54,7 +54,7 @@ function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
 function latestMappedProviderEvent(history: any[], mapping: Record<string, string>) {
   return history
     .map((item) => ({ ...item, mappedStatus: mapProviderStatus(item?.status, mapping) }))
-    .filter((item) => item.mappedStatus && item.updateAt)
+    .filter((item) => item.mappedStatus && item.updateAt && !isApiCreatedConfirmed(item.mappedStatus, item.msg))
     .sort((a, b) => new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime())[0] ?? null;
 }
 
