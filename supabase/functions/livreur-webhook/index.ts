@@ -17,6 +17,14 @@ function getPath(obj: any, path?: string | null) {
   return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
 }
 
+function buildCapturedFields(payload: any, mapping: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(mapping ?? {})
+      .map(([key, path]) => [key, getPath(payload, path)])
+      .filter(([key, value]) => String(key).trim() && value !== undefined),
+  );
+}
+
 function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   const raw = String(status ?? "").trim();
   if (!raw) return null;
@@ -55,10 +63,8 @@ async function findOrderByTracking(admin: any, livreurId: string, tracking: stri
     .maybeSingle();
 }
 
-async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+async function removeRecentSystemDuplicate(admin: any, order: any, mappedStatus: string) {
   const since = new Date(Date.now() - 5000).toISOString();
-  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
-  if (updateError) return updateError;
   await admin
     .from("order_status_history")
     .delete()
@@ -67,6 +73,24 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
     .eq("new_status", mappedStatus)
     .is("changed_by", null)
     .gte("changed_at", since);
+}
+
+async function hasLatestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
+  const { data } = await admin
+    .from("order_status_history")
+    .select("new_status, changed_by")
+    .eq("order_id", orderId)
+    .order("changed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.new_status === mappedStatus && data?.changed_by === livreurId;
+}
+
+async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
+  if (updateError) return updateError;
+  await removeRecentSystemDuplicate(admin, order, mappedStatus);
+  if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) return null;
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
