@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
 
   const statusMapping = settings?.status_mapping ?? {};
   const apiHistory = Array.isArray(packageDetails?.history) ? packageDetails.history : [];
+  const mappedApiStatuses = new Set(apiHistory.map((h: any) => mapProviderStatus(h.status, statusMapping)).filter(Boolean));
   let currentOrder = order;
   const latestProviderEvent = latestMappedProviderEvent(apiHistory, statusMapping);
   if (settings?.webhook_updates_current_status === true && order.assigned_livreur_id && latestProviderEvent) {
@@ -230,7 +231,7 @@ Deno.serve(async (req) => {
   const visibleDbHistory = removeSystemDuplicates(history ?? []);
   const seenTimeline = new Set<string>();
   const mergedHistory = [
-    ...visibleDbHistory.filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status)).map((h: any) => ({
+    ...visibleDbHistory.filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status) && !(h.changed_by === order.assigned_livreur_id && mappedApiStatuses.has(h.new_status))).map((h: any) => ({
       source: "odit",
       status: h.new_status,
       old_status: h.old_status,
