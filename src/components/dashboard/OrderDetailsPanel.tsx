@@ -21,6 +21,9 @@ interface OrderSummary {
   tracking_number: string | null;
   external_tracking_number: string | null;
   comment?: string | null;
+  status_note?: string | null;
+  postponed_date?: string | null;
+  scheduled_date?: string | null;
   created_at: string;
 }
 
@@ -29,6 +32,9 @@ interface HistoryItem {
   status: string;
   old_status?: string | null;
   message?: string | null;
+  note?: string | null;
+  reported_date?: string | null;
+  scheduled_date?: string | null;
   changed_at: string;
   actor?: { full_name?: string | null; username?: string | null; role?: string | null } | null;
 }
@@ -49,7 +55,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const cleanActor = (value?: string | null) => value?.includes("@") ? value.split("@")[0] : value;
-const actorName = (item: HistoryItem) => cleanActor(item.actor?.full_name) || cleanActor(item.actor?.username) || (item.source === "olivraison" ? "Olivraison" : "Système");
+const actorName = (item: HistoryItem) => cleanActor(item.actor?.full_name) || cleanActor(item.actor?.username) || (item.source === "provider" ? "Transport" : "Système");
 const vendeurName = (vendeur?: DetailsData["vendeur"]) => vendeur?.full_name || vendeur?.username || vendeur?.company_name || "Système";
 const isInternalConfirmed = (item: HistoryItem) =>
   item.source === "odit" && [item.status, item.old_status].some((status) => status?.toLowerCase() === "confirmed");
@@ -64,6 +70,7 @@ const historyKey = (item: HistoryItem) => [
   item.changed_at,
   item.actor?.username ?? item.actor?.full_name ?? "",
 ].join("|");
+const hasMeta = (note?: string | null, reported?: string | null, scheduled?: string | null) => Boolean(note || reported || scheduled);
 
 export const OrderDetailsPanel = ({
   order,
