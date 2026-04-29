@@ -38,6 +38,8 @@ const sampleOrder = {
   tracking_number: "ODIT123456",
   external_tracking_number: "AI744EA4742637",
   created_at: new Date().toISOString(),
+  hub_id: 1,
+  hub_name: "Casablanca Hub",
   seller_username: "seller.demo",
   seller_full_name: "Demo Seller",
   seller_company_name: "Demo Store SARL",
