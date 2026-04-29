@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,37 +6,83 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { defaultStickerTemplate, stickerElements, type StickerElementKey, type StickerTemplate } from "@/lib/printSticker";
-import { RotateCcw, Save } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  defaultStickerTemplate,
+  normalizeStickerTemplate,
+  resolveStickerValue,
+  stickerSystemFields,
+  type StickerElement,
+  type StickerElementType,
+  type StickerSystemField,
+  type StickerTemplate,
+} from "@/lib/printSticker";
+import { AlignCenter, AlignLeft, AlignRight, Copy, Image, Minus, QrCode, RotateCcw, Save, Smile, Trash2, Type } from "lucide-react";
 import { toast } from "sonner";
 
-const textFields = [
-  ["brand_title", "Titre"], ["brand_subtitle", "Sous-titre"], ["sender_label", "Libellé expéditeur"], ["sender_name", "Nom expéditeur"],
-  ["phone_label", "Libellé téléphone"], ["date_label", "Libellé date"], ["recipient_label", "Libellé destinataire"], ["city_label", "Libellé ville"],
-  ["address_label", "Libellé adresse"], ["hub_label", "Libellé hub"], ["qr_label", "Libellé QR"], ["tracking_label", "Libellé suivi"],
-  ["product_label", "Libellé produit"], ["open_package_allowed", "Texte ouverture autorisée"], ["open_package_denied", "Texte ouverture refusée"],
-  ["comment_label", "Libellé commentaire"], ["currency", "Devise"],
-] as const;
-
-const elementLabels: Record<StickerElementKey, string> = {
-  brand: "Logo / marque", sender: "Expéditeur", recipient: "Destinataire", phone: "Téléphone", city: "Ville", address: "Adresse",
-  qr: "QR", tracking: "Numéro suivi", barcode: "Barcode", product: "Produit", open: "Ouverture", comment: "Commentaire", price: "Prix", date: "Date",
+const sampleOrder = {
+  id: 1842,
+  customer_name: "Client Exemple",
+  customer_phone: "0600000000",
+  customer_address: "Rue principale, immeuble 12, appartement 4",
+  customer_city: "Casablanca",
+  product_name: "Produit exemple",
+  order_value: 249,
+  open_package: false,
+  comment: "Fragile",
+  tracking_number: "ODIT123456",
+  external_tracking_number: "AI744EA4742637",
+  created_at: new Date().toISOString(),
 };
 
-const num = (template: StickerTemplate, key: string) => Number(template[key] ?? defaultStickerTemplate[key] ?? 0);
+const newElement = (type: StickerElementType, field?: StickerSystemField): StickerElement => ({
+  id: crypto.randomUUID(),
+  type,
+  field,
+  text: type === "emoji" ? "⭐" : type === "text" ? "Texte" : "",
+  label: type === "field" ? stickerSystemFields.find((item) => item.value === field)?.label : type,
+  imageData: "",
+  x: 8,
+  y: 8,
+  w: type === "line" ? 55 : type === "qr" || type === "image" ? 22 : 34,
+  h: type === "line" ? 1 : type === "qr" || type === "image" ? 22 : 8,
+  fontSize: type === "barcode" ? 14 : type === "emoji" ? 10 : 4,
+  fontWeight: 700,
+  align: "left",
+  border: false,
+  radius: 0,
+  rotation: 0,
+  visible: true,
+});
 
 const AdminSticker = () => {
   const [template, setTemplate] = useState<StickerTemplate>(defaultStickerTemplate);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [selectedElement, setSelectedElement] = useState<StickerElementKey>("brand");
+  const [drag, setDrag] = useState<{ id: string; startX: number; startY: number; x: number; y: number } | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     (supabase as any).from("app_settings").select("value").eq("key", "sticker_template").maybeSingle()
-      .then(({ data }: any) => setTemplate({ ...defaultStickerTemplate, ...(data?.value ?? {}) }));
+      .then(({ data }: any) => setTemplate(normalizeStickerTemplate(data?.value)));
   }, []);
 
-  const update = (key: string, value: string | boolean | number) => setTemplate((current) => ({ ...current, [key]: value }));
-  const reset = () => setTemplate(defaultStickerTemplate);
+  const selected = useMemo(() => template.elements.find((el) => el.id === selectedId) || null, [template.elements, selectedId]);
+  const updateTemplate = (patch: Partial<StickerTemplate>) => setTemplate((current) => ({ ...current, ...patch }));
+  const updateElement = (id: string, patch: Partial<StickerElement>) => setTemplate((current) => ({ ...current, elements: current.elements.map((el) => el.id === id ? { ...el, ...patch } : el) }));
+  const addElement = (type: StickerElementType, field?: StickerSystemField) => {
+    const element = newElement(type, field);
+    setTemplate((current) => ({ ...current, elements: [...current.elements, element] }));
+    setSelectedId(element.id);
+  };
+  const duplicate = () => selected && setTemplate((current) => {
+    const copy = { ...selected, id: crypto.randomUUID(), x: selected.x + 3, y: selected.y + 3 };
+    setSelectedId(copy.id);
+    return { ...current, elements: [...current.elements, copy] };
+  });
+  const remove = () => selected && setTemplate((current) => ({ ...current, elements: current.elements.filter((el) => el.id !== selected.id) }));
+  const reset = () => { setTemplate(defaultStickerTemplate); setSelectedId(null); };
   const save = async () => {
     setSaving(true);
     const { data: userData } = await supabase.auth.getUser();
@@ -45,45 +91,91 @@ const AdminSticker = () => {
     if (error) toast.error(error.message); else toast.success("Sticker sauvegardé");
   };
 
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mmPerPx = template.sizeMm / rect.width;
+    updateElement(drag.id, { x: Math.max(0, drag.x + (event.clientX - drag.startX) * mmPerPx), y: Math.max(0, drag.y + (event.clientY - drag.startY) * mmPerPx) });
+  };
+
+  const imageUpload = (file?: File) => {
+    if (!file || !selected) return;
+    const reader = new FileReader();
+    reader.onload = () => updateElement(selected.id, { imageData: String(reader.result), type: "image" });
+    reader.readAsDataURL(file);
+  };
+
+  const renderPreviewValue = (el: StickerElement) => {
+    if (el.type === "field") return resolveStickerValue(sampleOrder, el.field);
+    if (el.type === "qr") return "QR";
+    if (el.type === "barcode") return `*${resolveStickerValue(sampleOrder, "tracking")}*`;
+    return el.text || "";
+  };
+
   return (
-    <Card className="p-4">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><h3 className="font-semibold">Sticker thermique carré</h3><p className="text-sm text-muted-foreground">Modifier textes, taille 1:1, positions et dimensions avant impression thermique.</p></div>
-        <div className="flex gap-2"><Button variant="outline" onClick={reset}><RotateCcw className="mr-1 h-4 w-4" />Réinitialiser</Button><Button onClick={save} disabled={saving}><Save className="mr-1 h-4 w-4" />{saving ? "..." : "Sauvegarder"}</Button></div>
-      </div>
-      <div className="mb-4 grid gap-3 md:grid-cols-4">
-        {[ ["size_mm", "Taille papier mm", 40, 120], ["margin_mm", "Marge imprimante mm", 0, 10], ["border_mm", "Bordure mm", 0, 2], ["font_scale", "Échelle textes", 0.6, 1.6] ].map(([key, label, min, max]) => (
-          <div key={String(key)} className="space-y-2 rounded-md border border-border p-3"><Label>{String(label)}</Label><Input type="number" step="0.1" min={Number(min)} max={Number(max)} value={num(template, String(key))} onChange={(e) => update(String(key), Number(e.target.value))} /><Slider min={Number(min)} max={Number(max)} step={0.1} value={[num(template, String(key))]} onValueChange={([v]) => update(String(key), v)} /></div>
-        ))}
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {textFields.map(([key, label]) => (
-          <div key={key} className="space-y-1.5"><Label>{label}</Label><Input value={String(template[key] ?? "")} onChange={(e) => update(key, e.target.value)} /></div>
-        ))}
-      </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-[220px_1fr]">
-        <div className="space-y-2 rounded-md border border-border p-3">
-          <Label>Élément à positionner</Label>
-          <div className="grid gap-1">
-            {stickerElements.map((key) => <Button key={key} type="button" variant={selectedElement === key ? "default" : "ghost"} className="justify-start" onClick={() => setSelectedElement(key)}>{elementLabels[key]}</Button>)}
+    <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+      <Card className="p-4">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div><h3 className="font-semibold">Live sticker editor</h3><p className="text-sm text-muted-foreground">Canvas مربع فارغ: زيد المعلومة، جرّها، كبّرها، وصايب sticker بحال Photoshop.</p></div>
+          <div className="flex flex-wrap gap-2">
+            <Select onValueChange={(value) => addElement("field", value as StickerSystemField)}><SelectTrigger className="w-44"><SelectValue placeholder="+ معلومة النظام" /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select>
+            <Button variant="outline" onClick={() => addElement("text")}><Type className="mr-1 h-4 w-4" />Texte</Button>
+            <Button variant="outline" onClick={() => addElement("emoji")}><Smile className="mr-1 h-4 w-4" />Emoji</Button>
+            <Button variant="outline" onClick={() => addElement("line")}><Minus className="mr-1 h-4 w-4" />Ligne</Button>
+            <Button variant="outline" onClick={() => addElement("qr")}><QrCode className="mr-1 h-4 w-4" />QR</Button>
+            <Button variant="outline" onClick={() => addElement("barcode")}>Barcode</Button>
           </div>
         </div>
-        <div className="grid gap-3 rounded-md border border-border p-3 md:grid-cols-5">
-          {[["x", "Position X"], ["y", "Position Y"], ["w", "Largeur"], ["h", "Hauteur"], ["font", "Police"]].map(([suffix, label]) => {
-            const key = `${selectedElement}_${suffix}`;
-            return <div key={key} className="space-y-2"><Label>{label}</Label><Input type="number" step="0.1" value={num(template, key)} onChange={(e) => update(key, Number(e.target.value))} /><Slider min={0} max={suffix === "font" ? 18 : 100} step={0.1} value={[num(template, key)]} onValueChange={([v]) => update(key, v)} /></div>;
-          })}
+        <div className="mb-4 grid gap-3 md:grid-cols-3">
+          <div className="space-y-2"><Label>Taille carrée mm</Label><Input type="number" min={40} max={120} value={template.sizeMm} onChange={(e) => updateTemplate({ sizeMm: Number(e.target.value) })} /></div>
+          <div className="space-y-2"><Label>Marge imprimante mm</Label><Input type="number" min={0} max={10} value={template.marginMm} onChange={(e) => updateTemplate({ marginMm: Number(e.target.value) })} /></div>
+          <label className="flex items-center justify-between rounded-md border border-border p-3 text-sm"><span>Cadre extérieur</span><Switch checked={template.showFrame} onCheckedChange={(showFrame) => updateTemplate({ showFrame })} /></label>
         </div>
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {["show_border", "show_qr", "show_barcode"].map((key) => (
-          <label key={key} className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm">
-            <span>{key === "show_border" ? "Afficher bordure" : key === "show_qr" ? "Afficher QR" : "Afficher barcode"}</span>
-            <Switch checked={template[key] !== false} onCheckedChange={(value) => update(key, value)} />
-          </label>
-        ))}
-      </div>
-    </Card>
+        <div className="overflow-auto rounded-md border border-border bg-muted/40 p-4">
+          <div
+            ref={canvasRef}
+            className="relative mx-auto bg-background shadow-sm"
+            style={{ width: "min(72vw, 560px)", aspectRatio: "1 / 1", border: template.showFrame ? "2px solid hsl(var(--foreground))" : "1px dashed hsl(var(--border))" }}
+            onPointerMove={onPointerMove}
+            onPointerUp={() => setDrag(null)}
+            onPointerLeave={() => setDrag(null)}
+          >
+            {template.elements.map((el) => el.visible && (
+              <div
+                key={el.id}
+                role="button"
+                tabIndex={0}
+                onPointerDown={(event) => { setSelectedId(el.id); setDrag({ id: el.id, startX: event.clientX, startY: event.clientY, x: el.x, y: el.y }); }}
+                className={`absolute overflow-hidden border border-dashed p-1 leading-none ${selectedId === el.id ? "border-primary bg-primary/10" : "border-muted-foreground/40"}`}
+                style={{ left: `${(el.x / template.sizeMm) * 100}%`, top: `${(el.y / template.sizeMm) * 100}%`, width: `${(el.w / template.sizeMm) * 100}%`, height: `${(el.h / template.sizeMm) * 100}%`, fontSize: `${el.fontSize * 3}px`, fontWeight: el.fontWeight, textAlign: el.align, borderRadius: `${el.radius}px`, transform: `rotate(${el.rotation}deg)`, cursor: "move" }}
+              >
+                {el.type === "image" && el.imageData ? <img src={el.imageData} alt="logo" className="h-full w-full object-contain" /> : renderPreviewValue(el)}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4">
+        <div className="mb-3 flex items-center justify-between"><h4 className="font-semibold">Détails élément</h4><div className="flex gap-1"><Button variant="ghost" size="icon" onClick={duplicate} disabled={!selected}><Copy className="h-4 w-4" /></Button><Button variant="ghost" size="icon" onClick={remove} disabled={!selected}><Trash2 className="h-4 w-4" /></Button></div></div>
+        {!selected ? <p className="text-sm text-muted-foreground">اختار عنصر من sticker أو زيد عنصر جديد.</p> : (
+          <div className="space-y-4">
+            {(selected.type === "text" || selected.type === "emoji") && <div className="space-y-2"><Label>Texte / Emoji</Label><Textarea value={selected.text || ""} onChange={(e) => updateElement(selected.id, { text: e.target.value })} /></div>}
+            {selected.type === "field" && <div className="space-y-2"><Label>معلومة النظام</Label><Select value={selected.field} onValueChange={(field) => updateElement(selected.id, { field: field as StickerSystemField })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select></div>}
+            <Button variant="outline" className="w-full" onClick={() => addElement("image")}><Image className="mr-1 h-4 w-4" />Ajouter logo / image</Button>
+            {selected.type === "image" && <Input type="file" accept="image/*" onChange={(e) => imageUpload(e.target.files?.[0])} />}
+            <div className="grid grid-cols-2 gap-3">{(["x", "y", "w", "h"] as const).map((key) => <div key={key} className="space-y-2"><Label>{key.toUpperCase()}</Label><Input type="number" value={selected[key]} onChange={(e) => updateElement(selected.id, { [key]: Number(e.target.value) })} /></div>)}</div>
+            <div className="space-y-2"><Label>Taille texte</Label><Slider min={1} max={24} step={0.5} value={[selected.fontSize]} onValueChange={([fontSize]) => updateElement(selected.id, { fontSize })} /></div>
+            <div className="space-y-2"><Label>Épaisseur</Label><Slider min={100} max={900} step={100} value={[selected.fontWeight]} onValueChange={([fontWeight]) => updateElement(selected.id, { fontWeight })} /></div>
+            <div className="grid grid-cols-3 gap-2"><Button variant={selected.align === "left" ? "default" : "outline"} onClick={() => updateElement(selected.id, { align: "left" })}><AlignLeft className="h-4 w-4" /></Button><Button variant={selected.align === "center" ? "default" : "outline"} onClick={() => updateElement(selected.id, { align: "center" })}><AlignCenter className="h-4 w-4" /></Button><Button variant={selected.align === "right" ? "default" : "outline"} onClick={() => updateElement(selected.id, { align: "right" })}><AlignRight className="h-4 w-4" /></Button></div>
+            <label className="flex items-center justify-between rounded-md border border-border p-3 text-sm"><span>Bordure élément</span><Switch checked={selected.border} onCheckedChange={(border) => updateElement(selected.id, { border })} /></label>
+            <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Arrondi</Label><Input type="number" value={selected.radius} onChange={(e) => updateElement(selected.id, { radius: Number(e.target.value) })} /></div><div className="space-y-2"><Label>Rotation</Label><Input type="number" value={selected.rotation} onChange={(e) => updateElement(selected.id, { rotation: Number(e.target.value) })} /></div></div>
+            <label className="flex items-center justify-between rounded-md border border-border p-3 text-sm"><span>Visible</span><Switch checked={selected.visible} onCheckedChange={(visible) => updateElement(selected.id, { visible })} /></label>
+          </div>
+        )}
+        <div className="mt-5 flex gap-2"><Button variant="outline" onClick={reset}><RotateCcw className="mr-1 h-4 w-4" />Réinitialiser</Button><Button onClick={save} disabled={saving} className="flex-1"><Save className="mr-1 h-4 w-4" />{saving ? "..." : "Sauvegarder"}</Button></div>
+      </Card>
+    </div>
   );
 };
 
