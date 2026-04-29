@@ -91,10 +91,12 @@ async function latestDuplicate(admin: any, orderId: number, mappedStatus: string
     .from("order_status_history")
     .select("id, new_status, changed_by")
     .eq("order_id", orderId)
+    .eq("new_status", mappedStatus)
+    .eq("changed_by", livreurId)
     .order("changed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.new_status === mappedStatus && data?.changed_by === livreurId ? data : null;
+  return data ?? null;
 }
 
 async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent: any, livreurId: string, settings: any) {
