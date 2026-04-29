@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface StickerOrder {
   id: number;
+  vendeur_id?: string;
   customer_name: string;
   customer_phone: string;
   customer_address: string;
@@ -14,12 +15,22 @@ export interface StickerOrder {
   tracking_number?: string | null;
   external_tracking_number?: string | null;
   created_at?: string | null;
+  seller_username?: string | null;
+  seller_full_name?: string | null;
+  seller_company_name?: string | null;
+  seller_phone?: string | null;
+  seller_cin?: string | null;
+  seller_affiliation_code?: string | null;
+  seller_bank_account_name?: string | null;
+  seller_bank_account_number?: string | null;
 }
 
-export type StickerElementType = "field" | "text" | "line" | "image" | "emoji" | "qr" | "barcode";
+export type StickerElementType = "field" | "text" | "line" | "image" | "emoji" | "qr" | "barcode" | "html";
 export type StickerSystemField =
   | "tracking" | "customer_name" | "customer_phone" | "customer_city" | "customer_address"
-  | "product_name" | "order_value" | "open_package" | "comment" | "created_at" | "order_id";
+  | "product_name" | "order_value" | "open_package" | "comment" | "created_at" | "order_id"
+  | "seller_username" | "seller_full_name" | "seller_company_name" | "seller_phone" | "seller_cin"
+  | "seller_affiliation_code" | "seller_bank_account_name" | "seller_bank_account_number";
 
 export interface StickerElement {
   id: string;
@@ -27,6 +38,8 @@ export interface StickerElement {
   label?: string;
   field?: StickerSystemField;
   text?: string;
+  html?: string;
+  css?: string;
   imageData?: string;
   x: number;
   y: number;
@@ -61,6 +74,14 @@ export const stickerSystemFields: { value: StickerSystemField; label: string }[]
   { value: "comment", label: "Commentaire" },
   { value: "created_at", label: "Date" },
   { value: "order_id", label: "ID commande" },
+  { value: "seller_username", label: "Seller username" },
+  { value: "seller_full_name", label: "Seller full name" },
+  { value: "seller_company_name", label: "Seller company" },
+  { value: "seller_phone", label: "Seller phone" },
+  { value: "seller_cin", label: "Seller CIN" },
+  { value: "seller_affiliation_code", label: "Seller affiliation code" },
+  { value: "seller_bank_account_name", label: "Seller bank account name" },
+  { value: "seller_bank_account_number", label: "Seller bank account number" },
 ];
 
 export const defaultStickerTemplate: StickerTemplate = {
@@ -91,10 +112,12 @@ export const normalizeStickerTemplate = (raw: unknown): StickerTemplate => {
 
 const normalizeElement = (element: Partial<StickerElement>, index: number): StickerElement => ({
   id: String(element.id || `el-${index}-${Date.now()}`),
-  type: ["field", "text", "line", "image", "emoji", "qr", "barcode"].includes(String(element.type)) ? element.type as StickerElementType : "text",
+  type: ["field", "text", "line", "image", "emoji", "qr", "barcode", "html"].includes(String(element.type)) ? element.type as StickerElementType : "text",
   label: element.label || "",
   field: element.field,
   text: element.text || "",
+  html: element.html || "",
+  css: element.css || "",
   imageData: element.imageData || "",
   x: clamp(n(element.x, 8), 0, 100),
   y: clamp(n(element.y, 8), 0, 100),
