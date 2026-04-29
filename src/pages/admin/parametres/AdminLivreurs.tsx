@@ -449,6 +449,9 @@ const AdminLivreurs = () => {
         webhook_tracking_field: settingsForm.webhook_tracking_field.trim() || "trackingID",
         webhook_driver_name_field: settingsForm.webhook_driver_name_field.trim() || "transport.currentDriverName",
         webhook_driver_phone_field: settingsForm.webhook_driver_phone_field.trim() || "transport.currentDriverPhone",
+        webhook_note_field: settingsForm.webhook_note_field.trim() || "note",
+        webhook_reported_date_field: settingsForm.webhook_reported_date_field.trim() || "reportedDate",
+        webhook_scheduled_date_field: settingsForm.webhook_scheduled_date_field.trim() || "scheduledDate",
         webhook_extra_fields_mapping: parseJson("Webhook extra fields", settingsForm.webhook_extra_fields_mapping),
         polling_enabled: settingsForm.polling_enabled,
         polling_interval_minutes: Number(settingsForm.polling_interval_minutes) || 15,
@@ -459,6 +462,8 @@ const AdminLivreurs = () => {
         polling_tracking_field: settingsForm.polling_tracking_field.trim() || "trackingID",
         polling_status_field: settingsForm.polling_status_field.trim() || "status",
         polling_message_field: settingsForm.polling_message_field.trim() || "message",
+        polling_reported_date_field: settingsForm.polling_reported_date_field.trim() || "reportedDate",
+        polling_scheduled_date_field: settingsForm.polling_scheduled_date_field.trim() || "scheduledDate",
         rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
         is_active: settingsForm.is_active,
       };
