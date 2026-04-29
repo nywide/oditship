@@ -30,6 +30,11 @@ async function getOlivraisonPackage(token: string, trackingID: string) {
   return parsed;
 }
 
+function getPath(obj: any, path?: string | null) {
+  if (!path) return undefined;
+  return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
+}
+
 function isInternalConfirmed(status?: string | null) {
   const normalized = status?.toLowerCase();
   return normalized === "confirmed";
