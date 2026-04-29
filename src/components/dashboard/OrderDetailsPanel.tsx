@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Bike, Download, Headphones, Loader2, MapPin, Package, QrCode, RefreshCw, Truck, UserRound } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
+import { defaultColisPreviewSettings, getColisPreviewValue, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
 
 interface OrderSummary {
   id: number;
@@ -77,10 +78,12 @@ export const OrderDetailsPanel = ({
   order,
   className,
   onOrderSynced,
+  previewSettings = defaultColisPreviewSettings,
 }: {
   order: OrderSummary;
   className?: string;
   onOrderSynced?: (order: OrderSummary) => void;
+  previewSettings?: ColisPreviewSettings;
 }) => {
   const [data, setData] = useState<DetailsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +131,22 @@ export const OrderDetailsPanel = ({
       : isTransitStatus(displayOrder.status)
         ? "Informations transport en attente"
         : "Disponible après passage en transit";
+  const previewData = {
+    ...displayOrder,
+    tracking,
+    vendeur: vendeurName(data?.vendeur),
+    livreur: hasLivreur ? [data?.livreur?.name, data?.livreur?.phone].filter(Boolean).join(" · ") : "",
+    support: [data?.support?.name, data?.support?.phone].filter(Boolean).join(" · "),
+  };
+  const renderConfiguredSection = (section: ColisPreviewSettings["details"], itemData: Record<string, unknown>) => {
+    if (section.useCustomHtml) return <div className="rounded-lg border border-border p-3" dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(section.css, itemData)}</style>${renderColisTemplate(section.html, itemData)}`) }} />;
+    return <div className="flex flex-wrap gap-2 rounded-lg border border-border p-3 text-sm">
+      {sortedVisibleFields(section).map((field) => {
+        const value = getColisPreviewValue(itemData, field.key);
+        return value ? <span key={field.key} className={field.slot === "primary" ? "font-semibold" : "rounded-md bg-muted px-3 py-1 font-medium text-muted-foreground"}>{value}</span> : null;
+      })}
+    </div>;
+  };
 
   return (
     <div className={cn("grid gap-4 p-4 lg:grid-cols-[1fr_1fr]", className)}>
@@ -146,6 +165,7 @@ export const OrderDetailsPanel = ({
 
         <div className="grid gap-4 py-5 md:grid-cols-[1fr_auto]">
           <div className="space-y-3">
+            {renderConfiguredSection(previewSettings.details, previewData)}
             <div className="flex items-center gap-3 rounded-lg border border-border p-3">
               <Package className="h-5 w-5 text-muted-foreground" />
               <div>
@@ -213,22 +233,36 @@ export const OrderDetailsPanel = ({
         {data?.package_error && <p className="mb-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Tracking externe indisponible</p>}
         <div className="relative space-y-0 pl-7">
           <div className="absolute left-[15px] top-2 h-[calc(100%-1rem)] w-px bg-border" />
-          {history.map((item, index) => (
+          {history.map((item, index) => {
+            const timelineData = {
+              ...previewData,
+              status_note: item.note,
+              postponed_date: item.reported_date,
+              scheduled_date: item.scheduled_date,
+              history_status: statusLabel(item.status),
+              history_message: item.message && item.message !== item.note ? item.message : `Statut mis à jour vers ${statusLabel(item.status)}`,
+              history_actor: actorName(item) === "Système" ? vendeurName(data?.vendeur) : actorName(item),
+              history_date: item.changed_at,
+            };
+            return (
             <div key={`${item.changed_at}-${index}`} className="relative pb-5 last:pb-0">
               <div className="absolute -left-7 top-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-card">
                 <Truck className="h-4 w-4" />
               </div>
               <div className="ml-4 space-y-1">
-                <StatusBadge status={item.status} />
-                <p className="text-sm font-medium">{item.message && item.message !== item.note ? item.message : `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
-                {metaValues(item.note, item.reported_date, item.scheduled_date).map((value, metaIndex) => (
-                  <p key={metaIndex} className="rounded-md bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">{value}</p>
-                ))}
-                <p className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{actorName(item) === "Système" ? vendeurName(data?.vendeur) : actorName(item)}</p>
-                <p className="text-xs text-muted-foreground">{formatDate(item.changed_at)}</p>
+                {previewSettings.timeline.useCustomHtml ? renderConfiguredSection(previewSettings.timeline, timelineData) : <>
+                  {sortedVisibleFields(previewSettings.timeline).some((field) => field.key === "history_status") && <StatusBadge status={item.status} />}
+                  {sortedVisibleFields(previewSettings.timeline).map((field) => {
+                    if (field.key === "history_status") return null;
+                    const value = getColisPreviewValue(timelineData, field.key);
+                    if (!value) return null;
+                    if (field.key === "history_actor") return <p key={field.key} className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{value}</p>;
+                    return <p key={field.key} className={field.slot === "meta" ? "rounded-md bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground" : "text-sm font-medium"}>{value}</p>;
+                  })}
+                </>}
               </div>
             </div>
-          ))}
+          );})}
         </div>
       </Card>
     </div>
