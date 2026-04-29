@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   defaultStickerTemplate,
   normalizeStickerTemplate,
@@ -18,8 +19,11 @@ import {
   type StickerSystemField,
   type StickerTemplate,
 } from "@/lib/printSticker";
-import { AlignCenter, AlignLeft, AlignRight, Copy, Image, Minus, QrCode, RotateCcw, Save, Smile, Trash2, Type } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Copy, Eye, Image, Minus, QrCode, RotateCcw, Save, Smile, Trash2, Type } from "lucide-react";
 import { toast } from "sonner";
+
+const STICKER_SELECTED_KEY = "odit-sticker-editor-selected";
+const STICKER_PREVIEW_OPEN_KEY = "odit-sticker-editor-preview-open";
 
 const sampleOrder = {
   id: 1842,
@@ -68,7 +72,8 @@ const newElement = (type: StickerElementType, field?: StickerSystemField): Stick
 
 const AdminSticker = () => {
   const [template, setTemplate] = useState<StickerTemplate>(defaultStickerTemplate);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => localStorage.getItem(STICKER_SELECTED_KEY));
+  const [previewOpen, setPreviewOpen] = useState(() => localStorage.getItem(STICKER_PREVIEW_OPEN_KEY) === "true");
   const [saving, setSaving] = useState(false);
   const [drag, setDrag] = useState<{ id: string; startX: number; startY: number; x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -78,7 +83,26 @@ const AdminSticker = () => {
       .then(({ data }: any) => setTemplate(normalizeStickerTemplate(data?.value)));
   }, []);
 
+  useEffect(() => {
+    if (selectedId) localStorage.setItem(STICKER_SELECTED_KEY, selectedId);
+    else localStorage.removeItem(STICKER_SELECTED_KEY);
+  }, [selectedId]);
+
+  useEffect(() => {
+    localStorage.setItem(STICKER_PREVIEW_OPEN_KEY, String(previewOpen));
+  }, [previewOpen]);
+
   const selected = useMemo(() => template.elements.find((el) => el.id === selectedId) || null, [template.elements, selectedId]);
+  const previewElements = useMemo(() => {
+    if (template.elements.length) return template.elements;
+    return [
+      { ...newElement("field", "tracking"), id: "preview-tracking", x: 8, y: 8, w: 52, h: 9, fontSize: 4.6 },
+      { ...newElement("field", "customer_name"), id: "preview-client", x: 8, y: 20, w: 50, h: 8, fontSize: 3.8 },
+      { ...newElement("field", "customer_phone"), id: "preview-phone", x: 8, y: 30, w: 42, h: 8, fontSize: 3.6 },
+      { ...newElement("field", "customer_city"), id: "preview-city", x: 8, y: 40, w: 38, h: 8, fontSize: 4 },
+      { ...newElement("qr"), id: "preview-qr", x: 68, y: 8, w: 24, h: 24 },
+    ];
+  }, [template.elements]);
   const updateTemplate = (patch: Partial<StickerTemplate>) => setTemplate((current) => ({ ...current, ...patch }));
   const updateElement = (id: string, patch: Partial<StickerElement>) => setTemplate((current) => ({ ...current, elements: current.elements.map((el) => el.id === id ? { ...el, ...patch } : el) }));
   const addElement = (type: StickerElementType, field?: StickerSystemField) => {
@@ -115,6 +139,12 @@ const AdminSticker = () => {
     reader.readAsDataURL(file);
   };
 
+  const autoInsertPreviewInfo = () => {
+    const elements = previewElements.map((el) => ({ ...el, id: crypto.randomUUID() }));
+    setTemplate((current) => ({ ...current, elements: [...current.elements, ...elements] }));
+    setSelectedId(elements[0]?.id ?? null);
+  };
+
   const renderCustomPreview = (el: StickerElement) => {
     const vars = stickerSystemFields.reduce<Record<string, string>>((acc, field) => {
       acc[field.value] = String(resolveStickerValue(sampleOrder, field.value));
@@ -133,6 +163,7 @@ const AdminSticker = () => {
   };
 
   return (
+    <>
     <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
       <Card className="p-4">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -145,6 +176,8 @@ const AdminSticker = () => {
             <Button variant="outline" onClick={() => addElement("qr")}><QrCode className="mr-1 h-4 w-4" />QR</Button>
             <Button variant="outline" onClick={() => addElement("barcode")}>Barcode</Button>
             <Button variant="outline" onClick={() => addElement("html")}>HTML/CSS</Button>
+            <Button variant="outline" onClick={autoInsertPreviewInfo}>Auto info</Button>
+            <Button onClick={() => setPreviewOpen(true)}><Eye className="mr-1 h-4 w-4" />Preview</Button>
           </div>
         </div>
         <div className="mb-4 grid gap-3 md:grid-cols-3">
@@ -198,6 +231,21 @@ const AdminSticker = () => {
         <div className="mt-5 flex gap-2"><Button variant="outline" onClick={reset}><RotateCcw className="mr-1 h-4 w-4" />Reset</Button><Button onClick={save} disabled={saving} className="flex-1"><Save className="mr-1 h-4 w-4" />{saving ? "..." : "Save"}</Button></div>
       </Card>
     </div>
+    <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>Sticker preview</DialogTitle></DialogHeader>
+        <div className="rounded-md border border-border bg-muted/40 p-4">
+          <div className="relative mx-auto bg-background shadow-sm" style={{ width: "min(78vw, 520px)", aspectRatio: "1 / 1", border: template.showFrame ? "2px solid hsl(var(--foreground))" : "1px dashed hsl(var(--border))" }}>
+            {previewElements.map((el) => el.visible && (
+              <div key={el.id} className={`absolute overflow-hidden p-1 leading-none ${el.border ? "border border-foreground" : ""}`} style={{ left: `${(el.x / template.sizeMm) * 100}%`, top: `${(el.y / template.sizeMm) * 100}%`, width: `${(el.w / template.sizeMm) * 100}%`, height: `${(el.h / template.sizeMm) * 100}%`, fontSize: `${el.fontSize * 3}px`, fontWeight: el.fontWeight, textAlign: el.align, borderRadius: `${el.radius}px`, transform: `rotate(${el.rotation}deg)` }}>
+                {el.type === "image" && el.imageData ? <img src={el.imageData} alt="logo" className="h-full w-full object-contain" /> : el.type === "html" ? <div className="h-full w-full" dangerouslySetInnerHTML={renderCustomPreview(el)} /> : renderPreviewValue(el)}
+              </div>
+            ))}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 
