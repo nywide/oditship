@@ -27,7 +27,7 @@ const sampleOrder = {
   customer_phone: "0600000000",
   customer_address: "Rue principale, immeuble 12, appartement 4",
   customer_city: "Casablanca",
-  product_name: "Produit exemple",
+  product_name: "Sample product",
   order_value: 249,
   open_package: false,
   comment: "Fragile",
@@ -98,7 +98,7 @@ const AdminSticker = () => {
     const { data: userData } = await supabase.auth.getUser();
     const { error } = await (supabase as any).from("app_settings").upsert({ key: "sticker_template", value: template, updated_by: userData.user?.id ?? null }, { onConflict: "key" });
     setSaving(false);
-    if (error) toast.error(error.message); else toast.success("Sticker sauvegardé");
+    if (error) toast.error(error.message); else toast.success("Sticker saved");
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -137,10 +137,10 @@ const AdminSticker = () => {
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div><h3 className="font-semibold">Live sticker editor</h3><p className="text-sm text-muted-foreground">Start from an empty square canvas, add any system field, text, logo, emoji, line, QR, barcode, or custom HTML/CSS block, then drag and style it freely.</p></div>
           <div className="flex flex-wrap gap-2">
-            <Select onValueChange={(value) => addElement("field", value as StickerSystemField)}><SelectTrigger className="w-44"><SelectValue placeholder="+ معلومة النظام" /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select>
-            <Button variant="outline" onClick={() => addElement("text")}><Type className="mr-1 h-4 w-4" />Texte</Button>
+            <Select onValueChange={(value) => addElement("field", value as StickerSystemField)}><SelectTrigger className="w-44"><SelectValue placeholder="+ System field" /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select>
+            <Button variant="outline" onClick={() => addElement("text")}><Type className="mr-1 h-4 w-4" />Text</Button>
             <Button variant="outline" onClick={() => addElement("emoji")}><Smile className="mr-1 h-4 w-4" />Emoji</Button>
-            <Button variant="outline" onClick={() => addElement("line")}><Minus className="mr-1 h-4 w-4" />Ligne</Button>
+            <Button variant="outline" onClick={() => addElement("line")}><Minus className="mr-1 h-4 w-4" />Line</Button>
             <Button variant="outline" onClick={() => addElement("qr")}><QrCode className="mr-1 h-4 w-4" />QR</Button>
             <Button variant="outline" onClick={() => addElement("barcode")}>Barcode</Button>
             <Button variant="outline" onClick={() => addElement("html")}>HTML/CSS</Button>
