@@ -52,6 +52,7 @@ interface LivreurApiSettings {
 }
 
 const db = supabase as any;
+const functionsBaseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   livreur_id: livreurId,
@@ -370,7 +371,7 @@ const AdminLivreurs = () => {
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
-      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(1000),
+      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(5000),
       db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle(),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
@@ -539,7 +540,7 @@ const AdminLivreurs = () => {
       return {
         type: "Incoming webhook endpoint",
         method: "POST",
-        url: log.livreur_id ? `${window.location.origin}/functions/v1/livreur-webhook/${log.livreur_id}` : null,
+        url: log.livreur_id ? `${functionsBaseUrl}/livreur-webhook/${log.livreur_id}` : null,
         auth: "Bearer token required",
         tracking_field: logSettings?.webhook_tracking_field ?? "trackingID",
         status_field: logSettings?.webhook_status_field ?? "status",
@@ -584,6 +585,11 @@ const AdminLivreurs = () => {
       sending: details.sending ?? null,
       exchanges: Array.isArray(details.exchanges) ? details.exchanges : [],
     };
+  };
+  const getLogTracking = (log: typeof apiLogs[number]) => {
+    const details = (log.details ?? {}) as any;
+    const candidates = [details.tracking, details.expected_tracking, details.response_tracking, details.reception?.payload?.trackingID, details.reception?.payload?.tracking, details.reception?.payload?.partnerTrackingID, details.reception?.body?.trackingID, details.reception?.body?.tracking, details.reception?.body?.partnerTrackingID];
+    return candidates.find((value) => value !== undefined && value !== null && String(value).trim()) ?? "—";
   };
 
   return (
@@ -666,7 +672,7 @@ const AdminLivreurs = () => {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold">Webhook logs & Driver API logs</h3>
-            <p className="text-sm text-muted-foreground">Webhook, polling, package creation, and provider responses with full details.</p>
+            <p className="text-sm text-muted-foreground">Showing latest {apiLogs.length} receptions, rejections, polling checks, and provider responses with full details.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Input className="h-9 w-64" placeholder="Search order, tracking, status..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
@@ -678,12 +684,12 @@ const AdminLivreurs = () => {
           </div>
         </div>
         <Table>
-          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead><TableHead className="text-right">Details</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Tracking</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead><TableHead className="text-right">Details</TableHead></TableRow></TableHeader>
           <TableBody>
-            {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : filteredLogs.map((log) => {
+            {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : filteredLogs.map((log) => {
               const livreur = livreurs.find((item) => item.id === log.livreur_id);
               const flow = getLogFlowDetails(log);
-              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}<div className="mt-1 flex flex-wrap gap-1"><Badge variant="outline">Reception {flow.reception ? "✓" : "—"}</Badge><Badge variant="outline">Sending {flow.sending ? "✓" : "—"}</Badge></div></TableCell><TableCell><Badge variant={log.status === "success" || log.status === "received" ? "default" : log.status === "ignored" ? "secondary" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell className="font-mono text-xs">{getLogTracking(log)}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}<div className="mt-1 flex flex-wrap gap-1"><Badge variant="outline">Reception {flow.reception ? "✓" : "—"}</Badge><Badge variant="outline">Sending {flow.sending ? "✓" : "—"}</Badge></div></TableCell><TableCell><Badge variant={log.status === "success" || log.status === "received" ? "default" : log.status === "ignored" ? "secondary" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
             })}
           </TableBody>
         </Table>
@@ -757,7 +763,7 @@ const AdminLivreurs = () => {
               <SectionHeader icon={Webhook} title="Validation & webhook" description="Rules checked before sending, plus status mapping for incoming webhook updates." />
               <KeyValueEditor label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value. Values can be plain text, numbers, true/false, or small JSON objects." value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} keyPlaceholder="Order field" valuePlaceholder='Rule, e.g. {"min_alnum":3}' primitiveValues />
               <KeyValueEditor label="Status mapping" help="Left side is the provider status. Right side is the internal status used in this app." value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
-              <div><Label>Webhook URL</Label><Input readOnly value={editing ? `${window.location.origin}/functions/v1/livreur-webhook/${editing.id}` : ""} /><FieldHelp>Give this URL to the provider with this driver's API token as a Bearer token.</FieldHelp></div>
+              <div><Label>Webhook URL</Label><Input readOnly value={editing ? `${functionsBaseUrl}/livreur-webhook/${editing.id}` : ""} /><FieldHelp>Give this URL to the provider with this driver's API token as a Bearer token.</FieldHelp></div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div><Label>Webhook status field</Label><Input value={settingsForm.webhook_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_status_field: e.target.value })} /><FieldHelp>Field name that contains the provider status in the webhook body.</FieldHelp></div>
                 <div><Label>Webhook tracking field</Label><Input value={settingsForm.webhook_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_tracking_field: e.target.value })} /><FieldHelp>Field name that contains the tracking number in the webhook body.</FieldHelp></div>
