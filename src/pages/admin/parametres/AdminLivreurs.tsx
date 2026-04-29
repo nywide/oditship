@@ -292,7 +292,9 @@ const AdminLivreurs = () => {
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Livreur | null>(null);
-  const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; created_at: string }>>([]);
+  const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; details: Record<string, unknown>; created_at: string }>>([]);
+  const [selectedLog, setSelectedLog] = useState<typeof apiLogs[number] | null>(null);
+  const [retention, setRetention] = useState({ enabled: false, days: 30 });
   const activeSettings = useMemo(() => {
     if (!editing) return null;
     const current = settings[editing.id] ?? defaultSettings(editing.id);
@@ -342,12 +344,13 @@ const AdminLivreurs = () => {
   });
 
   const load = async () => {
-    const [p, h, hl, s, logs] = await Promise.all([
+    const [p, h, hl, s, logs, retentionSetting] = await Promise.all([
       db.from("profiles").select("id, username, full_name, api_enabled, api_token, authentication_config, create_package_config").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
-      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, created_at").order("created_at", { ascending: false }).limit(50),
+      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(200),
+      db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle(),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
     setHubs((h.data ?? []) as Hub[]);
@@ -356,6 +359,8 @@ const AdminLivreurs = () => {
     (s.data ?? []).forEach((row: LivreurApiSettings) => { byLivreur[row.livreur_id] = row; });
     setSettings(byLivreur);
     setApiLogs(logs.data ?? []);
+    const retentionValue = (retentionSetting.data?.value ?? {}) as Record<string, unknown>;
+    setRetention({ enabled: Boolean(retentionValue.enabled), days: Number(retentionValue.days) || 30 });
   };
   useEffect(() => { load(); }, []);
 
