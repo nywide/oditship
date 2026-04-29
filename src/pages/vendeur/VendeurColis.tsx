@@ -36,6 +36,9 @@ interface Order {
   external_tracking_number: string | null;
   api_sync_status: string | null;
   api_sync_error: string | null;
+  status_note: string | null;
+  postponed_date: string | null;
+  scheduled_date: string | null;
   agent_id: string | null;
   created_at: string;
 }
@@ -64,6 +67,9 @@ const VendeurColis = () => {
   const isAgent = profile?.agent_of != null;
   const agentPages = (profile?.agent_pages ?? {}) as Record<string, boolean | string>;
   const colisScope = agentPages.colis_scope === "own" ? "own" : "all";
+
+  const formatShortDate = (value?: string | null) => value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" }).format(new Date(value)) : "—";
+  const hasStatusMeta = (o: Order) => Boolean(o.status_note || o.postponed_date || o.scheduled_date);
 
   const load = async () => {
     if (!user) return;
