@@ -151,11 +151,27 @@ export const resolveStickerValue = (order: StickerOrder, field?: StickerSystemFi
     case "comment": return order.comment || "";
     case "created_at": return new Date(order.created_at || Date.now()).toLocaleString("fr-FR");
     case "order_id": return String(order.id);
+    case "seller_username": return order.seller_username || "";
+    case "seller_full_name": return order.seller_full_name || "";
+    case "seller_company_name": return order.seller_company_name || "";
+    case "seller_phone": return order.seller_phone || "";
+    case "seller_cin": return order.seller_cin || "";
+    case "seller_affiliation_code": return order.seller_affiliation_code || "";
+    case "seller_bank_account_name": return order.seller_bank_account_name || "";
+    case "seller_bank_account_number": return order.seller_bank_account_number || "";
     default: return "";
   }
 };
 
 const elementCss = (el: StickerElement) => `left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;font-size:${el.fontSize}mm;font-weight:${el.fontWeight};text-align:${el.align};border:${el.border ? ".35mm solid #111" : "0"};border-radius:${el.radius}mm;transform:rotate(${el.rotation}deg);`;
+const renderCustomHtml = (order: StickerOrder, el: StickerElement) => {
+  const vars = stickerSystemFields.reduce<Record<string, string>>((acc, field) => {
+    acc[field.value] = esc(resolveStickerValue(order, field.value));
+    return acc;
+  }, {});
+  const replaceVars = (value = "") => value.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => vars[key] ?? "");
+  return `<style>${replaceVars(el.css)}</style>${replaceVars(el.html || "")}`;
+};
 
 const stickerStyles = (template: StickerTemplate) => `
 @page { size: ${template.sizeMm}mm ${template.sizeMm}mm; margin: ${template.marginMm}mm; }
@@ -181,6 +197,7 @@ const renderElement = async (order: StickerOrder, el: StickerElement) => {
     return `<div class="${classes}" style="${elementCss(el)}"><img src="${qr}" alt="QR"></div>`;
   }
   if (el.type === "barcode") return `<div class="${classes}" style="${elementCss(el)}">*${esc(tracking)}*</div>`;
+  if (el.type === "html") return `<div class="${classes}" style="${elementCss(el)}">${renderCustomHtml(order, el)}</div>`;
   const value = el.type === "field" ? resolveStickerValue(order, el.field) : el.text;
   return `<div class="${classes}" style="${elementCss(el)}">${esc(value)}</div>`;
 };
