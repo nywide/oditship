@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface StickerOrder {
   id: number;
+  vendeur_id?: string;
   customer_name: string;
   customer_phone: string;
   customer_address: string;
@@ -14,12 +15,22 @@ export interface StickerOrder {
   tracking_number?: string | null;
   external_tracking_number?: string | null;
   created_at?: string | null;
+  seller_username?: string | null;
+  seller_full_name?: string | null;
+  seller_company_name?: string | null;
+  seller_phone?: string | null;
+  seller_cin?: string | null;
+  seller_affiliation_code?: string | null;
+  seller_bank_account_name?: string | null;
+  seller_bank_account_number?: string | null;
 }
 
-export type StickerElementType = "field" | "text" | "line" | "image" | "emoji" | "qr" | "barcode";
+export type StickerElementType = "field" | "text" | "line" | "image" | "emoji" | "qr" | "barcode" | "html";
 export type StickerSystemField =
   | "tracking" | "customer_name" | "customer_phone" | "customer_city" | "customer_address"
-  | "product_name" | "order_value" | "open_package" | "comment" | "created_at" | "order_id";
+  | "product_name" | "order_value" | "open_package" | "comment" | "created_at" | "order_id"
+  | "seller_username" | "seller_full_name" | "seller_company_name" | "seller_phone" | "seller_cin"
+  | "seller_affiliation_code" | "seller_bank_account_name" | "seller_bank_account_number";
 
 export interface StickerElement {
   id: string;
@@ -27,6 +38,8 @@ export interface StickerElement {
   label?: string;
   field?: StickerSystemField;
   text?: string;
+  html?: string;
+  css?: string;
   imageData?: string;
   x: number;
   y: number;
@@ -51,16 +64,24 @@ export interface StickerTemplate {
 
 export const stickerSystemFields: { value: StickerSystemField; label: string }[] = [
   { value: "tracking", label: "Numéro suivi" },
-  { value: "customer_name", label: "Destinataire" },
-  { value: "customer_phone", label: "Téléphone" },
-  { value: "customer_city", label: "Ville" },
-  { value: "customer_address", label: "Adresse" },
-  { value: "product_name", label: "Produit" },
-  { value: "order_value", label: "Prix" },
-  { value: "open_package", label: "Ouverture colis" },
-  { value: "comment", label: "Commentaire" },
+  { value: "customer_name", label: "Customer name" },
+  { value: "customer_phone", label: "Customer phone" },
+  { value: "customer_city", label: "Customer city" },
+  { value: "customer_address", label: "Customer address" },
+  { value: "product_name", label: "Product" },
+  { value: "order_value", label: "Price" },
+  { value: "open_package", label: "Open package" },
+  { value: "comment", label: "Comment" },
   { value: "created_at", label: "Date" },
-  { value: "order_id", label: "ID commande" },
+  { value: "order_id", label: "Order ID" },
+  { value: "seller_username", label: "Seller username" },
+  { value: "seller_full_name", label: "Seller full name" },
+  { value: "seller_company_name", label: "Seller company" },
+  { value: "seller_phone", label: "Seller phone" },
+  { value: "seller_cin", label: "Seller CIN" },
+  { value: "seller_affiliation_code", label: "Seller affiliation code" },
+  { value: "seller_bank_account_name", label: "Seller bank account name" },
+  { value: "seller_bank_account_number", label: "Seller bank account number" },
 ];
 
 export const defaultStickerTemplate: StickerTemplate = {
@@ -72,6 +93,7 @@ export const defaultStickerTemplate: StickerTemplate = {
 };
 
 const esc = (value: unknown) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c] as string));
+const stripUnsafeHtml = (value: string) => value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "").replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const n = (value: unknown, fallback: number) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
@@ -91,10 +113,12 @@ export const normalizeStickerTemplate = (raw: unknown): StickerTemplate => {
 
 const normalizeElement = (element: Partial<StickerElement>, index: number): StickerElement => ({
   id: String(element.id || `el-${index}-${Date.now()}`),
-  type: ["field", "text", "line", "image", "emoji", "qr", "barcode"].includes(String(element.type)) ? element.type as StickerElementType : "text",
+  type: ["field", "text", "line", "image", "emoji", "qr", "barcode", "html"].includes(String(element.type)) ? element.type as StickerElementType : "text",
   label: element.label || "",
   field: element.field,
   text: element.text || "",
+  html: element.html || "",
+  css: element.css || "",
   imageData: element.imageData || "",
   x: clamp(n(element.x, 8), 0, 100),
   y: clamp(n(element.y, 8), 0, 100),
@@ -128,11 +152,48 @@ export const resolveStickerValue = (order: StickerOrder, field?: StickerSystemFi
     case "comment": return order.comment || "";
     case "created_at": return new Date(order.created_at || Date.now()).toLocaleString("fr-FR");
     case "order_id": return String(order.id);
+    case "seller_username": return order.seller_username || "";
+    case "seller_full_name": return order.seller_full_name || "";
+    case "seller_company_name": return order.seller_company_name || "";
+    case "seller_phone": return order.seller_phone || "";
+    case "seller_cin": return order.seller_cin || "";
+    case "seller_affiliation_code": return order.seller_affiliation_code || "";
+    case "seller_bank_account_name": return order.seller_bank_account_name || "";
+    case "seller_bank_account_number": return order.seller_bank_account_number || "";
     default: return "";
   }
 };
 
 const elementCss = (el: StickerElement) => `left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;font-size:${el.fontSize}mm;font-weight:${el.fontWeight};text-align:${el.align};border:${el.border ? ".35mm solid #111" : "0"};border-radius:${el.radius}mm;transform:rotate(${el.rotation}deg);`;
+const renderCustomHtml = (order: StickerOrder, el: StickerElement) => {
+  const vars = stickerSystemFields.reduce<Record<string, string>>((acc, field) => {
+    acc[field.value] = esc(resolveStickerValue(order, field.value));
+    return acc;
+  }, {});
+  const replaceVars = (value = "") => value.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => vars[key] ?? "");
+  return `<style>${stripUnsafeHtml(replaceVars(el.css))}</style>${stripUnsafeHtml(replaceVars(el.html || ""))}`;
+};
+
+const withSellerProfile = async (order: StickerOrder): Promise<StickerOrder> => {
+  if (!order.vendeur_id || order.seller_username || order.seller_full_name || order.seller_company_name) return order;
+  const { data } = await (supabase as any)
+    .from("profiles")
+    .select("username, full_name, company_name, phone, cin, affiliation_code, bank_account_name, bank_account_number")
+    .eq("id", order.vendeur_id)
+    .maybeSingle();
+  if (!data) return order;
+  return {
+    ...order,
+    seller_username: data.username ?? null,
+    seller_full_name: data.full_name ?? null,
+    seller_company_name: data.company_name ?? null,
+    seller_phone: data.phone ?? null,
+    seller_cin: data.cin ?? null,
+    seller_affiliation_code: data.affiliation_code ?? null,
+    seller_bank_account_name: data.bank_account_name ?? null,
+    seller_bank_account_number: data.bank_account_number ?? null,
+  };
+};
 
 const stickerStyles = (template: StickerTemplate) => `
 @page { size: ${template.sizeMm}mm ${template.sizeMm}mm; margin: ${template.marginMm}mm; }
@@ -158,6 +219,7 @@ const renderElement = async (order: StickerOrder, el: StickerElement) => {
     return `<div class="${classes}" style="${elementCss(el)}"><img src="${qr}" alt="QR"></div>`;
   }
   if (el.type === "barcode") return `<div class="${classes}" style="${elementCss(el)}">*${esc(tracking)}*</div>`;
+  if (el.type === "html") return `<div class="${classes}" style="${elementCss(el)}">${renderCustomHtml(order, el)}</div>`;
   const value = el.type === "field" ? resolveStickerValue(order, el.field) : el.text;
   return `<div class="${classes}" style="${elementCss(el)}">${esc(value)}</div>`;
 };
@@ -176,12 +238,14 @@ const openPrintWindow = (title: string, body: string, template: StickerTemplate)
 
 export const printSticker = async (order: StickerOrder) => {
   const template = await getStickerTemplate();
-  openPrintWindow(`Sticker ${order.external_tracking_number || order.tracking_number || order.id}`, await renderSticker(order, template), template);
+  const enrichedOrder = await withSellerProfile(order);
+  openPrintWindow(`Sticker ${enrichedOrder.external_tracking_number || enrichedOrder.tracking_number || enrichedOrder.id}`, await renderSticker(enrichedOrder, template), template);
 };
 
 export const printStickers = async (orders: StickerOrder[]) => {
   if (!orders.length) return;
   const template = await getStickerTemplate();
-  const html = (await Promise.all(orders.map((order) => renderSticker(order, template)))).join("");
+  const enrichedOrders = await Promise.all(orders.map(withSellerProfile));
+  const html = (await Promise.all(enrichedOrders.map((order) => renderSticker(order, template)))).join("");
   openPrintWindow(`Stickers (${orders.length})`, html, template);
 };
