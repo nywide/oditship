@@ -121,7 +121,8 @@ const AdminSticker = () => {
       return acc;
     }, {});
     const replaceVars = (value = "") => value.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => vars[key] ?? "");
-    return { __html: `<style>${replaceVars(el.css || "")}</style>${replaceVars(el.html || "")}` };
+    const stripUnsafe = (value: string) => value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "").replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
+    return { __html: `<style>${stripUnsafe(replaceVars(el.css || ""))}</style>${stripUnsafe(replaceVars(el.html || ""))}` };
   };
 
   const renderPreviewValue = (el: StickerElement) => {
