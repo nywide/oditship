@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 export type ColisPreviewLocation = "main" | "details" | "timeline" | "actions" | "invoice" | "courier" | "support" | "qr";
 
 export interface ColisPreviewField {
@@ -201,7 +203,7 @@ export const backgroundValue = (section: ColisPreviewSection, data: Record<strin
   return section.backgroundSource === "none" ? "" : getColisPreviewValue(data, source);
 };
 
-export const colisSectionStyle = (section: ColisPreviewSection, data: Record<string, unknown>): React.CSSProperties => {
+export const colisSectionStyle = (section: ColisPreviewSection, data: Record<string, unknown>): CSSProperties => {
   const bgSource = backgroundValue(section, data);
   return {
     background: bgSource ? `linear-gradient(135deg, ${section.style.background}, hsl(var(--muted)))` : section.style.background,
