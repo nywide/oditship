@@ -370,7 +370,7 @@ const AdminLivreurs = () => {
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
-      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(1000),
+      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(5000),
       db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle(),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
@@ -584,6 +584,11 @@ const AdminLivreurs = () => {
       sending: details.sending ?? null,
       exchanges: Array.isArray(details.exchanges) ? details.exchanges : [],
     };
+  };
+  const getLogTracking = (log: typeof apiLogs[number]) => {
+    const details = (log.details ?? {}) as any;
+    const candidates = [details.tracking, details.expected_tracking, details.response_tracking, details.reception?.payload?.trackingID, details.reception?.payload?.tracking, details.reception?.payload?.partnerTrackingID, details.reception?.body?.trackingID, details.reception?.body?.tracking, details.reception?.body?.partnerTrackingID];
+    return candidates.find((value) => value !== undefined && value !== null && String(value).trim()) ?? "—";
   };
 
   return (
