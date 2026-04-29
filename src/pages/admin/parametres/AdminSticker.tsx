@@ -163,6 +163,7 @@ const AdminSticker = () => {
   };
 
   return (
+    <>
     <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
       <Card className="p-4">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -230,6 +231,21 @@ const AdminSticker = () => {
         <div className="mt-5 flex gap-2"><Button variant="outline" onClick={reset}><RotateCcw className="mr-1 h-4 w-4" />Reset</Button><Button onClick={save} disabled={saving} className="flex-1"><Save className="mr-1 h-4 w-4" />{saving ? "..." : "Save"}</Button></div>
       </Card>
     </div>
+    <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader><DialogTitle>Sticker preview</DialogTitle></DialogHeader>
+        <div className="rounded-md border border-border bg-muted/40 p-4">
+          <div className="relative mx-auto bg-background shadow-sm" style={{ width: "min(78vw, 520px)", aspectRatio: "1 / 1", border: template.showFrame ? "2px solid hsl(var(--foreground))" : "1px dashed hsl(var(--border))" }}>
+            {previewElements.map((el) => el.visible && (
+              <div key={el.id} className={`absolute overflow-hidden p-1 leading-none ${el.border ? "border border-foreground" : ""}`} style={{ left: `${(el.x / template.sizeMm) * 100}%`, top: `${(el.y / template.sizeMm) * 100}%`, width: `${(el.w / template.sizeMm) * 100}%`, height: `${(el.h / template.sizeMm) * 100}%`, fontSize: `${el.fontSize * 3}px`, fontWeight: el.fontWeight, textAlign: el.align, borderRadius: `${el.radius}px`, transform: `rotate(${el.rotation}deg)` }}>
+                {el.type === "image" && el.imageData ? <img src={el.imageData} alt="logo" className="h-full w-full object-contain" /> : el.type === "html" ? <div className="h-full w-full" dangerouslySetInnerHTML={renderCustomPreview(el)} /> : renderPreviewValue(el)}
+              </div>
+            ))}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 
