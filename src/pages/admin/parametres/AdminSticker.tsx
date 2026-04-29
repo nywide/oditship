@@ -18,7 +18,7 @@ import {
   type StickerSystemField,
   type StickerTemplate,
 } from "@/lib/printSticker";
-import { AlignCenter, AlignLeft, AlignRight, Copy, Image, Minus, Plus, QrCode, RotateCcw, Save, Smile, Trash2, Type } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Copy, Image, Minus, QrCode, RotateCcw, Save, Smile, Trash2, Type } from "lucide-react";
 import { toast } from "sonner";
 
 const sampleOrder = {
@@ -118,7 +118,7 @@ const AdminSticker = () => {
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div><h3 className="font-semibold">Live sticker editor</h3><p className="text-sm text-muted-foreground">Canvas مربع فارغ: زيد المعلومة، جرّها، كبّرها، وصايب sticker بحال Photoshop.</p></div>
           <div className="flex flex-wrap gap-2">
-            <Select onValueChange={(value: StickerSystemField) => addElement("field", value)}><SelectTrigger className="w-44"><SelectValue placeholder="+ معلومة النظام" /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select>
+            <Select onValueChange={(value) => addElement("field", value as StickerSystemField)}><SelectTrigger className="w-44"><SelectValue placeholder="+ معلومة النظام" /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select>
             <Button variant="outline" onClick={() => addElement("text")}><Type className="mr-1 h-4 w-4" />Texte</Button>
             <Button variant="outline" onClick={() => addElement("emoji")}><Smile className="mr-1 h-4 w-4" />Emoji</Button>
             <Button variant="outline" onClick={() => addElement("line")}><Minus className="mr-1 h-4 w-4" />Ligne</Button>
@@ -147,7 +147,7 @@ const AdminSticker = () => {
                 tabIndex={0}
                 onPointerDown={(event) => { setSelectedId(el.id); setDrag({ id: el.id, startX: event.clientX, startY: event.clientY, x: el.x, y: el.y }); }}
                 className={`absolute overflow-hidden border border-dashed p-1 leading-none ${selectedId === el.id ? "border-primary bg-primary/10" : "border-muted-foreground/40"}`}
-                style={{ left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`, height: `${el.h}%`, fontSize: `${el.fontSize * 3}px`, fontWeight: el.fontWeight, textAlign: el.align, borderRadius: `${el.radius}px`, transform: `rotate(${el.rotation}deg)`, cursor: "move" }}
+                style={{ left: `${(el.x / template.sizeMm) * 100}%`, top: `${(el.y / template.sizeMm) * 100}%`, width: `${(el.w / template.sizeMm) * 100}%`, height: `${(el.h / template.sizeMm) * 100}%`, fontSize: `${el.fontSize * 3}px`, fontWeight: el.fontWeight, textAlign: el.align, borderRadius: `${el.radius}px`, transform: `rotate(${el.rotation}deg)`, cursor: "move" }}
               >
                 {el.type === "image" && el.imageData ? <img src={el.imageData} alt="logo" className="h-full w-full object-contain" /> : renderPreviewValue(el)}
               </div>
@@ -161,7 +161,7 @@ const AdminSticker = () => {
         {!selected ? <p className="text-sm text-muted-foreground">اختار عنصر من sticker أو زيد عنصر جديد.</p> : (
           <div className="space-y-4">
             {(selected.type === "text" || selected.type === "emoji") && <div className="space-y-2"><Label>Texte / Emoji</Label><Textarea value={selected.text || ""} onChange={(e) => updateElement(selected.id, { text: e.target.value })} /></div>}
-            {selected.type === "field" && <div className="space-y-2"><Label>معلومة النظام</Label><Select value={selected.field} onValueChange={(field: StickerSystemField) => updateElement(selected.id, { field })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select></div>}
+            {selected.type === "field" && <div className="space-y-2"><Label>معلومة النظام</Label><Select value={selected.field} onValueChange={(field) => updateElement(selected.id, { field: field as StickerSystemField })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select></div>}
             <Button variant="outline" className="w-full" onClick={() => addElement("image")}><Image className="mr-1 h-4 w-4" />Ajouter logo / image</Button>
             {selected.type === "image" && <Input type="file" accept="image/*" onChange={(e) => imageUpload(e.target.files?.[0])} />}
             <div className="grid grid-cols-2 gap-3">{(["x", "y", "w", "h"] as const).map((key) => <div key={key} className="space-y-2"><Label>{key.toUpperCase()}</Label><Input type="number" value={selected[key]} onChange={(e) => updateElement(selected.id, { [key]: Number(e.target.value) })} /></div>)}</div>
