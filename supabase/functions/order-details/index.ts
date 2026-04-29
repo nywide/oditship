@@ -62,6 +62,54 @@ function parseDateValue(value: unknown) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function maskSensitiveHeaders(headers: Record<string, unknown> = {}) {
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => {
+    const name = key.toLowerCase();
+    if (name.includes("authorization") || name.includes("token") || name.includes("secret") || name.includes("key")) {
+      const text = String(value ?? "");
+      return [key, text ? `${text.slice(0, 8)}••••${text.slice(-4)}` : "••••"];
+    }
+    return [key, value];
+  }));
+}
+
+async function logApi(admin: any, entry: Record<string, unknown>) {
+  const { error } = await admin.from("livreur_api_logs").insert({
+    order_id: entry.order_id ?? null,
+    livreur_id: entry.livreur_id ?? null,
+    event_type: entry.event_type,
+    status: entry.status,
+    message: entry.message ?? null,
+    details: entry.details ?? {},
+  });
+  if (error) console.error("livreur_api_logs insert failed", error.message);
+}
+
+function providerLookupExchange(tracking: string, responseStatus: number | null, responseBody: unknown) {
+  const endpoint = {
+    type: "Outgoing provider status lookup from order details",
+    method: "GET",
+    url: `${OLIVRAISON_BASE}/package/${encodeURIComponent(tracking)}`,
+    tracking_field: "trackingID",
+    status_field: "history.status",
+  };
+  return {
+    endpoint,
+    tracking,
+    sending: {
+      direction: "outgoing",
+      method: endpoint.method,
+      url: endpoint.url,
+      headers: maskSensitiveHeaders({ Authorization: "Bearer provider-token" }),
+    },
+    reception: {
+      direction: "incoming_response",
+      status_code: responseStatus,
+      body: responseBody,
+    },
+  };
+}
+
 function providerMeta(item: any, settings: any) {
   return {
     note: getPath(item, settings?.polling_message_field) ?? item?.msg ?? item?.message ?? item?.note ?? null,
