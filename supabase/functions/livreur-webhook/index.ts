@@ -72,7 +72,7 @@ function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
 }
 
 async function logApi(admin: any, entry: Record<string, unknown>) {
-  await admin.from("livreur_api_logs").insert({
+  const { error } = await admin.from("livreur_api_logs").insert({
     order_id: entry.order_id ?? null,
     livreur_id: entry.livreur_id ?? null,
     event_type: entry.event_type,
@@ -80,6 +80,7 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
     message: entry.message ?? null,
     details: entry.details ?? {},
   });
+  if (error) console.error("livreur_api_logs insert failed", error.message);
 }
 
 function webhookExchangeDetails(req: Request, livreurId: string, settings: any, payload: any, responseStatus: number, responseBody: Record<string, unknown>, extra: Record<string, unknown> = {}) {
@@ -200,13 +201,13 @@ Deno.serve(async (req) => {
     admin.from("livreur_api_settings").select("*").eq("livreur_id", livreurId).maybeSingle(),
   ]);
 
+  let payload: any = {};
+  try { payload = await req.json(); } catch { payload = {}; }
+
   if (!profile || profile.api_token !== token) {
     await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Invalid webhook credentials", details: webhookExchangeDetails(req, livreurId, settings, null, 401, { error: "Invalid credentials" }) });
     return jsonResponse({ error: "Invalid credentials" }, 401);
   }
-
-  let payload: any = {};
-  try { payload = await req.json(); } catch { payload = {}; }
 
   const trackingField = settings?.webhook_tracking_field || "trackingID";
   const statusField = settings?.webhook_status_field || "status";
