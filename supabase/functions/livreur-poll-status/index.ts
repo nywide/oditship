@@ -211,7 +211,10 @@ Deno.serve(async (req) => {
   for (const settings of settingsRows ?? []) {
     const lastRun = settings.polling_last_run_at ? new Date(settings.polling_last_run_at).getTime() : 0;
     const intervalMs = Math.max(Number(settings.polling_interval_minutes) || 15, 1) * 60_000;
-    if (lastRun && now - lastRun < intervalMs) continue;
+    if (lastRun && now - lastRun < intervalMs) {
+      await logApi(admin, { livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling skipped: interval not reached", details: { rejection_reason: "interval_not_reached", last_run_at: settings.polling_last_run_at, interval_minutes: settings.polling_interval_minutes, next_run_at: new Date(lastRun + intervalMs).toISOString() } });
+      continue;
+    }
 
     const { data: orders } = await admin
       .from("orders")
@@ -219,6 +222,9 @@ Deno.serve(async (req) => {
       .eq("assigned_livreur_id", settings.livreur_id)
       .not("external_tracking_number", "is", null)
       .limit(200);
+    if (!orders?.length) {
+      await logApi(admin, { livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling skipped: no tracked orders", details: { rejection_reason: "no_tracked_orders" } });
+    }
 
     const delayMs = Math.ceil(1000 / Math.max(Number(settings.rate_limit_per_second) || 5, 0.1));
     for (const order of orders ?? []) {
