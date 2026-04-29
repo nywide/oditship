@@ -571,6 +571,14 @@ const AdminLivreurs = () => {
       extra_operations: config.operations ?? logSettings?.api_operations ?? [],
     };
   };
+  const getLogFlowDetails = (log: typeof apiLogs[number]) => {
+    const details = (log.details ?? {}) as any;
+    return {
+      reception: details.reception ?? null,
+      sending: details.sending ?? null,
+      exchanges: Array.isArray(details.exchanges) ? details.exchanges : [],
+    };
+  };
 
   return (
     <>
@@ -667,7 +675,8 @@ const AdminLivreurs = () => {
           <TableBody>
             {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : filteredLogs.map((log) => {
               const livreur = livreurs.find((item) => item.id === log.livreur_id);
-              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}</TableCell><TableCell><Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
+              const flow = getLogFlowDetails(log);
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}<div className="mt-1 flex flex-wrap gap-1"><Badge variant="outline">Reception {flow.reception ? "✓" : "—"}</Badge><Badge variant="outline">Sending {flow.sending ? "✓" : "—"}</Badge></div></TableCell><TableCell><Badge variant={log.status === "success" ? "default" : log.status === "ignored" ? "secondary" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
             })}
           </TableBody>
         </Table>
@@ -678,6 +687,16 @@ const AdminLivreurs = () => {
           <DialogHeader><DialogTitle>Log full details</DialogTitle></DialogHeader>
           {selectedLog && (
             <div className="space-y-3 text-sm">
+              {(() => {
+                const flow = getLogFlowDetails(selectedLog);
+                return (
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div><Label>Reception</Label><pre className="max-h-[30vh] overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(flow.reception ?? "No reception data saved for this legacy log", null, 2)}</pre></div>
+                    <div><Label>Sending</Label><pre className="max-h-[30vh] overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(flow.sending ?? "No sending data saved for this legacy log", null, 2)}</pre></div>
+                    {flow.exchanges.length > 0 && <div className="lg:col-span-2"><Label>All request/response exchanges</Label><pre className="max-h-[32vh] overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(flow.exchanges, null, 2)}</pre></div>}
+                  </div>
+                );
+              })()}
               <div className="grid gap-2 sm:grid-cols-2">
                 <div><Label>Time</Label><p className="rounded-md bg-muted p-2">{new Date(selectedLog.created_at).toLocaleString("fr-FR")}</p></div>
                 <div><Label>Event</Label><p className="rounded-md bg-muted p-2">{selectedLog.event_type}</p></div>

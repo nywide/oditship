@@ -25,6 +25,18 @@ function buildCapturedFields(payload: any, mapping: Record<string, string>) {
   );
 }
 
+function maskSensitiveHeaders(headers: Headers | Record<string, unknown>) {
+  const entries = headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers ?? {});
+  return Object.fromEntries(entries.map(([key, value]) => {
+    const name = key.toLowerCase();
+    if (name.includes("authorization") || name.includes("token") || name.includes("secret") || name.includes("key")) {
+      const text = String(value ?? "");
+      return [key, text ? `${text.slice(0, 8)}••••${text.slice(-4)}` : "••••"];
+    }
+    return [key, value];
+  }));
+}
+
 function webhookEndpointInfo(req: Request, livreurId: string, settings: any) {
   return {
     type: "Incoming webhook endpoint",
@@ -68,6 +80,25 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
     message: entry.message ?? null,
     details: entry.details ?? {},
   });
+}
+
+function webhookExchangeDetails(req: Request, livreurId: string, settings: any, payload: any, responseStatus: number, responseBody: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  return {
+    endpoint: webhookEndpointInfo(req, livreurId, settings),
+    reception: {
+      direction: "incoming",
+      method: req.method,
+      url: req.url,
+      headers: maskSensitiveHeaders(req.headers),
+      payload,
+    },
+    sending: {
+      direction: "outgoing_response",
+      status_code: responseStatus,
+      body: responseBody,
+    },
+    ...extra,
+  };
 }
 
 async function findOrderByTracking(admin: any, livreurId: string, tracking: string) {
@@ -170,6 +201,7 @@ Deno.serve(async (req) => {
   ]);
 
   if (!profile || profile.api_token !== token) {
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Invalid webhook credentials", details: webhookExchangeDetails(req, livreurId, settings, null, 401, { error: "Invalid credentials" }) });
     return jsonResponse({ error: "Invalid credentials" }, 401);
   }
 
@@ -190,24 +222,24 @@ Deno.serve(async (req) => {
   const capturedFields = buildCapturedFields(payload, settings?.webhook_extra_fields_mapping ?? {});
 
   if (!tracking || !String(rawStatus ?? "").trim()) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), trackingField, statusField, payload } });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: webhookExchangeDetails(req, livreurId, settings, payload, 400, { error: "Webhook requires tracking and status" }, { trackingField, statusField }) });
     return jsonResponse({ error: "Webhook requires tracking and status" }, 400);
   }
 
   if (!settings || settings.is_active === false) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "API settings disabled", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus } });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "API settings disabled", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "settings_disabled" }, { tracking, raw_status: rawStatus }) });
     return jsonResponse({ ok: true, ignored: true, reason: "settings_disabled" });
   }
 
   if (!mappedStatus) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Provider status is not mapped", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus, status_mapping: settings?.status_mapping ?? {} } });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Provider status is not mapped", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "status_not_mapped" }, { tracking, raw_status: rawStatus, status_mapping: settings?.status_mapping ?? {} }) });
     return jsonResponse({ ok: true, ignored: true, reason: "status_not_mapped" });
   }
 
   const { data: order, error: orderError } = await findOrderByTracking(admin, livreurId, String(tracking).trim());
 
   if (orderError || !order) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Order not found for tracking", details: { tracking, raw_status: rawStatus, error: orderError?.message } });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Order not found for tracking", details: webhookExchangeDetails(req, livreurId, settings, payload, 404, { error: "Order not found for tracking" }, { tracking, raw_status: rawStatus, error: orderError?.message }) });
     return jsonResponse({ error: "Order not found for tracking" }, 404);
   }
 
@@ -215,7 +247,7 @@ Deno.serve(async (req) => {
   if (shouldUpdateCurrentStatus && mappedStatus !== order.status) {
     const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, meta, true);
     if (updateError) {
-      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to update order status", details: webhookExchangeDetails(req, livreurId, settings, payload, 500, { error: "Unable to update order status" }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message }) });
       return jsonResponse({ error: "Unable to update order status" }, 500);
     }
   } else {
@@ -223,7 +255,7 @@ Deno.serve(async (req) => {
     if (duplicate) {
       await admin.from("order_status_history").update({ notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate }).eq("id", duplicate.id);
       await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
-    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status updated with latest metadata", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status updated with latest metadata", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields }) });
       return jsonResponse({ ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus });
     }
     await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
@@ -238,12 +270,12 @@ Deno.serve(async (req) => {
       scheduled_date: scheduledDate,
     });
     if (historyError) {
-      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to record status history", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: historyError.message } });
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to record status history", details: webhookExchangeDetails(req, livreurId, settings, payload, 500, { error: "Unable to record status history" }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: historyError.message }) });
       return jsonResponse({ error: "Unable to record status history" }, 500);
     }
   }
 
-  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, order_id: order.id, status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields }) });
 
   return jsonResponse({ ok: true, order_id: order.id, status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status });
 });

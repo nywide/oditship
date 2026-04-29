@@ -148,8 +148,16 @@ async function sendRequest(config: JsonRecord, order: JsonRecord, context: JsonR
   const text = await response.text();
   let parsed: any = {};
   try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
-  if (!response.ok) throw new Error(`${label} ${response.status}: ${parsed?.description || parsed?.message || text}`);
-  return parsed;
+  const exchange = {
+    sending: { direction: "outgoing", label, method, url: config.url, headers: maskSensitiveHeaders({ "Content-Type": "application/json", ...headers }), payload: method === "GET" ? null : payload },
+    reception: { direction: "incoming_response", status_code: response.status, ok: response.ok, headers: maskSensitiveHeaders(Object.fromEntries(response.headers.entries())), body: parsed },
+  };
+  if (!response.ok) {
+    const err = new Error(`${label} ${response.status}: ${parsed?.description || parsed?.message || text}`) as Error & { exchange?: JsonRecord };
+    err.exchange = exchange;
+    throw err;
+  }
+  return { data: parsed, exchange };
 }
 
 async function logApi(admin: any, entry: JsonRecord) {
@@ -243,11 +251,14 @@ Deno.serve(async (req) => {
     lastEndpoint = endpoint;
 
     const delayMs = Math.ceil(1000 / Math.max(Number(settings?.rate_limit_per_second) || Number(createConfig.rate_limit_per_second) || 5, 0.1));
-    const result = await sendRequest(createConfig, order, context);
+    const createResult = await sendRequest(createConfig, order, context);
+    const result = createResult.data;
+    const exchanges = [createResult.exchange];
     for (const operation of createConfig.operations ?? []) {
       if (operation?.enabled === false) continue;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
-      await sendRequest(operation, order, { ...context, create_response: result }, operation.name || "API operation");
+      const operationResult = await sendRequest(operation, order, { ...context, create_response: result }, operation.name || "API operation");
+      exchanges.push(operationResult.exchange);
     }
 
     const trackingPath = createConfig.response_tracking_path || createConfig.tracking_path || "trackingID";
@@ -256,13 +267,14 @@ Deno.serve(async (req) => {
 
     const { error } = await admin.from("orders").update({ external_tracking_number: String(tracking), status: "Pickup", assigned_livreur_id: livreur.id, hub_id: hubCity.hub_id, api_sync_status: "success", api_sync_error: null }).eq("id", order.id);
     if (error) return jsonResponse({ error: `Provider succeeded but database update failed: ${error.message}`, tracking_id: String(tracking) }, 500);
-    await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: `Tracking ${String(tracking)}`, details: { endpoint, tracking_path: trackingPath } });
+    await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: `Tracking ${String(tracking)}`, details: { endpoint, sending: exchanges[0]?.sending, reception: exchanges[0]?.reception, exchanges, tracking_path: trackingPath } });
 
     return jsonResponse({ ok: true, mode: "external_api", tracking_id: String(tracking) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown delivery API error";
     await admin.from("orders").update({ api_sync_status: "failed", api_sync_error: message }).eq("id", order.id);
-    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "create_package", status: "failed", message, details: { endpoint: lastEndpoint, customer_city: order.customer_city } });
+    const exchange = (error as Error & { exchange?: JsonRecord })?.exchange ?? null;
+    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "create_package", status: "failed", message, details: { endpoint: lastEndpoint, sending: exchange?.sending ?? null, reception: exchange?.reception ?? null, customer_city: order.customer_city } });
     return jsonResponse({ error: "Commande refusée par les règles ou l'API du livreur. Contactez l'administration." }, 502);
   }
 });
