@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
   const seenTimeline = new Set<string>();
   const mergedHistory = [
     ...visibleDbHistory.filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status) && !(h.changed_by === order.assigned_livreur_id && mappedApiStatuses.has(h.new_status))).map((h: any) => ({
-      source: "odit",
+      source: h.changed_by === order.assigned_livreur_id ? "provider" : "odit",
       status: h.new_status,
       old_status: h.old_status,
       message: h.notes,
@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
       reported_date: h.reported_date ?? null,
       scheduled_date: h.scheduled_date ?? null,
       changed_at: h.changed_at,
-      actor: h.changed_by ? actors[h.changed_by] ?? null : null,
+      actor: h.changed_by && h.changed_by !== order.assigned_livreur_id ? actors[h.changed_by] ?? null : null,
     })),
     ...apiHistory.filter((h: any) => mapProviderStatus(h.status, statusMapping) && !isApiCreatedConfirmed(mapProviderStatus(h.status, statusMapping), h.msg)).map((h: any) => {
       const meta = providerMeta(h, settings);
