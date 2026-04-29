@@ -308,8 +308,14 @@ const AdminLivreurs = () => {
   const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; details: Record<string, unknown>; created_at: string }>>([]);
   const [selectedLog, setSelectedLog] = useState<typeof apiLogs[number] | null>(null);
   const [logFilter, setLogFilter] = useState("all");
+  const [logSearch, setLogSearch] = useState("");
   const [retention, setRetention] = useState({ enabled: false, days: 30 });
-  const filteredLogs = useMemo(() => apiLogs.filter((log) => logFilter === "all" || (logFilter === "webhook" ? log.event_type === "webhook_status" : log.event_type !== "webhook_status")), [apiLogs, logFilter]);
+  const filteredLogs = useMemo(() => apiLogs.filter((log) => {
+    if (logFilter !== "all" && (logFilter === "webhook" ? log.event_type !== "webhook_status" : log.event_type === "webhook_status")) return false;
+    const needle = logSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return [log.order_id, log.livreur_id, log.event_type, log.status, log.message, JSON.stringify(log.details ?? {})].some((value) => String(value ?? "").toLowerCase().includes(needle));
+  }), [apiLogs, logFilter, logSearch]);
   const activeSettings = useMemo(() => {
     if (!editing) return null;
     const current = settings[editing.id] ?? defaultSettings(editing.id);
@@ -364,7 +370,7 @@ const AdminLivreurs = () => {
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
-      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(200),
+      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(1000),
       db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle(),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
