@@ -629,6 +629,9 @@ const AdminLivreurs = () => {
                 <div><Label>Webhook tracking field</Label><Input value={settingsForm.webhook_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_tracking_field: e.target.value })} /><FieldHelp>Field name that contains the tracking number in the webhook body.</FieldHelp></div>
                 <div><Label>Webhook driver name field</Label><Input value={settingsForm.webhook_driver_name_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_driver_name_field: e.target.value })} /><FieldHelp>Path used to capture the driver name shown in order details.</FieldHelp></div>
                 <div><Label>Webhook driver phone field</Label><Input value={settingsForm.webhook_driver_phone_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_driver_phone_field: e.target.value })} /><FieldHelp>Path used to capture the driver phone shown in order details.</FieldHelp></div>
+                <div><Label>Webhook note field</Label><Input value={settingsForm.webhook_note_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_note_field: e.target.value })} /><FieldHelp>Path used to capture the delivery note.</FieldHelp></div>
+                <div><Label>Webhook date Reporté field</Label><Input value={settingsForm.webhook_reported_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_reported_date_field: e.target.value })} /><FieldHelp>Path used to capture postponed delivery date.</FieldHelp></div>
+                <div><Label>Webhook date Programmé field</Label><Input value={settingsForm.webhook_scheduled_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_scheduled_date_field: e.target.value })} /><FieldHelp>Path used to capture scheduled delivery date.</FieldHelp></div>
               </div>
               <KeyValueEditor label="Webhook extra fields" help="Optional values captured from the webhook body for future use. Left side is the saved key, right side is the webhook body path." value={settingsForm.webhook_extra_fields_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, webhook_extra_fields_mapping: value })} keyPlaceholder="Saved key" valuePlaceholder="Webhook path" />
               <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><span>Webhook updates current status</span><Switch checked={settingsForm.webhook_updates_current_status} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, webhook_updates_current_status: v })} /></label>
@@ -648,6 +651,8 @@ const AdminLivreurs = () => {
                 <div><Label>Tracking field</Label><Input value={settingsForm.polling_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_tracking_field: e.target.value })} /></div>
                 <div><Label>Status field</Label><Input value={settingsForm.polling_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_field: e.target.value })} /></div>
                 <div><Label>Message field</Label><Input value={settingsForm.polling_message_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_message_field: e.target.value })} /></div>
+                <div><Label>Date Reporté field</Label><Input value={settingsForm.polling_reported_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_reported_date_field: e.target.value })} /></div>
+                <div><Label>Date Programmé field</Label><Input value={settingsForm.polling_scheduled_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_scheduled_date_field: e.target.value })} /></div>
               </div>
             </Card>
           </div>
