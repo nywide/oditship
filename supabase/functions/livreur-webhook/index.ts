@@ -37,7 +37,7 @@ function maskSensitiveHeaders(headers: Headers | Record<string, unknown>) {
   }));
 }
 
-function webhookEndpointInfo(req: Request, livreurId: string, settings: any) {
+function webhookEndpointInfo(req: Request, livreurId: string | null, settings: any) {
   return {
     type: "Incoming webhook endpoint",
     method: req.method,
@@ -81,6 +81,14 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
     details: entry.details ?? {},
   });
   if (error) console.error("livreur_api_logs insert failed", error.message);
+}
+
+function createAdmin() {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(SUPABASE_URL, SERVICE_ROLE, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 function webhookExchangeDetails(req: Request, livreurId: string, settings: any, payload: any, responseStatus: number, responseBody: Record<string, unknown>, extra: Record<string, unknown> = {}) {
@@ -174,28 +182,27 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
-  }
 
   const url = new URL(req.url);
   const parts = url.pathname.split("/").filter(Boolean);
   const idIdx = parts.findIndex((p) => p === "livreur-webhook");
   const livreurId = idIdx >= 0 ? parts[idIdx + 1] : null;
+  const admin = createAdmin();
+  let payload: any = {};
+  try { payload = await req.json(); } catch { payload = {}; }
+
+  if (req.method !== "POST") {
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Rejected webhook: method not allowed", details: webhookExchangeDetails(req, livreurId, null, payload, 405, { error: "Method not allowed" }, { rejected: true, rejection_reason: "method_not_allowed" }) });
+    return jsonResponse({ error: "Method not allowed" }, 405);
+  }
 
   const auth = req.headers.get("Authorization") ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
 
-  if (!livreurId) return jsonResponse({ error: "Missing livreur id or bearer token" }, 401);
-
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  let payload: any = {};
-  try { payload = await req.json(); } catch { payload = {}; }
+  if (!livreurId) {
+    await logApi(admin, { livreur_id: null, event_type: "webhook_status", status: "failed", message: "Rejected webhook: missing livreur id", details: webhookExchangeDetails(req, null, null, payload, 401, { error: "Missing livreur id" }, { rejected: true, rejection_reason: "missing_livreur_id" }) });
+    return jsonResponse({ error: "Missing livreur id or bearer token" }, 401);
+  }
 
   if (!token) {
     await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Rejected webhook: missing bearer token", details: webhookExchangeDetails(req, livreurId, null, payload, 401, { error: "Missing bearer token" }, { rejected: true, rejection_reason: "missing_bearer_token" }) });
