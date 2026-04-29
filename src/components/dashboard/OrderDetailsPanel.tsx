@@ -71,6 +71,7 @@ const historyKey = (item: HistoryItem) => [
   item.actor?.username ?? item.actor?.full_name ?? "",
 ].join("|");
 const hasMeta = (note?: string | null, reported?: string | null, scheduled?: string | null) => Boolean(note || reported || scheduled);
+const metaValues = (note?: string | null, reported?: string | null, scheduled?: string | null) => [note, reported ? formatDate(reported) : null, scheduled ? formatDate(scheduled) : null].filter(Boolean) as string[];
 
 export const OrderDetailsPanel = ({
   order,
@@ -163,10 +164,10 @@ export const OrderDetailsPanel = ({
               <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">{order.comment}</p>
             )}
             {hasMeta(displayOrder.status_note, displayOrder.postponed_date, displayOrder.scheduled_date) && (
-              <div className="grid gap-2 rounded-lg border border-border p-3 text-sm md:grid-cols-3">
-                <div><p className="text-xs text-muted-foreground">Note</p><p className="font-medium">{displayOrder.status_note || "—"}</p></div>
-                <div><p className="text-xs text-muted-foreground">Date Reporté</p><p className="font-medium">{formatDate(displayOrder.postponed_date)}</p></div>
-                <div><p className="text-xs text-muted-foreground">Date Programmé</p><p className="font-medium">{formatDate(displayOrder.scheduled_date)}</p></div>
+              <div className="flex flex-wrap gap-2 rounded-lg border border-border p-3 text-sm">
+                {metaValues(displayOrder.status_note, displayOrder.postponed_date, displayOrder.scheduled_date).map((value, index) => (
+                  <span key={index} className="rounded-full bg-muted px-3 py-1 font-medium text-muted-foreground">{value}</span>
+                ))}
               </div>
             )}
           </div>
@@ -220,13 +221,9 @@ export const OrderDetailsPanel = ({
               <div className="ml-4 space-y-1">
                 <StatusBadge status={item.status} />
                 <p className="text-sm font-medium">{item.message || `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
-                {hasMeta(item.note, item.reported_date, item.scheduled_date) && (
-                  <div className="grid gap-2 rounded-md bg-muted/50 p-2 text-xs md:grid-cols-3">
-                    <span><strong>Note:</strong> {item.note || "—"}</span>
-                    <span><strong>Date Reporté:</strong> {formatDate(item.reported_date)}</span>
-                    <span><strong>Date Programmé:</strong> {formatDate(item.scheduled_date)}</span>
-                  </div>
-                )}
+                {metaValues(item.note, item.reported_date, item.scheduled_date).map((value, metaIndex) => (
+                  <p key={metaIndex} className="rounded-md bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">{value}</p>
+                ))}
                 <p className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{actorName(item) === "Système" ? vendeurName(data?.vendeur) : actorName(item)}</p>
                 <p className="text-xs text-muted-foreground">{formatDate(item.changed_at)}</p>
               </div>
