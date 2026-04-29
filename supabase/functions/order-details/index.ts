@@ -59,9 +59,9 @@ function parseDateValue(value: unknown) {
 
 function providerMeta(item: any, settings: any) {
   return {
-    note: item?.msg ?? item?.message ?? item?.note ?? null,
-    reported_date: parseDateValue(item?.reportedTo ?? item?.reportedDate ?? item?.reportDate),
-    scheduled_date: parseDateValue(item?.scheduledTo ?? item?.scheduledDate ?? item?.programmedDate),
+    note: getPath(item, settings?.polling_message_field) ?? item?.msg ?? item?.message ?? item?.note ?? null,
+    reported_date: parseDateValue(getPath(item, settings?.polling_reported_date_field) ?? item?.reportedTo ?? item?.reportedDate ?? item?.reportDate),
+    scheduled_date: parseDateValue(getPath(item, settings?.polling_scheduled_date_field) ?? item?.scheduledTo ?? item?.scheduledDate ?? item?.programmedDate),
   };
 }
 
@@ -208,13 +208,11 @@ Deno.serve(async (req) => {
   }
 
   const [{ data: history }, { data: livreur }, { data: vendeur }, { data: settings }, { data: latestWebhookLog }] = await Promise.all([
-    admin.from("order_status_history").select("id, old_status, new_status, changed_at, changed_by, notes").eq("order_id", order.id).order("changed_at", { ascending: true }),
-    order.assigned_livreur_id
-      ? admin.from("profiles").select("id, full_name, username, phone").eq("id", order.assigned_livreur_id).maybeSingle()
-      : Promise.resolve({ data: null }),
+    admin.from("order_status_history").select("id, old_status, new_status, changed_at, changed_by, notes, provider_note, reported_date, scheduled_date").eq("order_id", order.id).order("changed_at", { ascending: true }),
+    Promise.resolve({ data: null }),
     admin.from("profiles").select("id, full_name, username, company_name, phone").eq("id", order.vendeur_id).maybeSingle(),
     order.assigned_livreur_id
-      ? admin.from("livreur_api_settings").select("status_mapping, webhook_updates_current_status").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
+      ? admin.from("livreur_api_settings").select("status_mapping, webhook_updates_current_status, polling_message_field, polling_reported_date_field, polling_scheduled_date_field").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
       : Promise.resolve({ data: null }),
     admin.from("livreur_api_logs").select("details").eq("order_id", order.id).eq("event_type", "webhook_status").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
