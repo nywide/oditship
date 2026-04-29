@@ -91,7 +91,7 @@ function createAdmin() {
   });
 }
 
-function webhookExchangeDetails(req: Request, livreurId: string, settings: any, payload: any, responseStatus: number, responseBody: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+function webhookExchangeDetails(req: Request, livreurId: string | null, settings: any, payload: any, responseStatus: number, responseBody: Record<string, unknown>, extra: Record<string, unknown> = {}) {
   return {
     endpoint: webhookEndpointInfo(req, livreurId, settings),
     reception: {
