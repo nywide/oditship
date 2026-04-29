@@ -591,16 +591,21 @@ const AdminLivreurs = () => {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold">Driver API logs</h3>
-            <p className="text-sm text-muted-foreground">Internal errors and provider responses for package creation.</p>
+            <p className="text-sm text-muted-foreground">Webhook, polling, package creation, and provider responses with full details.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Auto clean</label>
+            <Input type="number" min={1} className="h-9 w-24" value={retention.days} onChange={(e) => setRetention({ ...retention, days: Number(e.target.value) })} />
+            <Button variant="outline" size="sm" onClick={saveRetention}>Save cleanup</Button>
+            <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
+          </div>
         </div>
         <Table>
-          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead><TableHead className="text-right">Details</TableHead></TableRow></TableHeader>
           <TableBody>
-            {apiLogs.length === 0 ? <TableRow><TableCell colSpan={6} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : apiLogs.map((log) => {
+            {apiLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : apiLogs.map((log) => {
               const livreur = livreurs.find((item) => item.id === log.livreur_id);
-              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}</TableCell><TableCell><Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell></TableRow>;
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}</TableCell><TableCell><Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
             })}
           </TableBody>
         </Table>
