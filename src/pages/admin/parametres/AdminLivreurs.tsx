@@ -31,6 +31,9 @@ interface LivreurApiSettings {
   webhook_tracking_field: string;
   webhook_driver_name_field: string;
   webhook_driver_phone_field: string;
+  webhook_note_field: string;
+  webhook_reported_date_field: string;
+  webhook_scheduled_date_field: string;
   webhook_extra_fields_mapping: Record<string, string>;
   polling_enabled: boolean;
   polling_interval_minutes: number;
@@ -41,6 +44,8 @@ interface LivreurApiSettings {
   polling_tracking_field: string;
   polling_status_field: string;
   polling_message_field: string;
+  polling_reported_date_field: string;
+  polling_scheduled_date_field: string;
   rate_limit_per_second: number;
   is_active: boolean;
 }
@@ -97,6 +102,9 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   webhook_tracking_field: "trackingID",
   webhook_driver_name_field: "transport.currentDriverName",
   webhook_driver_phone_field: "transport.currentDriverPhone",
+  webhook_note_field: "note",
+  webhook_reported_date_field: "reportedDate",
+  webhook_scheduled_date_field: "scheduledDate",
   webhook_extra_fields_mapping: {},
   polling_enabled: false,
   polling_interval_minutes: 15,
@@ -107,6 +115,8 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   polling_tracking_field: "trackingID",
   polling_status_field: "status",
   polling_message_field: "message",
+  polling_reported_date_field: "reportedDate",
+  polling_scheduled_date_field: "scheduledDate",
   rate_limit_per_second: 5,
   is_active: true,
 });
