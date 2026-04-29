@@ -243,9 +243,9 @@ Deno.serve(async (req) => {
   const latestProviderEvent = latestMappedProviderEvent(apiHistory, statusMapping);
   if (settings?.webhook_updates_current_status === true && order.assigned_livreur_id && latestProviderEvent) {
     try {
-      currentOrder = await syncCurrentStatusFromProvider(admin, order, latestProviderEvent, order.assigned_livreur_id);
+      currentOrder = await syncCurrentStatusFromProvider(admin, order, latestProviderEvent, order.assigned_livreur_id, settings);
     } catch (e) {
-      packageError = e instanceof Error ? e.message : "Synchronisation du statut indisponible";
+      packageError = "Tracking externe indisponible";
     }
   }
   const visibleDbHistory = removeSystemDuplicates(history ?? []);
@@ -256,17 +256,25 @@ Deno.serve(async (req) => {
       status: h.new_status,
       old_status: h.old_status,
       message: h.notes,
+      note: h.provider_note ?? h.notes ?? null,
+      reported_date: h.reported_date ?? null,
+      scheduled_date: h.scheduled_date ?? null,
       changed_at: h.changed_at,
       actor: h.changed_by ? actors[h.changed_by] ?? null : null,
     })),
-    ...apiHistory.filter((h: any) => mapProviderStatus(h.status, statusMapping) && !isApiCreatedConfirmed(mapProviderStatus(h.status, statusMapping), h.msg)).map((h: any) => ({
-      source: "olivraison",
-      status: mapProviderStatus(h.status, statusMapping),
-      message: h.msg,
-      changed_at: h.updateAt,
-      actor: h.user ? { username: h.user } : null,
-      reported_to: h.reportedTo ?? null,
-    })),
+    ...apiHistory.filter((h: any) => mapProviderStatus(h.status, statusMapping) && !isApiCreatedConfirmed(mapProviderStatus(h.status, statusMapping), h.msg)).map((h: any) => {
+      const meta = providerMeta(h, settings);
+      return {
+        source: "provider",
+        status: mapProviderStatus(h.status, statusMapping),
+        message: meta.note,
+        note: meta.note,
+        reported_date: meta.reported_date,
+        scheduled_date: meta.scheduled_date,
+        changed_at: h.updateAt,
+        actor: h.user ? { username: h.user } : null,
+      };
+    }),
   ]
     .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
     .filter((item: any) => {
@@ -281,8 +289,8 @@ Deno.serve(async (req) => {
     tracking,
     vendeur,
     livreur: {
-      name: packageDetails?.transport?.currentDriverName || latestWebhookLog?.details?.driver_name || livreur?.full_name || livreur?.username || null,
-      phone: packageDetails?.transport?.currentDriverPhone || latestWebhookLog?.details?.driver_phone || livreur?.phone || null,
+      name: latestWebhookLog?.details?.driver_name || null,
+      phone: latestWebhookLog?.details?.driver_phone || null,
     },
     support: null,
     destination: packageDetails?.destination ?? null,
