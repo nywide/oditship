@@ -188,6 +188,18 @@ const parseJsonArray = (label: string, value: string) => {
   }
 };
 
+const maskSensitiveValue = (key: string, value: unknown) => {
+  const name = key.toLowerCase();
+  if (name.includes("authorization") || name.includes("token") || name.includes("secret") || name.includes("key")) {
+    const text = String(value ?? "");
+    return text ? `${text.slice(0, 8)}••••${text.slice(-4)}` : "••••";
+  }
+  return value;
+};
+
+const maskSensitiveHeaders = (headers: Record<string, unknown> = {}) =>
+  Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, maskSensitiveValue(key, value)]));
+
 const FieldHelp = ({ children }: { children: string }) => (
   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{children}</p>
 );
@@ -513,6 +525,52 @@ const AdminLivreurs = () => {
   };
 
   const masked = (t: string | null) => t ? `${t.slice(0, 6)}${"•".repeat(20)}${t.slice(-4)}` : "—";
+  const getLogEndpointInfo = (log: typeof apiLogs[number]) => {
+    const details = log.details ?? {};
+    if ((details as any).endpoint) return (details as any).endpoint;
+    const logSettings = log.livreur_id ? settings[log.livreur_id] : null;
+    if (log.event_type === "webhook_status") {
+      return {
+        type: "Incoming webhook endpoint",
+        method: "POST",
+        url: log.livreur_id ? `${window.location.origin}/functions/v1/livreur-webhook/${log.livreur_id}` : null,
+        auth: "Bearer token required",
+        tracking_field: logSettings?.webhook_tracking_field ?? "trackingID",
+        status_field: logSettings?.webhook_status_field ?? "status",
+        note_field: logSettings?.webhook_note_field ?? "note",
+        reported_date_field: logSettings?.webhook_reported_date_field ?? "reportedDate",
+        scheduled_date_field: logSettings?.webhook_scheduled_date_field ?? "scheduledDate",
+        driver_name_field: logSettings?.webhook_driver_name_field ?? "transport.currentDriverName",
+        driver_phone_field: logSettings?.webhook_driver_phone_field ?? "transport.currentDriverPhone",
+        extra_fields_mapping: logSettings?.webhook_extra_fields_mapping ?? {},
+      };
+    }
+    if (log.event_type === "polling_status") {
+      return {
+        type: "Outgoing polling endpoint",
+        method: logSettings?.polling_status_method ?? null,
+        url: logSettings?.polling_status_url ?? null,
+        headers: maskSensitiveHeaders(logSettings?.polling_status_headers ?? {}),
+        payload_mapping: logSettings?.polling_status_payload_mapping ?? {},
+        tracking_field: logSettings?.polling_tracking_field ?? null,
+        status_field: logSettings?.polling_status_field ?? null,
+        message_field: logSettings?.polling_message_field ?? null,
+        reported_date_field: logSettings?.polling_reported_date_field ?? null,
+        scheduled_date_field: logSettings?.polling_scheduled_date_field ?? null,
+      };
+    }
+    const livreur = log.livreur_id ? livreurs.find((item) => item.id === log.livreur_id) : null;
+    const config = (livreur?.create_package_config as any) ?? {};
+    return {
+      type: "Outgoing create package endpoint",
+      method: config.method ?? logSettings?.create_package_method ?? null,
+      url: config.url ?? logSettings?.create_package_url ?? null,
+      headers: maskSensitiveHeaders(config.headers ?? logSettings?.create_package_headers ?? {}),
+      payload_mapping: config.payload_mapping ?? logSettings?.create_package_mapping ?? {},
+      response_tracking_path: config.response_tracking_path ?? (details as any).tracking_path ?? "trackingID",
+      extra_operations: config.operations ?? logSettings?.api_operations ?? [],
+    };
+  };
 
   return (
     <>
@@ -627,6 +685,7 @@ const AdminLivreurs = () => {
                 <div><Label>Status</Label><p className="rounded-md bg-muted p-2">{selectedLog.status}</p></div>
               </div>
               <div><Label>Message</Label><p className="rounded-md bg-muted p-2">{selectedLog.message ?? "—"}</p></div>
+              <div><Label>Endpoint details</Label><pre className="max-h-[32vh] overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(getLogEndpointInfo(selectedLog), null, 2)}</pre></div>
               <div><Label>Details</Label><pre className="max-h-[45vh] overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(selectedLog.details ?? {}, null, 2)}</pre></div>
             </div>
           )}
