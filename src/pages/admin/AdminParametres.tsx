@@ -3,11 +3,20 @@ import AdminCities from "./parametres/AdminCities";
 import AdminHubs from "./parametres/AdminHubs";
 import AdminLivreurs from "./parametres/AdminLivreurs";
 import AdminSticker from "./parametres/AdminSticker";
+import { useEffect, useState } from "react";
 
-const AdminParametres = () => (
-  <div className="space-y-4">
+const PARAMETRES_TAB_KEY = "odit-admin-parametres-tab";
+
+const AdminParametres = () => {
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem(PARAMETRES_TAB_KEY) || "cities");
+
+  useEffect(() => {
+    localStorage.setItem(PARAMETRES_TAB_KEY, activeTab);
+  }, [activeTab]);
+
+  return <div className="space-y-4">
     <h2 className="text-2xl font-bold">Paramètres</h2>
-    <Tabs defaultValue="cities">
+    <Tabs value={activeTab} onValueChange={setActiveTab}>
       <TabsList>
         <TabsTrigger value="cities">Villes</TabsTrigger>
         <TabsTrigger value="hubs">Hubs</TabsTrigger>
@@ -19,7 +28,7 @@ const AdminParametres = () => (
       <TabsContent value="livreurs" className="mt-4"><AdminLivreurs /></TabsContent>
       <TabsContent value="sticker" className="mt-4"><AdminSticker /></TabsContent>
     </Tabs>
-  </div>
-);
+  </div>;
+};
 
 export default AdminParametres;
