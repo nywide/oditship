@@ -52,6 +52,7 @@ interface LivreurApiSettings {
 }
 
 const db = supabase as any;
+const functionsBaseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   livreur_id: livreurId,
@@ -539,7 +540,7 @@ const AdminLivreurs = () => {
       return {
         type: "Incoming webhook endpoint",
         method: "POST",
-        url: log.livreur_id ? `${window.location.origin}/functions/v1/livreur-webhook/${log.livreur_id}` : null,
+        url: log.livreur_id ? `${functionsBaseUrl}/livreur-webhook/${log.livreur_id}` : null,
         auth: "Bearer token required",
         tracking_field: logSettings?.webhook_tracking_field ?? "trackingID",
         status_field: logSettings?.webhook_status_field ?? "status",
@@ -762,7 +763,7 @@ const AdminLivreurs = () => {
               <SectionHeader icon={Webhook} title="Validation & webhook" description="Rules checked before sending, plus status mapping for incoming webhook updates." />
               <KeyValueEditor label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value. Values can be plain text, numbers, true/false, or small JSON objects." value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} keyPlaceholder="Order field" valuePlaceholder='Rule, e.g. {"min_alnum":3}' primitiveValues />
               <KeyValueEditor label="Status mapping" help="Left side is the provider status. Right side is the internal status used in this app." value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
-              <div><Label>Webhook URL</Label><Input readOnly value={editing ? `${window.location.origin}/functions/v1/livreur-webhook/${editing.id}` : ""} /><FieldHelp>Give this URL to the provider with this driver's API token as a Bearer token.</FieldHelp></div>
+              <div><Label>Webhook URL</Label><Input readOnly value={editing ? `${functionsBaseUrl}/livreur-webhook/${editing.id}` : ""} /><FieldHelp>Give this URL to the provider with this driver's API token as a Bearer token.</FieldHelp></div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div><Label>Webhook status field</Label><Input value={settingsForm.webhook_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_status_field: e.target.value })} /><FieldHelp>Field name that contains the provider status in the webhook body.</FieldHelp></div>
                 <div><Label>Webhook tracking field</Label><Input value={settingsForm.webhook_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_tracking_field: e.target.value })} /><FieldHelp>Field name that contains the tracking number in the webhook body.</FieldHelp></div>
