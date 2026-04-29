@@ -25,6 +25,24 @@ function buildCapturedFields(payload: any, mapping: Record<string, string>) {
   );
 }
 
+function webhookEndpointInfo(req: Request, livreurId: string, settings: any) {
+  return {
+    type: "Incoming webhook endpoint",
+    method: req.method,
+    url: req.url,
+    auth: "Bearer token required",
+    tracking_field: settings?.webhook_tracking_field || "trackingID",
+    status_field: settings?.webhook_status_field || "status",
+    note_field: settings?.webhook_note_field || "note",
+    reported_date_field: settings?.webhook_reported_date_field || "reportedDate",
+    scheduled_date_field: settings?.webhook_scheduled_date_field || "scheduledDate",
+    driver_name_field: settings?.webhook_driver_name_field || "transport.currentDriverName",
+    driver_phone_field: settings?.webhook_driver_phone_field || "transport.currentDriverPhone",
+    extra_fields_mapping: settings?.webhook_extra_fields_mapping ?? {},
+    livreur_id: livreurId,
+  };
+}
+
 function parseDateValue(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
   const date = new Date(String(value));
@@ -172,17 +190,17 @@ Deno.serve(async (req) => {
   const capturedFields = buildCapturedFields(payload, settings?.webhook_extra_fields_mapping ?? {});
 
   if (!tracking || !String(rawStatus ?? "").trim()) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: { trackingField, statusField, payload } });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), trackingField, statusField, payload } });
     return jsonResponse({ error: "Webhook requires tracking and status" }, 400);
   }
 
   if (!settings || settings.is_active === false) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "API settings disabled", details: { tracking, raw_status: rawStatus } });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "API settings disabled", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus } });
     return jsonResponse({ ok: true, ignored: true, reason: "settings_disabled" });
   }
 
   if (!mappedStatus) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Provider status is not mapped", details: { tracking, raw_status: rawStatus, status_mapping: settings?.status_mapping ?? {} } });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Provider status is not mapped", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus, status_mapping: settings?.status_mapping ?? {} } });
     return jsonResponse({ ok: true, ignored: true, reason: "status_not_mapped" });
   }
 
@@ -205,7 +223,7 @@ Deno.serve(async (req) => {
     if (duplicate) {
       await admin.from("order_status_history").update({ notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate }).eq("id", duplicate.id);
       await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
-      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status updated with latest metadata", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status updated with latest metadata", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
       return jsonResponse({ ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus });
     }
     await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
@@ -225,7 +243,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { endpoint: webhookEndpointInfo(req, livreurId, settings), tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
 
   return jsonResponse({ ok: true, order_id: order.id, status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status });
 });
