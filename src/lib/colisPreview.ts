@@ -1,4 +1,4 @@
-export type ColisPreviewLocation = "main" | "details" | "timeline";
+export type ColisPreviewLocation = "main" | "details" | "timeline" | "actions" | "invoice" | "courier" | "support" | "qr";
 
 export interface ColisPreviewField {
   key: string;
@@ -14,6 +14,20 @@ export interface ColisPreviewSection {
   useCustomHtml: boolean;
   html: string;
   css: string;
+  layout: "stack" | "inline" | "grid";
+  backgroundSource: "none" | "status" | "city" | "seller" | "courier" | "support" | "tracking";
+  icon: "package" | "truck" | "bike" | "invoice" | "support" | "qr" | "map" | "user" | "none";
+  buttonPlacement: "right" | "left" | "bottom" | "hidden";
+  qrPlacement: "right" | "left" | "top" | "bottom" | "hidden";
+  style: {
+    background: string;
+    foreground: string;
+    accent: string;
+    border: string;
+    radius: number;
+    padding: number;
+    gap: number;
+  };
 }
 
 export type ColisPreviewSettings = Record<ColisPreviewLocation, ColisPreviewSection>;
@@ -42,7 +56,31 @@ export const colisPreviewFieldOptions = [
   { key: "history_message", label: "Activity message" },
   { key: "history_actor", label: "Activity actor" },
   { key: "history_date", label: "Activity date" },
+  { key: "invoice_label", label: "Invoice label" },
+  { key: "invoice_status", label: "Invoice status" },
+  { key: "courier_name", label: "Courier name" },
+  { key: "courier_phone", label: "Courier phone" },
+  { key: "support_name", label: "Support name" },
+  { key: "support_phone", label: "Support phone" },
+  { key: "qr_value", label: "QR value" },
 ] as const;
+
+const baseStyle = {
+  layout: "stack" as const,
+  backgroundSource: "none" as const,
+  icon: "package" as const,
+  buttonPlacement: "right" as const,
+  qrPlacement: "right" as const,
+  style: {
+    background: "hsl(var(--card))",
+    foreground: "hsl(var(--foreground))",
+    accent: "hsl(var(--primary))",
+    border: "hsl(var(--border))",
+    radius: 8,
+    padding: 12,
+    gap: 8,
+  },
+};
 
 const fields = (keys: string[], slot: ColisPreviewField["slot"] = "secondary") => keys.map((key, index) => ({
   key,
@@ -55,6 +93,7 @@ const fields = (keys: string[], slot: ColisPreviewField["slot"] = "secondary") =
 export const defaultColisPreviewSettings: ColisPreviewSettings = {
   main: {
     title: "Main order row",
+    ...baseStyle,
     fields: [
       ...fields(["customer_name"], "primary"),
       ...fields(["product_name", "customer_phone", "customer_city", "order_value", "status", "tracking"], "secondary"),
@@ -66,6 +105,7 @@ export const defaultColisPreviewSettings: ColisPreviewSettings = {
   },
   details: {
     title: "Order details",
+    ...baseStyle,
     fields: fields(["order_value", "customer_city", "comment", "status_note", "postponed_date", "scheduled_date", "livreur", "support", "tracking"], "secondary"),
     useCustomHtml: false,
     html: `<div class="details-grid"><div>{{order_value}}</div><div>{{customer_city}}</div><div>{{tracking}}</div></div>`,
@@ -73,10 +113,59 @@ export const defaultColisPreviewSettings: ColisPreviewSettings = {
   },
   timeline: {
     title: "Activity chronology",
+    ...baseStyle,
+    icon: "truck",
     fields: fields(["history_status", "history_message", "status_note", "postponed_date", "scheduled_date", "history_actor", "history_date"], "secondary"),
     useCustomHtml: false,
     html: `<div class="activity-item"><strong>{{history_status}}</strong><span>{{history_message}}</span><small>{{history_actor}} · {{history_date}}</small></div>`,
     css: `.activity-item{display:flex;flex-direction:column;gap:4px}.activity-item strong{font-weight:800}`,
+  },
+  actions: {
+    title: "Actions area",
+    ...baseStyle,
+    icon: "package",
+    buttonPlacement: "right",
+    fields: fields(["invoice_label", "invoice_status", "courier_name", "courier_phone", "support_name", "support_phone"], "secondary"),
+    useCustomHtml: false,
+    html: `<div class="actions-box"><strong>{{invoice_label}}</strong><span>{{invoice_status}}</span><small>{{courier_name}} · {{support_name}}</small></div>`,
+    css: `.actions-box{display:flex;flex-direction:column;gap:4px}`,
+  },
+  invoice: {
+    title: "Invoice block",
+    ...baseStyle,
+    icon: "invoice",
+    fields: fields(["invoice_label", "invoice_status", "order_value", "tracking"], "secondary"),
+    useCustomHtml: false,
+    html: `<div class="invoice-box"><strong>{{invoice_label}}</strong><span>{{invoice_status}}</span><small>{{order_value}} · {{tracking}}</small></div>`,
+    css: `.invoice-box{display:flex;flex-direction:column;gap:4px}`,
+  },
+  courier: {
+    title: "Courier info",
+    ...baseStyle,
+    icon: "bike",
+    fields: fields(["courier_name", "courier_phone", "livreur", "status"], "secondary"),
+    useCustomHtml: false,
+    html: `<div class="courier-box"><strong>{{courier_name}}</strong><span>{{courier_phone}}</span><small>{{status}}</small></div>`,
+    css: `.courier-box{display:flex;flex-direction:column;gap:4px}`,
+  },
+  support: {
+    title: "Support info",
+    ...baseStyle,
+    icon: "support",
+    fields: fields(["support_name", "support_phone", "support"], "secondary"),
+    useCustomHtml: false,
+    html: `<div class="support-box"><strong>{{support_name}}</strong><span>{{support_phone}}</span></div>`,
+    css: `.support-box{display:flex;flex-direction:column;gap:4px}`,
+  },
+  qr: {
+    title: "QR block",
+    ...baseStyle,
+    icon: "qr",
+    qrPlacement: "right",
+    fields: fields(["qr_value", "tracking", "external_tracking_number"], "secondary"),
+    useCustomHtml: false,
+    html: `<div class="qr-box"><strong>{{qr_value}}</strong><small>{{tracking}}</small></div>`,
+    css: `.qr-box{display:flex;flex-direction:column;gap:4px;align-items:center}`,
   },
 };
 
@@ -93,6 +182,12 @@ export const normalizeColisPreviewSettings = (value: unknown): ColisPreviewSetti
       useCustomHtml: Boolean(current.useCustomHtml),
       html: typeof current.html === "string" ? current.html : defaults.html,
       css: typeof current.css === "string" ? current.css : defaults.css,
+      layout: ["stack", "inline", "grid"].includes(String(current.layout)) ? current.layout : defaults.layout,
+      backgroundSource: ["none", "status", "city", "seller", "courier", "support", "tracking"].includes(String(current.backgroundSource)) ? current.backgroundSource : defaults.backgroundSource,
+      icon: ["package", "truck", "bike", "invoice", "support", "qr", "map", "user", "none"].includes(String(current.icon)) ? current.icon : defaults.icon,
+      buttonPlacement: ["right", "left", "bottom", "hidden"].includes(String(current.buttonPlacement)) ? current.buttonPlacement : defaults.buttonPlacement,
+      qrPlacement: ["right", "left", "top", "bottom", "hidden"].includes(String(current.qrPlacement)) ? current.qrPlacement : defaults.qrPlacement,
+      style: { ...defaults.style, ...(current.style && typeof current.style === "object" ? current.style : {}) },
     };
     return acc;
   }, {} as ColisPreviewSettings);
