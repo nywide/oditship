@@ -228,6 +228,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, mode: "not_required", message: "External API not required for this driver.", tracking_number: trackingNumber });
   }
 
+  let lastEndpoint: JsonRecord | null = null;
   try {
     const settings = legacySettings?.is_active === false ? null : legacySettings;
     validateOrder(order, settings?.validation_rules ?? {});
@@ -239,6 +240,7 @@ Deno.serve(async (req) => {
     const context = { order, token: authResult.token, auth: authResult.auth };
     if (authResult.token && authConfig?.token_header) createConfig.headers = { ...(createConfig.headers ?? {}), [authConfig.token_header]: `${authConfig.token_prefix ?? "Bearer "}{{token}}` };
     const endpoint = createEndpointInfo(createConfig, createConfig.payload ? renderObject(createConfig.payload, context) : buildMappedPayload(order, createConfig.payload_mapping ?? {}, context));
+    lastEndpoint = endpoint;
 
     const delayMs = Math.ceil(1000 / Math.max(Number(settings?.rate_limit_per_second) || Number(createConfig.rate_limit_per_second) || 5, 0.1));
     const result = await sendRequest(createConfig, order, context);
@@ -260,7 +262,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown delivery API error";
     await admin.from("orders").update({ api_sync_status: "failed", api_sync_error: message }).eq("id", order.id);
-    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "create_package", status: "failed", message, details: { customer_city: order.customer_city } });
+    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "create_package", status: "failed", message, details: { endpoint: lastEndpoint, customer_city: order.customer_city } });
     return jsonResponse({ error: "Commande refusée par les règles ou l'API du livreur. Contactez l'administration." }, 502);
   }
 });
