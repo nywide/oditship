@@ -185,10 +185,15 @@ Deno.serve(async (req) => {
           await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
           continue;
         }
-        if (mappedStatus === order.status) continue;
         const message = getPath(body, settings.polling_message_field) ?? null;
         const reportedDate = parseDateValue(getPath(body, settings.polling_reported_date_field || "reportedDate"));
         const scheduledDate = parseDateValue(getPath(body, settings.polling_scheduled_date_field || "scheduledDate"));
+        if (mappedStatus === order.status) {
+          const duplicate = await latestDuplicate(admin, order.id, mappedStatus, settings.livreur_id);
+          await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
+          if (duplicate) await admin.from("order_status_history").update({ notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate }).eq("id", duplicate.id);
+          continue;
+        }
         const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, { note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
         if (updateError) {
           await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
