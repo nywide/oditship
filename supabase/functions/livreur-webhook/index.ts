@@ -186,9 +186,7 @@ Deno.serve(async (req) => {
   const auth = req.headers.get("Authorization") ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
 
-  if (!livreurId || !token) {
-    return jsonResponse({ error: "Missing livreur id or bearer token" }, 401);
-  }
+  if (!livreurId) return jsonResponse({ error: "Missing livreur id or bearer token" }, 401);
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -196,13 +194,18 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  let payload: any = {};
+  try { payload = await req.json(); } catch { payload = {}; }
+
+  if (!token) {
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Rejected webhook: missing bearer token", details: webhookExchangeDetails(req, livreurId, null, payload, 401, { error: "Missing bearer token" }, { rejected: true, rejection_reason: "missing_bearer_token" }) });
+    return jsonResponse({ error: "Missing livreur id or bearer token" }, 401);
+  }
+
   const [{ data: profile }, { data: settings }] = await Promise.all([
     admin.from("profiles").select("id, api_token, api_enabled").eq("id", livreurId).maybeSingle(),
     admin.from("livreur_api_settings").select("*").eq("livreur_id", livreurId).maybeSingle(),
   ]);
-
-  let payload: any = {};
-  try { payload = await req.json(); } catch { payload = {}; }
 
   if (!profile || profile.api_token !== token) {
     await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Rejected webhook: invalid credentials", details: webhookExchangeDetails(req, livreurId, settings, payload, 401, { error: "Invalid credentials" }, { rejected: true, rejection_reason: "invalid_credentials" }) });
