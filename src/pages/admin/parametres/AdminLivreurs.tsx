@@ -671,7 +671,7 @@ const AdminLivreurs = () => {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold">Webhook logs & Driver API logs</h3>
-            <p className="text-sm text-muted-foreground">Webhook, polling, package creation, and provider responses with full details.</p>
+            <p className="text-sm text-muted-foreground">Showing latest {apiLogs.length} receptions, rejections, polling checks, and provider responses with full details.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Input className="h-9 w-64" placeholder="Search order, tracking, status..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
@@ -683,12 +683,12 @@ const AdminLivreurs = () => {
           </div>
         </div>
         <Table>
-          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead><TableHead className="text-right">Details</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Tracking</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead><TableHead className="text-right">Details</TableHead></TableRow></TableHeader>
           <TableBody>
-            {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : filteredLogs.map((log) => {
+            {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={8} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : filteredLogs.map((log) => {
               const livreur = livreurs.find((item) => item.id === log.livreur_id);
               const flow = getLogFlowDetails(log);
-              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}<div className="mt-1 flex flex-wrap gap-1"><Badge variant="outline">Reception {flow.reception ? "✓" : "—"}</Badge><Badge variant="outline">Sending {flow.sending ? "✓" : "—"}</Badge></div></TableCell><TableCell><Badge variant={log.status === "success" || log.status === "received" ? "default" : log.status === "ignored" ? "secondary" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell className="font-mono text-xs">{getLogTracking(log)}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}<div className="mt-1 flex flex-wrap gap-1"><Badge variant="outline">Reception {flow.reception ? "✓" : "—"}</Badge><Badge variant="outline">Sending {flow.sending ? "✓" : "—"}</Badge></div></TableCell><TableCell><Badge variant={log.status === "success" || log.status === "received" ? "default" : log.status === "ignored" ? "secondary" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
             })}
           </TableBody>
         </Table>
