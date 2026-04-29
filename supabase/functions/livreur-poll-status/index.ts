@@ -211,10 +211,7 @@ Deno.serve(async (req) => {
   for (const settings of settingsRows ?? []) {
     const lastRun = settings.polling_last_run_at ? new Date(settings.polling_last_run_at).getTime() : 0;
     const intervalMs = Math.max(Number(settings.polling_interval_minutes) || 15, 1) * 60_000;
-    if (lastRun && now - lastRun < intervalMs) {
-      await logApi(admin, { livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling skipped: interval not reached", details: { rejection_reason: "interval_not_reached", last_run_at: settings.polling_last_run_at, interval_minutes: settings.polling_interval_minutes, next_run_at: new Date(lastRun + intervalMs).toISOString() } });
-      continue;
-    }
+    if (lastRun && now - lastRun < intervalMs) continue;
 
     const { data: orders } = await admin
       .from("orders")
