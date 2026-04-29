@@ -64,6 +64,31 @@ function buildMappedPayload(order: JsonRecord, mapping: JsonRecord, context: Jso
   return payload;
 }
 
+function maskSensitiveHeaders(headers: JsonRecord = {}) {
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => {
+    const name = key.toLowerCase();
+    if (name.includes("authorization") || name.includes("token") || name.includes("secret") || name.includes("key")) {
+      const text = String(value ?? "");
+      return [key, text ? `${text.slice(0, 8)}••••${text.slice(-4)}` : "••••"];
+    }
+    return [key, value];
+  }));
+}
+
+function createEndpointInfo(config: JsonRecord, payload: JsonRecord, label = "Create package") {
+  return {
+    type: "Outgoing create package endpoint",
+    label,
+    method: String(config.method || "POST").toUpperCase(),
+    url: config.url ?? null,
+    headers: maskSensitiveHeaders(config.headers ?? {}),
+    payload,
+    payload_mapping: config.payload_mapping ?? {},
+    response_tracking_path: config.response_tracking_path || config.tracking_path || "trackingID",
+    extra_operations: config.operations ?? [],
+  };
+}
+
 function alnumCount(value: unknown) {
   return String(value ?? "").replace(/[^\p{L}\p{N}]/gu, "").length;
 }
@@ -203,6 +228,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, mode: "not_required", message: "External API not required for this driver.", tracking_number: trackingNumber });
   }
 
+  let lastEndpoint: JsonRecord | null = null;
   try {
     const settings = legacySettings?.is_active === false ? null : legacySettings;
     validateOrder(order, settings?.validation_rules ?? {});
@@ -213,6 +239,8 @@ Deno.serve(async (req) => {
     const authResult = await authenticate(order, authConfig);
     const context = { order, token: authResult.token, auth: authResult.auth };
     if (authResult.token && authConfig?.token_header) createConfig.headers = { ...(createConfig.headers ?? {}), [authConfig.token_header]: `${authConfig.token_prefix ?? "Bearer "}{{token}}` };
+    const endpoint = createEndpointInfo(createConfig, createConfig.payload ? renderObject(createConfig.payload, context) : buildMappedPayload(order, createConfig.payload_mapping ?? {}, context));
+    lastEndpoint = endpoint;
 
     const delayMs = Math.ceil(1000 / Math.max(Number(settings?.rate_limit_per_second) || Number(createConfig.rate_limit_per_second) || 5, 0.1));
     const result = await sendRequest(createConfig, order, context);
@@ -228,13 +256,13 @@ Deno.serve(async (req) => {
 
     const { error } = await admin.from("orders").update({ external_tracking_number: String(tracking), status: "Pickup", assigned_livreur_id: livreur.id, hub_id: hubCity.hub_id, api_sync_status: "success", api_sync_error: null }).eq("id", order.id);
     if (error) return jsonResponse({ error: `Provider succeeded but database update failed: ${error.message}`, tracking_id: String(tracking) }, 500);
-    await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: `Tracking ${String(tracking)}`, details: { tracking_path: trackingPath } });
+    await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: `Tracking ${String(tracking)}`, details: { endpoint, tracking_path: trackingPath } });
 
     return jsonResponse({ ok: true, mode: "external_api", tracking_id: String(tracking) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown delivery API error";
     await admin.from("orders").update({ api_sync_status: "failed", api_sync_error: message }).eq("id", order.id);
-    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "create_package", status: "failed", message, details: { customer_city: order.customer_city } });
+    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "create_package", status: "failed", message, details: { endpoint: lastEndpoint, customer_city: order.customer_city } });
     return jsonResponse({ error: "Commande refusée par les règles ou l'API du livreur. Contactez l'administration." }, 502);
   }
 });
