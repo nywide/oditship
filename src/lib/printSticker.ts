@@ -23,12 +23,15 @@ export interface StickerOrder {
   seller_affiliation_code?: string | null;
   seller_bank_account_name?: string | null;
   seller_bank_account_number?: string | null;
+  hub_id?: number | null;
+  hub_name?: string | null;
 }
 
 export type StickerElementType = "field" | "text" | "line" | "image" | "emoji" | "qr" | "barcode" | "html";
 export type StickerSystemField =
   | "tracking" | "customer_name" | "customer_phone" | "customer_city" | "customer_address"
   | "product_name" | "order_value" | "open_package" | "comment" | "created_at" | "order_id"
+  | "hub"
   | "seller_username" | "seller_full_name" | "seller_company_name" | "seller_phone" | "seller_cin"
   | "seller_affiliation_code" | "seller_bank_account_name" | "seller_bank_account_number";
 
@@ -74,6 +77,7 @@ export const stickerSystemFields: { value: StickerSystemField; label: string }[]
   { value: "comment", label: "Comment" },
   { value: "created_at", label: "Date" },
   { value: "order_id", label: "Order ID" },
+  { value: "hub", label: "Hub" },
   { value: "seller_username", label: "Seller username" },
   { value: "seller_full_name", label: "Seller full name" },
   { value: "seller_company_name", label: "Seller company" },
