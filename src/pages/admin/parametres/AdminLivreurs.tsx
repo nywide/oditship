@@ -496,6 +496,19 @@ const AdminLivreurs = () => {
     }
   };
 
+  const saveRetention = async () => {
+    const days = Math.max(Number(retention.days) || 30, 1);
+    const { error } = await db.from("app_settings").upsert({ key: "api_logs_retention", value: { enabled: retention.enabled, days } }, { onConflict: "key" });
+    if (error) toast.error(error.message);
+    else { toast.success("Log cleanup settings saved"); setRetention({ enabled: retention.enabled, days }); }
+  };
+
+  const deleteLog = async (id: number) => {
+    const { error } = await db.from("livreur_api_logs").delete().eq("id", id);
+    if (error) toast.error(error.message);
+    else { toast.success("Log deleted"); setSelectedLog(null); await load(); }
+  };
+
   const masked = (t: string | null) => t ? `${t.slice(0, 6)}${"•".repeat(20)}${t.slice(-4)}` : "—";
 
   return (
