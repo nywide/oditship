@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       cities: {
         Row: {
           created_at: string
@@ -274,6 +295,8 @@ export type Database = {
           polling_interval_minutes: number
           polling_last_run_at: string | null
           polling_message_field: string
+          polling_reported_date_field: string
+          polling_scheduled_date_field: string
           polling_status_field: string
           polling_status_headers: Json
           polling_status_method: string
@@ -287,6 +310,9 @@ export type Database = {
           webhook_driver_name_field: string
           webhook_driver_phone_field: string
           webhook_extra_fields_mapping: Json
+          webhook_note_field: string
+          webhook_reported_date_field: string
+          webhook_scheduled_date_field: string
           webhook_status_field: string
           webhook_tracking_field: string
           webhook_updates_current_status: boolean
@@ -305,6 +331,8 @@ export type Database = {
           polling_interval_minutes?: number
           polling_last_run_at?: string | null
           polling_message_field?: string
+          polling_reported_date_field?: string
+          polling_scheduled_date_field?: string
           polling_status_field?: string
           polling_status_headers?: Json
           polling_status_method?: string
@@ -318,6 +346,9 @@ export type Database = {
           webhook_driver_name_field?: string
           webhook_driver_phone_field?: string
           webhook_extra_fields_mapping?: Json
+          webhook_note_field?: string
+          webhook_reported_date_field?: string
+          webhook_scheduled_date_field?: string
           webhook_status_field?: string
           webhook_tracking_field?: string
           webhook_updates_current_status?: boolean
@@ -336,6 +367,8 @@ export type Database = {
           polling_interval_minutes?: number
           polling_last_run_at?: string | null
           polling_message_field?: string
+          polling_reported_date_field?: string
+          polling_scheduled_date_field?: string
           polling_status_field?: string
           polling_status_headers?: Json
           polling_status_method?: string
@@ -349,6 +382,9 @@ export type Database = {
           webhook_driver_name_field?: string
           webhook_driver_phone_field?: string
           webhook_extra_fields_mapping?: Json
+          webhook_note_field?: string
+          webhook_reported_date_field?: string
+          webhook_scheduled_date_field?: string
           webhook_status_field?: string
           webhook_tracking_field?: string
           webhook_updates_current_status?: boolean
