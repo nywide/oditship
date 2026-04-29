@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { Bike, Download, Headphones, Loader2, MapPin, Package, QrCode, RefreshCw, Truck, UserRound } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
-import { defaultColisPreviewSettings, getColisPreviewValue, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
+import { colisSectionStyle, defaultColisPreviewSettings, getColisPreviewValue, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
 
 interface OrderSummary {
   id: number;
@@ -73,6 +73,7 @@ const historyKey = (item: HistoryItem) => [
 ].join("|");
 const hasMeta = (note?: string | null, reported?: string | null, scheduled?: string | null) => Boolean(note || reported || scheduled);
 const metaValues = (note?: string | null, reported?: string | null, scheduled?: string | null) => [note, reported ? formatDate(reported) : null, scheduled ? formatDate(scheduled) : null].filter(Boolean) as string[];
+const sectionLayoutClass = (layout: string) => layout === "inline" ? "flex flex-wrap items-center" : layout === "grid" ? "grid grid-cols-2" : "flex flex-col";
 
 export const OrderDetailsPanel = ({
   order,
@@ -137,10 +138,17 @@ export const OrderDetailsPanel = ({
     vendeur: vendeurName(data?.vendeur),
     livreur: hasLivreur ? [data?.livreur?.name, data?.livreur?.phone].filter(Boolean).join(" · ") : "",
     support: [data?.support?.name, data?.support?.phone].filter(Boolean).join(" · "),
+    invoice_label: "Facture client",
+    invoice_status: "Disponible après la fin du trajet",
+    courier_name: data?.livreur?.name || "",
+    courier_phone: data?.livreur?.phone || "",
+    support_name: data?.support?.name || "Support ODiT",
+    support_phone: data?.support?.phone || "",
+    qr_value: tracking,
   };
   const renderConfiguredSection = (section: ColisPreviewSettings["details"], itemData: Record<string, unknown>) => {
-    if (section.useCustomHtml) return <div className="rounded-lg border border-border p-3" dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(section.css, itemData)}</style>${renderColisTemplate(section.html, itemData)}`) }} />;
-    return <div className="flex flex-wrap gap-2 rounded-lg border border-border p-3 text-sm">
+    if (section.useCustomHtml) return <div className="rounded-lg border border-border p-3" style={colisSectionStyle(section, itemData)} dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(section.css, itemData)}</style>${renderColisTemplate(section.html, itemData)}`) }} />;
+    return <div className={cn("rounded-lg border border-border text-sm", sectionLayoutClass(section.layout))} style={colisSectionStyle(section, itemData)}>
       {sortedVisibleFields(section).map((field) => {
         const value = getColisPreviewValue(itemData, field.key);
         return value ? <span key={field.key} className={field.slot === "primary" ? "font-semibold" : "rounded-md bg-muted px-3 py-1 font-medium text-muted-foreground"}>{value}</span> : null;
