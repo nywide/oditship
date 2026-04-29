@@ -308,8 +308,14 @@ const AdminLivreurs = () => {
   const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; details: Record<string, unknown>; created_at: string }>>([]);
   const [selectedLog, setSelectedLog] = useState<typeof apiLogs[number] | null>(null);
   const [logFilter, setLogFilter] = useState("all");
+  const [logSearch, setLogSearch] = useState("");
   const [retention, setRetention] = useState({ enabled: false, days: 30 });
-  const filteredLogs = useMemo(() => apiLogs.filter((log) => logFilter === "all" || (logFilter === "webhook" ? log.event_type === "webhook_status" : log.event_type !== "webhook_status")), [apiLogs, logFilter]);
+  const filteredLogs = useMemo(() => apiLogs.filter((log) => {
+    if (logFilter !== "all" && (logFilter === "webhook" ? log.event_type !== "webhook_status" : log.event_type === "webhook_status")) return false;
+    const needle = logSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return [log.order_id, log.livreur_id, log.event_type, log.status, log.message, JSON.stringify(log.details ?? {})].some((value) => String(value ?? "").toLowerCase().includes(needle));
+  }), [apiLogs, logFilter, logSearch]);
   const activeSettings = useMemo(() => {
     if (!editing) return null;
     const current = settings[editing.id] ?? defaultSettings(editing.id);
@@ -364,7 +370,7 @@ const AdminLivreurs = () => {
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
-      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(200),
+      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(1000),
       db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle(),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
@@ -663,6 +669,7 @@ const AdminLivreurs = () => {
             <p className="text-sm text-muted-foreground">Webhook, polling, package creation, and provider responses with full details.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Input className="h-9 w-64" placeholder="Search order, tracking, status..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
             <Select value={logFilter} onValueChange={setLogFilter}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All logs</SelectItem><SelectItem value="webhook">Webhook logs</SelectItem><SelectItem value="driver">Driver API logs</SelectItem></SelectContent></Select>
             <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Auto clean</label>
             <Input type="number" min={1} className="h-9 w-24" value={retention.days} onChange={(e) => setRetention({ ...retention, days: Number(e.target.value) })} />
@@ -676,7 +683,7 @@ const AdminLivreurs = () => {
             {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : filteredLogs.map((log) => {
               const livreur = livreurs.find((item) => item.id === log.livreur_id);
               const flow = getLogFlowDetails(log);
-              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}<div className="mt-1 flex flex-wrap gap-1"><Badge variant="outline">Reception {flow.reception ? "✓" : "—"}</Badge><Badge variant="outline">Sending {flow.sending ? "✓" : "—"}</Badge></div></TableCell><TableCell><Badge variant={log.status === "success" ? "default" : log.status === "ignored" ? "secondary" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}<div className="mt-1 flex flex-wrap gap-1"><Badge variant="outline">Reception {flow.reception ? "✓" : "—"}</Badge><Badge variant="outline">Sending {flow.sending ? "✓" : "—"}</Badge></div></TableCell><TableCell><Badge variant={log.status === "success" || log.status === "received" ? "default" : log.status === "ignored" ? "secondary" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
             })}
           </TableBody>
         </Table>
