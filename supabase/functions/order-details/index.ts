@@ -26,8 +26,13 @@ async function getOlivraisonPackage(token: string, trackingID: string) {
   const text = await r.text();
   let parsed: any = null;
   try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
-  if (!r.ok) throw new Error(parsed?.description || `Olivraison package failed (${r.status})`);
-  return parsed;
+  if (!r.ok) {
+    const error = new Error(parsed?.description || `Olivraison package failed (${r.status})`) as Error & { status?: number; body?: unknown };
+    error.status = r.status;
+    error.body = parsed;
+    throw error;
+  }
+  return { body: parsed, status: r.status };
 }
 
 function getPath(obj: any, path?: string | null) {
