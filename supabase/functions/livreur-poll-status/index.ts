@@ -187,12 +187,14 @@ Deno.serve(async (req) => {
         }
         if (mappedStatus === order.status) continue;
         const message = getPath(body, settings.polling_message_field) ?? null;
-        const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, message);
+        const reportedDate = parseDateValue(getPath(body, settings.polling_reported_date_field || "reportedDate"));
+        const scheduledDate = parseDateValue(getPath(body, settings.polling_scheduled_date_field || "scheduledDate"));
+        const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, { note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
         if (updateError) {
           await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
           continue;
         }
-        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus } });
+        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
         updated += 1;
       } catch (e) {
         await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: e instanceof Error ? e.message : "Unknown polling error", details: { tracking: order.external_tracking_number || order.tracking_number || null } });
