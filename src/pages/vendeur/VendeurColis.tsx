@@ -324,6 +324,13 @@ const VendeurColis = () => {
                 <TableCell className="font-semibold">{Number(o.order_value).toFixed(2)} MAD</TableCell>
                 <TableCell>
                   <StatusBadge status={o.status} />
+                  {hasStatusMeta(o) && (
+                    <div className="mt-2 grid min-w-64 gap-1 text-xs text-muted-foreground">
+                      <span><strong>Note:</strong> {o.status_note || "—"}</span>
+                      <span><strong>Date Reporté:</strong> {formatShortDate(o.postponed_date)}</span>
+                      <span><strong>Date Programmé:</strong> {formatShortDate(o.scheduled_date)}</span>
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
