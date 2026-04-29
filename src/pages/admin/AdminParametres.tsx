@@ -3,6 +3,7 @@ import AdminCities from "./parametres/AdminCities";
 import AdminHubs from "./parametres/AdminHubs";
 import AdminLivreurs from "./parametres/AdminLivreurs";
 import AdminSticker from "./parametres/AdminSticker";
+import AdminColisPreview from "./parametres/AdminColisPreview";
 import { useEffect, useState } from "react";
 
 const PARAMETRES_TAB_KEY = "odit-admin-parametres-tab";
@@ -22,11 +23,13 @@ const AdminParametres = () => {
         <TabsTrigger value="hubs">Hubs</TabsTrigger>
         <TabsTrigger value="livreurs">Livreurs & API</TabsTrigger>
         <TabsTrigger value="sticker">Sticker</TabsTrigger>
+        <TabsTrigger value="colis-preview">Edit preview colis</TabsTrigger>
       </TabsList>
       <TabsContent value="cities" className="mt-4"><AdminCities /></TabsContent>
       <TabsContent value="hubs" className="mt-4"><AdminHubs /></TabsContent>
       <TabsContent value="livreurs" className="mt-4"><AdminLivreurs /></TabsContent>
       <TabsContent value="sticker" className="mt-4"><AdminSticker /></TabsContent>
+      <TabsContent value="colis-preview" className="mt-4"><AdminColisPreview /></TabsContent>
     </Tabs>
   </div>;
 };
