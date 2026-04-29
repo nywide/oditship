@@ -196,6 +196,23 @@ export const normalizeColisPreviewSettings = (value: unknown): ColisPreviewSetti
 export const sortedVisibleFields = (section: ColisPreviewSection, slot?: ColisPreviewField["slot"]) =>
   section.fields.filter((field) => field.visible && (!slot || field.slot === slot)).sort((a, b) => a.position - b.position);
 
+export const backgroundValue = (section: ColisPreviewSection, data: Record<string, unknown>) => {
+  const source = section.backgroundSource === "seller" ? "vendeur" : section.backgroundSource === "courier" ? "courier_name" : section.backgroundSource;
+  return section.backgroundSource === "none" ? "" : getColisPreviewValue(data, source);
+};
+
+export const colisSectionStyle = (section: ColisPreviewSection, data: Record<string, unknown>): React.CSSProperties => {
+  const bgSource = backgroundValue(section, data);
+  return {
+    background: bgSource ? `linear-gradient(135deg, ${section.style.background}, hsl(var(--muted)))` : section.style.background,
+    color: section.style.foreground,
+    borderColor: section.style.border,
+    borderRadius: section.style.radius,
+    padding: section.style.padding,
+    gap: section.style.gap,
+  };
+};
+
 export const formatPreviewDate = (value?: string | null) => value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "";
 
 export const getColisPreviewValue = (data: Record<string, unknown>, key: string) => {
