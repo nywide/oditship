@@ -93,6 +93,7 @@ export const defaultStickerTemplate: StickerTemplate = {
 };
 
 const esc = (value: unknown) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c] as string));
+const stripUnsafeHtml = (value: string) => value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "").replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const n = (value: unknown, fallback: number) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
@@ -170,7 +171,28 @@ const renderCustomHtml = (order: StickerOrder, el: StickerElement) => {
     return acc;
   }, {});
   const replaceVars = (value = "") => value.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => vars[key] ?? "");
-  return `<style>${replaceVars(el.css)}</style>${replaceVars(el.html || "")}`;
+  return `<style>${stripUnsafeHtml(replaceVars(el.css))}</style>${stripUnsafeHtml(replaceVars(el.html || ""))}`;
+};
+
+const withSellerProfile = async (order: StickerOrder): Promise<StickerOrder> => {
+  if (!order.vendeur_id || order.seller_username || order.seller_full_name || order.seller_company_name) return order;
+  const { data } = await (supabase as any)
+    .from("profiles")
+    .select("username, full_name, company_name, phone, cin, affiliation_code, bank_account_name, bank_account_number")
+    .eq("id", order.vendeur_id)
+    .maybeSingle();
+  if (!data) return order;
+  return {
+    ...order,
+    seller_username: data.username ?? null,
+    seller_full_name: data.full_name ?? null,
+    seller_company_name: data.company_name ?? null,
+    seller_phone: data.phone ?? null,
+    seller_cin: data.cin ?? null,
+    seller_affiliation_code: data.affiliation_code ?? null,
+    seller_bank_account_name: data.bank_account_name ?? null,
+    seller_bank_account_number: data.bank_account_number ?? null,
+  };
 };
 
 const stickerStyles = (template: StickerTemplate) => `
@@ -216,12 +238,14 @@ const openPrintWindow = (title: string, body: string, template: StickerTemplate)
 
 export const printSticker = async (order: StickerOrder) => {
   const template = await getStickerTemplate();
-  openPrintWindow(`Sticker ${order.external_tracking_number || order.tracking_number || order.id}`, await renderSticker(order, template), template);
+  const enrichedOrder = await withSellerProfile(order);
+  openPrintWindow(`Sticker ${enrichedOrder.external_tracking_number || enrichedOrder.tracking_number || enrichedOrder.id}`, await renderSticker(enrichedOrder, template), template);
 };
 
 export const printStickers = async (orders: StickerOrder[]) => {
   if (!orders.length) return;
   const template = await getStickerTemplate();
-  const html = (await Promise.all(orders.map((order) => renderSticker(order, template)))).join("");
+  const enrichedOrders = await Promise.all(orders.map(withSellerProfile));
+  const html = (await Promise.all(enrichedOrders.map((order) => renderSticker(order, template)))).join("");
   openPrintWindow(`Stickers (${orders.length})`, html, template);
 };
