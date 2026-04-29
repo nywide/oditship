@@ -56,6 +56,33 @@ function buildPayload(order: Record<string, any>, mapping: Record<string, string
   return payload;
 }
 
+function maskSensitiveHeaders(headers: Record<string, unknown> = {}) {
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => {
+    const name = key.toLowerCase();
+    if (name.includes("authorization") || name.includes("token") || name.includes("secret") || name.includes("key")) {
+      const text = String(value ?? "");
+      return [key, text ? `${text.slice(0, 8)}••••${text.slice(-4)}` : "••••"];
+    }
+    return [key, value];
+  }));
+}
+
+function pollingEndpointInfo(settings: any, url: string, method: string, payload: Record<string, any>) {
+  return {
+    type: "Outgoing polling endpoint",
+    method,
+    url,
+    headers: maskSensitiveHeaders(settings.polling_status_headers ?? {}),
+    payload,
+    payload_mapping: settings.polling_status_payload_mapping ?? {},
+    tracking_field: settings.polling_tracking_field,
+    status_field: settings.polling_status_field,
+    message_field: settings.polling_message_field,
+    reported_date_field: settings.polling_reported_date_field,
+    scheduled_date_field: settings.polling_scheduled_date_field,
+  };
+}
+
 async function logApi(admin: any, entry: Record<string, unknown>) {
   await admin.from("livreur_api_logs").insert({
     order_id: entry.order_id ?? null,
@@ -167,24 +194,25 @@ Deno.serve(async (req) => {
         const payload = buildPayload(order, settings.polling_status_payload_mapping ?? {});
         const tracking = order.external_tracking_number || order.tracking_number || "";
         const url = String(settings.polling_status_url).replace("{tracking}", encodeURIComponent(tracking));
+        const endpoint = pollingEndpointInfo(settings, url, method, payload);
         const response = await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body: method === "GET" ? undefined : JSON.stringify(payload) });
         checked += 1;
         const text = await response.text();
         let body: any = {};
         try { body = JSON.parse(text); } catch { body = { raw: text }; }
         if (!response.ok) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: `Polling ${response.status}`, details: { tracking, response: body } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: `Polling ${response.status}`, details: { endpoint, tracking, response: body } });
           continue;
         }
         const responseTracking = getPath(body, settings.polling_tracking_field);
         if (responseTracking && String(responseTracking).trim() !== String(tracking).trim()) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling response tracking mismatch", details: { expected_tracking: tracking, response_tracking: responseTracking } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling response tracking mismatch", details: { endpoint, expected_tracking: tracking, response_tracking: responseTracking } });
           continue;
         }
         const rawStatus = getPath(body, settings.polling_status_field);
         const mappedStatus = mapProviderStatus(rawStatus, settings.status_mapping ?? {});
         if (!mappedStatus) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { endpoint, tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
           continue;
         }
         const message = getPath(body, settings.polling_message_field) ?? null;
@@ -198,10 +226,10 @@ Deno.serve(async (req) => {
         }
         const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, { note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
         if (updateError) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { endpoint, tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
           continue;
         }
-        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
+        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { endpoint, tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
         updated += 1;
       } catch (e) {
         await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: e instanceof Error ? e.message : "Unknown polling error", details: { tracking: order.external_tracking_number || order.tracking_number || null } });
