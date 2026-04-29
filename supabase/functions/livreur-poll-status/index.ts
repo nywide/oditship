@@ -83,6 +83,24 @@ function pollingEndpointInfo(settings: any, url: string, method: string, payload
   };
 }
 
+function pollingExchange(endpoint: Record<string, unknown>, responseStatus: number | null, responseBody: unknown, responseHeaders: Headers | null = null) {
+  return {
+    sending: {
+      direction: "outgoing",
+      method: endpoint.method,
+      url: endpoint.url,
+      headers: endpoint.headers,
+      payload: endpoint.payload,
+    },
+    reception: {
+      direction: "incoming_response",
+      status_code: responseStatus,
+      headers: responseHeaders ? maskSensitiveHeaders(Object.fromEntries(responseHeaders.entries())) : {},
+      body: responseBody,
+    },
+  };
+}
+
 async function logApi(admin: any, entry: Record<string, unknown>) {
   await admin.from("livreur_api_logs").insert({
     order_id: entry.order_id ?? null,
@@ -200,19 +218,20 @@ Deno.serve(async (req) => {
         const text = await response.text();
         let body: any = {};
         try { body = JSON.parse(text); } catch { body = { raw: text }; }
+        const exchange = pollingExchange(endpoint, response.status, body, response.headers);
         if (!response.ok) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: `Polling ${response.status}`, details: { endpoint, tracking, response: body } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: `Polling ${response.status}`, details: { endpoint, ...exchange, tracking, response: body } });
           continue;
         }
         const responseTracking = getPath(body, settings.polling_tracking_field);
         if (responseTracking && String(responseTracking).trim() !== String(tracking).trim()) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling response tracking mismatch", details: { endpoint, expected_tracking: tracking, response_tracking: responseTracking } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling response tracking mismatch", details: { endpoint, ...exchange, expected_tracking: tracking, response_tracking: responseTracking } });
           continue;
         }
         const rawStatus = getPath(body, settings.polling_status_field);
         const mappedStatus = mapProviderStatus(rawStatus, settings.status_mapping ?? {});
         if (!mappedStatus) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { endpoint, tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
           continue;
         }
         const message = getPath(body, settings.polling_message_field) ?? null;
@@ -226,10 +245,10 @@ Deno.serve(async (req) => {
         }
         const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, { note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
         if (updateError) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { endpoint, tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
           continue;
         }
-        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { endpoint, tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
+        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
         updated += 1;
       } catch (e) {
         await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: e instanceof Error ? e.message : "Unknown polling error", details: { tracking: order.external_tracking_number || order.tracking_number || null } });
