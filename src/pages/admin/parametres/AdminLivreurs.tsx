@@ -611,6 +611,28 @@ const AdminLivreurs = () => {
         </Table>
       </Card>
 
+      <Dialog open={!!selectedLog} onOpenChange={(v) => !v && setSelectedLog(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Log full details</DialogTitle></DialogHeader>
+          {selectedLog && (
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div><Label>Time</Label><p className="rounded-md bg-muted p-2">{new Date(selectedLog.created_at).toLocaleString("fr-FR")}</p></div>
+                <div><Label>Event</Label><p className="rounded-md bg-muted p-2">{selectedLog.event_type}</p></div>
+                <div><Label>Order</Label><p className="rounded-md bg-muted p-2">{selectedLog.order_id ?? "—"}</p></div>
+                <div><Label>Status</Label><p className="rounded-md bg-muted p-2">{selectedLog.status}</p></div>
+              </div>
+              <div><Label>Message</Label><p className="rounded-md bg-muted p-2">{selectedLog.message ?? "—"}</p></div>
+              <div><Label>Details</Label><pre className="max-h-[45vh] overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(selectedLog.details ?? {}, null, 2)}</pre></div>
+            </div>
+          )}
+          <DialogFooter>
+            {selectedLog && <Button type="button" variant="destructive" onClick={() => deleteLog(selectedLog.id)}><Trash2 className="mr-1 h-4 w-4" /> Delete log</Button>}
+            <Button type="button" variant="outline" onClick={() => setSelectedLog(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
