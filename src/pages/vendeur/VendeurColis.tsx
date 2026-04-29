@@ -68,8 +68,8 @@ const VendeurColis = () => {
   const agentPages = (profile?.agent_pages ?? {}) as Record<string, boolean | string>;
   const colisScope = agentPages.colis_scope === "own" ? "own" : "all";
 
-  const formatShortDate = (value?: string | null) => value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" }).format(new Date(value)) : "—";
-  const hasStatusMeta = (o: Order) => Boolean(o.status_note || o.postponed_date || o.scheduled_date);
+  const formatShortDate = (value?: string | null) => value ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short" }).format(new Date(value)) : null;
+  const statusMetaValues = (o: Order) => [o.status_note, formatShortDate(o.postponed_date), formatShortDate(o.scheduled_date)].filter(Boolean) as string[];
 
   const load = async () => {
     if (!user) return;
@@ -316,7 +316,12 @@ const VendeurColis = () => {
                   <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} aria-label={`Sélectionner ${o.id}`} />
                 </TableCell>
                 <TableCell>
-                  <div className="font-medium">{o.customer_name}</div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-medium">{o.customer_name}</span>
+                    {statusMetaValues(o).map((value, index) => (
+                      <span key={`${o.id}-meta-${index}`} className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{value}</span>
+                    ))}
+                  </div>
                   <div className="text-xs text-muted-foreground">{o.product_name}</div>
                 </TableCell>
                 <TableCell>{o.customer_city}</TableCell>
@@ -324,13 +329,6 @@ const VendeurColis = () => {
                 <TableCell className="font-semibold">{Number(o.order_value).toFixed(2)} MAD</TableCell>
                 <TableCell>
                   <StatusBadge status={o.status} />
-                  {hasStatusMeta(o) && (
-                    <div className="mt-2 grid min-w-64 gap-1 text-xs text-muted-foreground">
-                      <span><strong>Note:</strong> {o.status_note || "—"}</span>
-                      <span><strong>Date Reporté:</strong> {formatShortDate(o.postponed_date)}</span>
-                      <span><strong>Date Programmé:</strong> {formatShortDate(o.scheduled_date)}</span>
-                    </div>
-                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">

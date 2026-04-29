@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, Clock, Eye, EyeOff, HelpCircle, PackageCheck, Plus, RefreshCw, ShieldCheck, SlidersHorizontal, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
 
@@ -292,7 +293,11 @@ const AdminLivreurs = () => {
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Livreur | null>(null);
-  const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; created_at: string }>>([]);
+  const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; details: Record<string, unknown>; created_at: string }>>([]);
+  const [selectedLog, setSelectedLog] = useState<typeof apiLogs[number] | null>(null);
+  const [logFilter, setLogFilter] = useState("all");
+  const [retention, setRetention] = useState({ enabled: false, days: 30 });
+  const filteredLogs = useMemo(() => apiLogs.filter((log) => logFilter === "all" || (logFilter === "webhook" ? log.event_type === "webhook_status" : log.event_type !== "webhook_status")), [apiLogs, logFilter]);
   const activeSettings = useMemo(() => {
     if (!editing) return null;
     const current = settings[editing.id] ?? defaultSettings(editing.id);
@@ -342,12 +347,13 @@ const AdminLivreurs = () => {
   });
 
   const load = async () => {
-    const [p, h, hl, s, logs] = await Promise.all([
+    const [p, h, hl, s, logs, retentionSetting] = await Promise.all([
       db.from("profiles").select("id, username, full_name, api_enabled, api_token, authentication_config, create_package_config").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       db.from("livreur_api_settings").select("*"),
-      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, created_at").order("created_at", { ascending: false }).limit(50),
+      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(200),
+      db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle(),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
     setHubs((h.data ?? []) as Hub[]);
@@ -356,6 +362,8 @@ const AdminLivreurs = () => {
     (s.data ?? []).forEach((row: LivreurApiSettings) => { byLivreur[row.livreur_id] = row; });
     setSettings(byLivreur);
     setApiLogs(logs.data ?? []);
+    const retentionValue = (retentionSetting.data?.value ?? {}) as Record<string, unknown>;
+    setRetention({ enabled: Boolean(retentionValue.enabled), days: Number(retentionValue.days) || 30 });
   };
   useEffect(() => { load(); }, []);
 
@@ -491,6 +499,19 @@ const AdminLivreurs = () => {
     }
   };
 
+  const saveRetention = async () => {
+    const days = Math.max(Number(retention.days) || 30, 1);
+    const { error } = await db.from("app_settings").upsert({ key: "api_logs_retention", value: { enabled: retention.enabled, days } }, { onConflict: "key" });
+    if (error) toast.error(error.message);
+    else { toast.success("Log cleanup settings saved"); setRetention({ enabled: retention.enabled, days }); }
+  };
+
+  const deleteLog = async (id: number) => {
+    const { error } = await db.from("livreur_api_logs").delete().eq("id", id);
+    if (error) toast.error(error.message);
+    else { toast.success("Log deleted"); setSelectedLog(null); await load(); }
+  };
+
   const masked = (t: string | null) => t ? `${t.slice(0, 6)}${"•".repeat(20)}${t.slice(-4)}` : "—";
 
   return (
@@ -572,21 +593,49 @@ const AdminLivreurs = () => {
       <Card className="mt-4 overflow-x-auto p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold">Driver API logs</h3>
-            <p className="text-sm text-muted-foreground">Internal errors and provider responses for package creation.</p>
+            <h3 className="font-semibold">Webhook logs & Driver API logs</h3>
+            <p className="text-sm text-muted-foreground">Webhook, polling, package creation, and provider responses with full details.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Select value={logFilter} onValueChange={setLogFilter}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All logs</SelectItem><SelectItem value="webhook">Webhook logs</SelectItem><SelectItem value="driver">Driver API logs</SelectItem></SelectContent></Select>
+            <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Auto clean</label>
+            <Input type="number" min={1} className="h-9 w-24" value={retention.days} onChange={(e) => setRetention({ ...retention, days: Number(e.target.value) })} />
+            <Button variant="outline" size="sm" onClick={saveRetention}>Save cleanup</Button>
+            <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
+          </div>
         </div>
         <Table>
-          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Order</TableHead><TableHead>Livreur</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead><TableHead>Message</TableHead><TableHead className="text-right">Details</TableHead></TableRow></TableHeader>
           <TableBody>
-            {apiLogs.length === 0 ? <TableRow><TableCell colSpan={6} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : apiLogs.map((log) => {
+            {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No logs</TableCell></TableRow> : filteredLogs.map((log) => {
               const livreur = livreurs.find((item) => item.id === log.livreur_id);
-              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}</TableCell><TableCell><Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell></TableRow>;
+              return <TableRow key={log.id}><TableCell className="whitespace-nowrap text-xs">{new Date(log.created_at).toLocaleString("fr-FR")}</TableCell><TableCell>{log.order_id ?? "—"}</TableCell><TableCell>{livreur?.full_name || livreur?.username || "—"}</TableCell><TableCell>{log.event_type}</TableCell><TableCell><Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge></TableCell><TableCell className="max-w-md truncate" title={log.message ?? ""}>{log.message ?? "—"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedLog(log)}>Full details</Button></TableCell></TableRow>;
             })}
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={!!selectedLog} onOpenChange={(v) => !v && setSelectedLog(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Log full details</DialogTitle></DialogHeader>
+          {selectedLog && (
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div><Label>Time</Label><p className="rounded-md bg-muted p-2">{new Date(selectedLog.created_at).toLocaleString("fr-FR")}</p></div>
+                <div><Label>Event</Label><p className="rounded-md bg-muted p-2">{selectedLog.event_type}</p></div>
+                <div><Label>Order</Label><p className="rounded-md bg-muted p-2">{selectedLog.order_id ?? "—"}</p></div>
+                <div><Label>Status</Label><p className="rounded-md bg-muted p-2">{selectedLog.status}</p></div>
+              </div>
+              <div><Label>Message</Label><p className="rounded-md bg-muted p-2">{selectedLog.message ?? "—"}</p></div>
+              <div><Label>Details</Label><pre className="max-h-[45vh] overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(selectedLog.details ?? {}, null, 2)}</pre></div>
+            </div>
+          )}
+          <DialogFooter>
+            {selectedLog && <Button type="button" variant="destructive" onClick={() => deleteLog(selectedLog.id)}><Trash2 className="mr-1 h-4 w-4" /> Delete log</Button>}
+            <Button type="button" variant="outline" onClick={() => setSelectedLog(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
