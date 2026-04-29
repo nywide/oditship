@@ -74,6 +74,10 @@ const historyKey = (item: HistoryItem) => [
 const hasMeta = (note?: string | null, reported?: string | null, scheduled?: string | null) => Boolean(note || reported || scheduled);
 const metaValues = (note?: string | null, reported?: string | null, scheduled?: string | null) => [note, reported ? formatDate(reported) : null, scheduled ? formatDate(scheduled) : null].filter(Boolean) as string[];
 const sectionLayoutClass = (layout: string) => layout === "inline" ? "flex flex-wrap items-center" : layout === "grid" ? "grid grid-cols-2" : "flex flex-col";
+const iconFor = (icon: string) => {
+  const map = { package: Package, truck: Truck, bike: Bike, invoice: Download, support: Headphones, qr: QrCode, map: MapPin, user: UserRound };
+  return map[icon as keyof typeof map] ?? Package;
+};
 
 export const OrderDetailsPanel = ({
   order,
@@ -149,6 +153,7 @@ export const OrderDetailsPanel = ({
   const renderConfiguredSection = (section: ColisPreviewSettings["details"], itemData: Record<string, unknown>) => {
     if (section.useCustomHtml) return <div className="rounded-lg border border-border p-3" style={colisSectionStyle(section, itemData)} dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(section.css, itemData)}</style>${renderColisTemplate(section.html, itemData)}`) }} />;
     return <div className={cn("rounded-lg border border-border text-sm", sectionLayoutClass(section.layout))} style={colisSectionStyle(section, itemData)}>
+      {section.icon !== "none" && (() => { const Icon = iconFor(section.icon); return <Icon className="h-5 w-5 shrink-0" style={{ color: section.style.accent }} />; })()}
       {sortedVisibleFields(section).map((field) => {
         const value = getColisPreviewValue(itemData, field.key);
         return value ? <span key={field.key} className={field.slot === "primary" ? "font-semibold" : "rounded-md bg-muted px-3 py-1 font-medium text-muted-foreground"}>{value}</span> : null;
@@ -199,34 +204,34 @@ export const OrderDetailsPanel = ({
               </div>
             )}
           </div>
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-border p-3">
+          <div className={cn("flex-col items-center rounded-lg border border-border", previewSettings.qr.qrPlacement === "hidden" && "hidden", previewSettings.qr.qrPlacement === "left" && "order-first", previewSettings.qr.qrPlacement === "top" && "md:col-span-2 md:order-first", previewSettings.qr.qrPlacement === "bottom" && "md:col-span-2 md:order-last", previewSettings.qr.qrPlacement === "right" && "flex")} style={colisSectionStyle(previewSettings.qr, previewData)}>
             {qrSrc ? <img src={qrSrc} alt={`QR code ${tracking}`} className="h-36 w-36" /> : <QrCode className="h-24 w-24 text-muted-foreground" />}
             <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground"><QrCode className="h-3.5 w-3.5" />{tracking}</div>
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className={cn("space-y-3 rounded-lg border border-border", previewSettings.actions.buttonPlacement === "hidden" && "hidden")} style={colisSectionStyle(previewSettings.actions, previewData)}>
           <h4 className="text-base font-bold">Actions:</h4>
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+          <div className={cn("flex items-center justify-between gap-3 rounded-lg border border-border p-3", previewSettings.actions.buttonPlacement === "left" && "flex-row-reverse", previewSettings.actions.buttonPlacement === "bottom" && "flex-col items-start")}>
             <div className="flex items-center gap-3">
               <Download className="h-5 w-5 text-muted-foreground" />
-              <div><p className="text-sm font-semibold">Facture client</p><p className="text-xs text-muted-foreground">Disponible après la fin du trajet</p></div>
+              <div>{renderConfiguredSection(previewSettings.invoice, previewData)}</div>
             </div>
             <Button size="sm" variant="outline" disabled>Télécharger</Button>
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+          <div className={cn("flex items-center justify-between gap-3 rounded-lg border border-border p-3", previewSettings.actions.buttonPlacement === "left" && "flex-row-reverse", previewSettings.actions.buttonPlacement === "bottom" && "flex-col items-start")}>
             <div className="flex items-center gap-3">
               <Bike className="h-5 w-5 text-foreground" />
-              <div><p className="text-sm font-semibold">Livreur</p><p className="text-xs text-muted-foreground">{livreurText}</p></div>
+              <div>{renderConfiguredSection(previewSettings.courier, { ...previewData, courier_name: data?.livreur?.name || livreurText })}</div>
             </div>
             <span className="font-mono text-sm">{hasLivreur ? data?.livreur?.phone || "—" : "—"}</span>
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+          <div className={cn("flex items-center justify-between gap-3 rounded-lg border border-border p-3", previewSettings.actions.buttonPlacement === "left" && "flex-row-reverse", previewSettings.actions.buttonPlacement === "bottom" && "flex-col items-start")}>
             <div className="flex items-center gap-3">
               <Headphones className="h-5 w-5 text-foreground" />
-              <div><p className="text-sm font-semibold">Support</p><p className="text-xs text-muted-foreground">Zone support</p></div>
+              <div>{renderConfiguredSection(previewSettings.support, previewData)}</div>
             </div>
-            <span className="font-mono text-sm">—</span>
+            <span className="font-mono text-sm">{data?.support?.phone || "—"}</span>
           </div>
         </div>
       </Card>
