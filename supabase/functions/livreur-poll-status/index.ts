@@ -101,6 +101,22 @@ function pollingExchange(endpoint: Record<string, unknown>, responseStatus: numb
   };
 }
 
+function skippedPollingExchange(endpoint: Record<string, unknown>, reason: string) {
+  return {
+    sending: {
+      direction: "not_sent",
+      method: endpoint.method,
+      url: endpoint.url,
+      headers: endpoint.headers,
+      payload: endpoint.payload,
+    },
+    reception: {
+      direction: "not_received",
+      reason,
+    },
+  };
+}
+
 async function logApi(admin: any, entry: Record<string, unknown>) {
   const { error } = await admin.from("livreur_api_logs").insert({
     order_id: entry.order_id ?? null,
@@ -214,6 +230,14 @@ Deno.serve(async (req) => {
         const tracking = order.external_tracking_number || order.tracking_number || "";
         const url = String(settings.polling_status_url).replace("{tracking}", encodeURIComponent(tracking));
         const endpoint = pollingEndpointInfo(settings, url, method, payload);
+        if (!tracking) {
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling skipped: missing tracking number", details: { endpoint, ...skippedPollingExchange(endpoint, "missing_tracking"), rejection_reason: "missing_tracking" } });
+          continue;
+        }
+        if (!url || url === "null" || url === "undefined") {
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling skipped: missing status URL", details: { endpoint, ...skippedPollingExchange(endpoint, "missing_status_url"), tracking, rejection_reason: "missing_status_url" } });
+          continue;
+        }
         const response = await fetch(url, { method, headers: { "Content-Type": "application/json", ...headers }, body: method === "GET" ? undefined : JSON.stringify(payload) });
         checked += 1;
         const text = await response.text();
