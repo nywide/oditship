@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
       const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
       packageDetails = await getOlivraisonPackage(token, order.external_tracking_number);
     } catch (e) {
-      packageError = e instanceof Error ? e.message : "Olivraison unavailable";
+      packageError = "Tracking externe indisponible";
     }
   }
 
