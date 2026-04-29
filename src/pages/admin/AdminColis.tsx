@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, Printer, Search } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 import { cn } from "@/lib/utils";
+import { COLIS_PREVIEW_SETTING_KEY, defaultColisPreviewSettings, getColisPreviewValue, normalizeColisPreviewSettings, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
 
 interface Order {
   id: number;
@@ -25,6 +26,9 @@ interface Order {
   status: string;
   tracking_number: string | null;
   external_tracking_number: string | null;
+  status_note?: string | null;
+  postponed_date?: string | null;
+  scheduled_date?: string | null;
   created_at: string;
   vendeur_id: string;
 }
@@ -41,14 +45,17 @@ const AdminColis = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [previewSettings, setPreviewSettings] = useState<ColisPreviewSettings>(defaultColisPreviewSettings);
 
   useEffect(() => {
     Promise.all([
       supabase.from("orders").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("id, username, full_name").eq("role", "vendeur").order("username"),
-    ]).then(([o, v]) => {
+      (supabase as any).from("app_settings").select("value").eq("key", COLIS_PREVIEW_SETTING_KEY).maybeSingle(),
+    ]).then(([o, v, settings]) => {
       setOrders((o.data ?? []) as Order[]);
       setVendeurs((v.data ?? []) as Vendeur[]);
+      setPreviewSettings(normalizeColisPreviewSettings(settings.data?.value));
       setLoading(false);
     });
   }, []);
@@ -81,6 +88,17 @@ const AdminColis = () => {
     }
     return true;
   }), [orders, statusFilter, vendeurFilter, search, dateFrom, dateTo]);
+  const mainPreview = previewSettings.main;
+  const rowData = (o: Order) => ({ ...o, vendeur: vendeurMap[o.vendeur_id] || "", tracking: o.external_tracking_number || o.tracking_number || `ODiT-${o.id}` });
+  const renderMainCell = (o: Order) => {
+    const data = rowData(o);
+    if (mainPreview.useCustomHtml) return <div dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(mainPreview.css, data)}</style>${renderColisTemplate(mainPreview.html, data)}`) }} />;
+    return <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-2">{sortedVisibleFields(mainPreview, "primary").map((field) => <span key={field.key} className="font-medium">{getColisPreviewValue(data, field.key)}</span>)}</div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">{sortedVisibleFields(mainPreview, "secondary").map((field) => <span key={field.key}>{getColisPreviewValue(data, field.key)}</span>)}</div>
+      <div className="flex flex-wrap items-center gap-1.5">{sortedVisibleFields(mainPreview, "meta").map((field) => { const value = getColisPreviewValue(data, field.key); return value ? <span key={field.key} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{value}</span> : null; })}</div>
+    </div>;
+  };
 
   return (
     <div className="space-y-4">
@@ -141,7 +159,7 @@ const AdminColis = () => {
             ) : filtered.map((o) => (
               <Fragment key={o.id}>
               <TableRow>
-                <TableCell><div className="font-medium">{o.customer_name}</div><div className="text-xs text-muted-foreground">{o.product_name}</div></TableCell>
+                <TableCell>{renderMainCell(o)}</TableCell>
                 <TableCell className="text-sm">{vendeurMap[o.vendeur_id] || "—"}</TableCell>
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
@@ -161,7 +179,7 @@ const AdminColis = () => {
               {expandedOrderId === o.id && (
                 <TableRow>
                   <TableCell colSpan={7} className="bg-muted/20 p-0">
-                    <OrderDetailsPanel order={o} />
+                    <OrderDetailsPanel order={o} previewSettings={previewSettings} />
                   </TableCell>
                 </TableRow>
               )}
