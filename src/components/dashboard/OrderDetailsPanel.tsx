@@ -220,7 +220,7 @@ export const OrderDetailsPanel = ({
               </div>
               <div className="ml-4 space-y-1">
                 <StatusBadge status={item.status} />
-                <p className="text-sm font-medium">{item.message || `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
+                <p className="text-sm font-medium">{item.message && item.message !== item.note ? item.message : `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
                 {metaValues(item.note, item.reported_date, item.scheduled_date).map((value, metaIndex) => (
                   <p key={metaIndex} className="rounded-md bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">{value}</p>
                 ))}
