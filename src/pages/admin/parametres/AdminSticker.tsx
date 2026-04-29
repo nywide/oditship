@@ -139,6 +139,12 @@ const AdminSticker = () => {
     reader.readAsDataURL(file);
   };
 
+  const autoInsertPreviewInfo = () => {
+    const elements = previewElements.map((el) => ({ ...el, id: crypto.randomUUID() }));
+    setTemplate((current) => ({ ...current, elements: [...current.elements, ...elements] }));
+    setSelectedId(elements[0]?.id ?? null);
+  };
+
   const renderCustomPreview = (el: StickerElement) => {
     const vars = stickerSystemFields.reduce<Record<string, string>>((acc, field) => {
       acc[field.value] = String(resolveStickerValue(sampleOrder, field.value));
@@ -169,6 +175,8 @@ const AdminSticker = () => {
             <Button variant="outline" onClick={() => addElement("qr")}><QrCode className="mr-1 h-4 w-4" />QR</Button>
             <Button variant="outline" onClick={() => addElement("barcode")}>Barcode</Button>
             <Button variant="outline" onClick={() => addElement("html")}>HTML/CSS</Button>
+            <Button variant="outline" onClick={autoInsertPreviewInfo}>Auto info</Button>
+            <Button onClick={() => setPreviewOpen(true)}><Eye className="mr-1 h-4 w-4" />Preview</Button>
           </div>
         </div>
         <div className="mb-4 grid gap-3 md:grid-cols-3">
