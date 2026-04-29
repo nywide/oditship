@@ -110,29 +110,40 @@ const renderSticker = async (o: StickerOrder, template: StickerTemplate) => {
   const qr = await QRCode.toDataURL(tracking, { width: 120, margin: 1 });
   const stickerDate = new Date(o.created_at || Date.now()).toLocaleString("fr-FR");
   return `<div class="sticker">
-    <div class="top"><div><div class="brand">${esc(text(template, "brand_title"))}</div><div class="subtitle">${esc(text(template, "brand_subtitle"))}</div></div><div class="sender"><b>${esc(text(template, "sender_label"))}:</b> ${esc(text(template, "sender_name"))}<br><b>${esc(text(template, "phone_label"))}:</b> ${esc(o.customer_phone)}<br><b>${esc(text(template, "date_label"))}:</b> ${esc(stickerDate)}</div></div>
-    <div class="section recipient"><div><div class="line"><b>${esc(text(template, "recipient_label"))}:</b> ${esc(o.customer_name)}</div><div class="line"><b>${esc(text(template, "phone_label"))}:</b> ${esc(o.customer_phone)}</div><div class="line"><b>${esc(text(template, "city_label"))}:</b> ${esc(o.customer_city)}</div><div class="line"><b>${esc(text(template, "address_label"))}:</b> ${esc(o.customer_address)}</div></div><div class="hub">${esc(text(template, "hub_label"))}<b>${esc(o.customer_city.split(" ").slice(-1)[0] || o.customer_city)}</b></div></div>
-    <div class="section codes"><div><div class="qr-title">${esc(text(template, "qr_label"))}</div><div class="qr-box">${template.show_qr === false ? "" : `<img src="${qr}" alt="QR">`}</div></div><div><div class="track-label">${esc(text(template, "tracking_label"))}</div>${template.show_barcode === false ? "" : `<div class="barcode">*${esc(tracking)}*</div>`}<div class="track">#${esc(tracking)}</div></div></div>
-    <div class="product"><b>${esc(text(template, "product_label"))}:</b> ${esc(o.product_name)}</div>
-    <div class="bottom"><div><div class="open">${esc(text(template, o.open_package ? "open_package_denied" : "open_package_allowed"))}</div><div class="comment">${esc(text(template, "comment_label"))}: ${esc(o.comment || "")}</div></div><div class="price">${Number(o.order_value).toFixed(2)} ${esc(text(template, "currency"))}</div></div>
+    <div class="field brand" style="${elementStyle(template, "brand")}">${esc(text(template, "brand_title"))}<small>${esc(text(template, "brand_subtitle"))}</small></div>
+    <div class="field sender" style="${elementStyle(template, "sender")}"><span class="label">${esc(text(template, "sender_label"))}:</span> ${esc(text(template, "sender_name"))}<br><span class="label">${esc(text(template, "phone_label"))}:</span> ${esc(o.customer_phone)}</div>
+    <div class="field" style="${elementStyle(template, "recipient")}"><span class="label">${esc(text(template, "recipient_label"))}:</span> ${esc(o.customer_name)}</div>
+    <div class="field" style="${elementStyle(template, "phone")}"><span class="label">${esc(text(template, "phone_label"))}:</span> ${esc(o.customer_phone)}</div>
+    <div class="field" style="${elementStyle(template, "city")}"><span class="label">${esc(text(template, "city_label"))}:</span> ${esc(o.customer_city)}</div>
+    <div class="field" style="${elementStyle(template, "date")}"><span class="label">${esc(text(template, "date_label"))}:</span> ${esc(stickerDate)}</div>
+    <div class="field" style="${elementStyle(template, "address")}"><span class="label">${esc(text(template, "address_label"))}:</span> ${esc(o.customer_address)}</div>
+    <div class="field box qr" style="${elementStyle(template, "qr")}">${template.show_qr === false ? esc(text(template, "qr_label")) : `<img src="${qr}" alt="QR">`}</div>
+    <div class="field tracking" style="${elementStyle(template, "tracking")}">${esc(text(template, "tracking_label"))}<br>#${esc(tracking)}</div>
+    ${template.show_barcode === false ? "" : `<div class="field barcode" style="${elementStyle(template, "barcode")}">*${esc(tracking)}*</div>`}
+    <div class="field" style="${elementStyle(template, "product")}"><span class="label">${esc(text(template, "product_label"))}:</span> ${esc(o.product_name)}</div>
+    <div class="field box" style="${elementStyle(template, "open")}">${esc(text(template, o.open_package ? "open_package_denied" : "open_package_allowed"))}</div>
+    <div class="field" style="${elementStyle(template, "comment")}"><span class="label">${esc(text(template, "comment_label"))}:</span> ${esc(o.comment || "")}</div>
+    <div class="field price" style="${elementStyle(template, "price")}">${Number(o.order_value).toFixed(2)} ${esc(text(template, "currency"))}</div>
   </div>`;
 };
 
-const openPrintWindow = (title: string, body: string) => {
-  const win = window.open("", "_blank", "width=520,height=780");
+const openPrintWindow = (title: string, body: string, template: StickerTemplate) => {
+  const win = window.open("", "_blank", "width=620,height=620");
   if (!win) return;
-  win.document.write(`<!doctype html><html><head><title>${esc(title)}</title><style>${stickerStyles}</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap"></head><body>${body}<script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+  win.document.write(`<!doctype html><html><head><title>${esc(title)}</title><style>${stickerStyles(template)}</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap"></head><body>${body}<script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
   win.document.close();
 };
 
 export const printSticker = async (o: StickerOrder) => {
   const template = await getStickerTemplate();
-  openPrintWindow(`Sticker ${o.external_tracking_number || o.tracking_number || o.id}`, await renderSticker(o, template));
+  openPrintWindow(`Sticker ${o.external_tracking_number || o.tracking_number || o.id}`, await renderSticker(o, template), template);
 };
 
 export const printStickers = async (orders: StickerOrder[]) => {
   if (!orders.length) return;
   const template = await getStickerTemplate();
   const html = (await Promise.all(orders.map((order) => renderSticker(order, template)))).join("");
-  openPrintWindow(`Stickers (${orders.length})`, html);
+  openPrintWindow(`Stickers (${orders.length})`, html, template);
 };
+
+export { stickerElements, type StickerElementKey, type StickerTemplate };
