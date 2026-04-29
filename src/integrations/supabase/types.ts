@@ -400,6 +400,9 @@ export type Database = {
           notes: string | null
           old_status: string | null
           order_id: number
+          provider_note: string | null
+          reported_date: string | null
+          scheduled_date: string | null
         }
         Insert: {
           changed_at?: string
@@ -409,6 +412,9 @@ export type Database = {
           notes?: string | null
           old_status?: string | null
           order_id: number
+          provider_note?: string | null
+          reported_date?: string | null
+          scheduled_date?: string | null
         }
         Update: {
           changed_at?: string
@@ -418,6 +424,9 @@ export type Database = {
           notes?: string | null
           old_status?: string | null
           order_id?: number
+          provider_note?: string | null
+          reported_date?: string | null
+          scheduled_date?: string | null
         }
         Relationships: [
           {
