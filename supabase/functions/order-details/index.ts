@@ -26,8 +26,13 @@ async function getOlivraisonPackage(token: string, trackingID: string) {
   const text = await r.text();
   let parsed: any = null;
   try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
-  if (!r.ok) throw new Error(parsed?.description || `Olivraison package failed (${r.status})`);
-  return parsed;
+  if (!r.ok) {
+    const error = new Error(parsed?.description || `Olivraison package failed (${r.status})`) as Error & { status?: number; body?: unknown };
+    error.status = r.status;
+    error.body = parsed;
+    throw error;
+  }
+  return { body: parsed, status: r.status };
 }
 
 function getPath(obj: any, path?: string | null) {
@@ -60,6 +65,54 @@ function parseDateValue(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function maskSensitiveHeaders(headers: Record<string, unknown> = {}) {
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => {
+    const name = key.toLowerCase();
+    if (name.includes("authorization") || name.includes("token") || name.includes("secret") || name.includes("key")) {
+      const text = String(value ?? "");
+      return [key, text ? `${text.slice(0, 8)}••••${text.slice(-4)}` : "••••"];
+    }
+    return [key, value];
+  }));
+}
+
+async function logApi(admin: any, entry: Record<string, unknown>) {
+  const { error } = await admin.from("livreur_api_logs").insert({
+    order_id: entry.order_id ?? null,
+    livreur_id: entry.livreur_id ?? null,
+    event_type: entry.event_type,
+    status: entry.status,
+    message: entry.message ?? null,
+    details: entry.details ?? {},
+  });
+  if (error) console.error("livreur_api_logs insert failed", error.message);
+}
+
+function providerLookupExchange(tracking: string, responseStatus: number | null, responseBody: unknown) {
+  const endpoint = {
+    type: "Outgoing provider status lookup from order details",
+    method: "GET",
+    url: `${OLIVRAISON_BASE}/package/${encodeURIComponent(tracking)}`,
+    tracking_field: "trackingID",
+    status_field: "history.status",
+  };
+  return {
+    endpoint,
+    tracking,
+    sending: {
+      direction: "outgoing",
+      method: endpoint.method,
+      url: endpoint.url,
+      headers: maskSensitiveHeaders({ Authorization: "Bearer provider-token" }),
+    },
+    reception: {
+      direction: "incoming_response",
+      status_code: responseStatus,
+      body: responseBody,
+    },
+  };
 }
 
 function providerMeta(item: any, settings: any) {
@@ -237,8 +290,12 @@ Deno.serve(async (req) => {
   if (order.external_tracking_number && OLI_KEY && OLI_SECRET) {
     try {
       const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
-      packageDetails = await getOlivraisonPackage(token, order.external_tracking_number);
+      const providerResponse = await getOlivraisonPackage(token, order.external_tracking_number);
+      packageDetails = providerResponse.body;
+      await logApi(admin, { order_id: order.id, livreur_id: order.assigned_livreur_id, event_type: "order_details_provider_lookup", status: "received", message: `Provider details received for ${order.external_tracking_number}`, details: providerLookupExchange(order.external_tracking_number, providerResponse.status, packageDetails) });
     } catch (e) {
+      const err = e as Error & { status?: number; body?: unknown };
+      await logApi(admin, { order_id: order.id, livreur_id: order.assigned_livreur_id, event_type: "order_details_provider_lookup", status: "failed", message: err.message || "Provider details lookup failed", details: providerLookupExchange(order.external_tracking_number, err.status ?? null, err.body ?? { error: err.message }) });
       packageError = "Tracking externe indisponible";
     }
   }
@@ -251,7 +308,9 @@ Deno.serve(async (req) => {
   if (settings?.webhook_updates_current_status === true && order.assigned_livreur_id && latestProviderEvent) {
     try {
       currentOrder = await syncCurrentStatusFromProvider(admin, order, latestProviderEvent, order.assigned_livreur_id, settings);
+      await logApi(admin, { order_id: order.id, livreur_id: order.assigned_livreur_id, event_type: "order_details_status_sync", status: latestProviderEvent.mappedStatus === order.status ? "ignored" : "success", message: latestProviderEvent.mappedStatus === order.status ? "Provider status already matches order" : "Order status synced from provider details", details: { tracking, raw_status: latestProviderEvent.status, mapped_status: latestProviderEvent.mappedStatus, previous_status: order.status, provider_event: latestProviderEvent, source: "order_details" } });
     } catch (e) {
+      await logApi(admin, { order_id: order.id, livreur_id: order.assigned_livreur_id, event_type: "order_details_status_sync", status: "failed", message: e instanceof Error ? e.message : "Unable to sync provider status", details: { tracking, raw_status: latestProviderEvent.status, mapped_status: latestProviderEvent.mappedStatus, previous_status: order.status, provider_event: latestProviderEvent, source: "order_details" } });
       packageError = "Tracking externe indisponible";
     }
   }
