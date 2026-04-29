@@ -115,6 +115,15 @@ const AdminSticker = () => {
     reader.readAsDataURL(file);
   };
 
+  const renderCustomPreview = (el: StickerElement) => {
+    const vars = stickerSystemFields.reduce<Record<string, string>>((acc, field) => {
+      acc[field.value] = String(resolveStickerValue(sampleOrder, field.value));
+      return acc;
+    }, {});
+    const replaceVars = (value = "") => value.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => vars[key] ?? "");
+    return { __html: `<style>${replaceVars(el.css || "")}</style>${replaceVars(el.html || "")}` };
+  };
+
   const renderPreviewValue = (el: StickerElement) => {
     if (el.type === "field") return resolveStickerValue(sampleOrder, el.field);
     if (el.type === "qr") return "QR";
@@ -126,7 +135,7 @@ const AdminSticker = () => {
     <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
       <Card className="p-4">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div><h3 className="font-semibold">Live sticker editor</h3><p className="text-sm text-muted-foreground">Canvas مربع فارغ: زيد المعلومة، جرّها، كبّرها، وصايب sticker بحال Photoshop.</p></div>
+          <div><h3 className="font-semibold">Live sticker editor</h3><p className="text-sm text-muted-foreground">Start from an empty square canvas, add any system field, text, logo, emoji, line, QR, barcode, or custom HTML/CSS block, then drag and style it freely.</p></div>
           <div className="flex flex-wrap gap-2">
             <Select onValueChange={(value) => addElement("field", value as StickerSystemField)}><SelectTrigger className="w-44"><SelectValue placeholder="+ معلومة النظام" /></SelectTrigger><SelectContent>{stickerSystemFields.map((field) => <SelectItem key={field.value} value={field.value}>{field.label}</SelectItem>)}</SelectContent></Select>
             <Button variant="outline" onClick={() => addElement("text")}><Type className="mr-1 h-4 w-4" />Texte</Button>
@@ -134,12 +143,13 @@ const AdminSticker = () => {
             <Button variant="outline" onClick={() => addElement("line")}><Minus className="mr-1 h-4 w-4" />Ligne</Button>
             <Button variant="outline" onClick={() => addElement("qr")}><QrCode className="mr-1 h-4 w-4" />QR</Button>
             <Button variant="outline" onClick={() => addElement("barcode")}>Barcode</Button>
+            <Button variant="outline" onClick={() => addElement("html")}>HTML/CSS</Button>
           </div>
         </div>
         <div className="mb-4 grid gap-3 md:grid-cols-3">
-          <div className="space-y-2"><Label>Taille carrée mm</Label><Input type="number" min={40} max={120} value={template.sizeMm} onChange={(e) => updateTemplate({ sizeMm: Number(e.target.value) })} /></div>
-          <div className="space-y-2"><Label>Marge imprimante mm</Label><Input type="number" min={0} max={10} value={template.marginMm} onChange={(e) => updateTemplate({ marginMm: Number(e.target.value) })} /></div>
-          <label className="flex items-center justify-between rounded-md border border-border p-3 text-sm"><span>Cadre extérieur</span><Switch checked={template.showFrame} onCheckedChange={(showFrame) => updateTemplate({ showFrame })} /></label>
+          <div className="space-y-2"><Label>Square size (mm)</Label><Input type="number" min={40} max={120} step="0.1" value={template.sizeMm} onChange={(e) => updateTemplate({ sizeMm: Number(e.target.value) })} /></div>
+          <div className="space-y-2"><Label>Printer margin (mm)</Label><Input type="number" min={0} max={10} step="0.1" value={template.marginMm} onChange={(e) => updateTemplate({ marginMm: Number(e.target.value) })} /></div>
+          <label className="flex items-center justify-between rounded-md border border-border p-3 text-sm"><span>Outer frame</span><Switch checked={template.showFrame} onCheckedChange={(showFrame) => updateTemplate({ showFrame })} /></label>
         </div>
         <div className="overflow-auto rounded-md border border-border bg-muted/40 p-4">
           <div
@@ -159,7 +169,7 @@ const AdminSticker = () => {
                 className={`absolute overflow-hidden border border-dashed p-1 leading-none ${selectedId === el.id ? "border-primary bg-primary/10" : "border-muted-foreground/40"}`}
                 style={{ left: `${(el.x / template.sizeMm) * 100}%`, top: `${(el.y / template.sizeMm) * 100}%`, width: `${(el.w / template.sizeMm) * 100}%`, height: `${(el.h / template.sizeMm) * 100}%`, fontSize: `${el.fontSize * 3}px`, fontWeight: el.fontWeight, textAlign: el.align, borderRadius: `${el.radius}px`, transform: `rotate(${el.rotation}deg)`, cursor: "move" }}
               >
-                {el.type === "image" && el.imageData ? <img src={el.imageData} alt="logo" className="h-full w-full object-contain" /> : renderPreviewValue(el)}
+                {el.type === "image" && el.imageData ? <img src={el.imageData} alt="logo" className="h-full w-full object-contain" /> : el.type === "html" ? <div className="h-full w-full" dangerouslySetInnerHTML={renderCustomPreview(el)} /> : renderPreviewValue(el)}
               </div>
             ))}
           </div>
