@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
   try { payload = await req.json(); } catch { payload = {}; }
 
   if (!profile || profile.api_token !== token) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Invalid webhook credentials", details: webhookExchangeDetails(req, livreurId, settings, null, 401, { error: "Invalid credentials" }) });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Rejected webhook: invalid credentials", details: webhookExchangeDetails(req, livreurId, settings, payload, 401, { error: "Invalid credentials" }, { rejected: true, rejection_reason: "invalid_credentials" }) });
     return jsonResponse({ error: "Invalid credentials" }, 401);
   }
 
@@ -223,24 +223,24 @@ Deno.serve(async (req) => {
   const capturedFields = buildCapturedFields(payload, settings?.webhook_extra_fields_mapping ?? {});
 
   if (!tracking || !String(rawStatus ?? "").trim()) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Webhook requires tracking and status", details: webhookExchangeDetails(req, livreurId, settings, payload, 400, { error: "Webhook requires tracking and status" }, { trackingField, statusField }) });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Rejected webhook: tracking and status are required", details: webhookExchangeDetails(req, livreurId, settings, payload, 400, { error: "Webhook requires tracking and status" }, { rejected: true, rejection_reason: "missing_tracking_or_status", trackingField, statusField }) });
     return jsonResponse({ error: "Webhook requires tracking and status" }, 400);
   }
 
   if (!settings || settings.is_active === false) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "API settings disabled", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "settings_disabled" }, { tracking, raw_status: rawStatus }) });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Rejected webhook: API settings disabled", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "settings_disabled" }, { rejected: true, rejection_reason: "settings_disabled", tracking, raw_status: rawStatus }) });
     return jsonResponse({ ok: true, ignored: true, reason: "settings_disabled" });
   }
 
   if (!mappedStatus) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Provider status is not mapped", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "status_not_mapped" }, { tracking, raw_status: rawStatus, status_mapping: settings?.status_mapping ?? {} }) });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Rejected webhook: provider status is not mapped", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "status_not_mapped" }, { rejected: true, rejection_reason: "status_not_mapped", tracking, raw_status: rawStatus, status_mapping: settings?.status_mapping ?? {} }) });
     return jsonResponse({ ok: true, ignored: true, reason: "status_not_mapped" });
   }
 
   const { data: order, error: orderError } = await findOrderByTracking(admin, livreurId, String(tracking).trim());
 
   if (orderError || !order) {
-    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Order not found for tracking", details: webhookExchangeDetails(req, livreurId, settings, payload, 404, { error: "Order not found for tracking" }, { tracking, raw_status: rawStatus, error: orderError?.message }) });
+    await logApi(admin, { livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Rejected webhook: order not found for tracking", details: webhookExchangeDetails(req, livreurId, settings, payload, 404, { error: "Order not found for tracking" }, { rejected: true, rejection_reason: "order_not_found", tracking, raw_status: rawStatus, error: orderError?.message }) });
     return jsonResponse({ error: "Order not found for tracking" }, 404);
   }
 
