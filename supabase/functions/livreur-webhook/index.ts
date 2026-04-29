@@ -25,6 +25,12 @@ function buildCapturedFields(payload: any, mapping: Record<string, string>) {
   );
 }
 
+function parseDateValue(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   const raw = String(status ?? "").trim();
   if (!raw) return null;
@@ -75,28 +81,41 @@ async function removeRecentSystemDuplicate(admin: any, order: any, mappedStatus:
     .gte("changed_at", since);
 }
 
-async function hasLatestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
+async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
   const { data } = await admin
     .from("order_status_history")
-    .select("new_status, changed_by")
+    .select("id, new_status, changed_by")
     .eq("order_id", orderId)
     .order("changed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.new_status === mappedStatus && data?.changed_by === livreurId;
+  return data?.new_status === mappedStatus && data?.changed_by === livreurId ? data : null;
 }
 
-async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
-  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
+async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>, updateCurrentStatus = true) {
+  const orderPatch = {
+    ...(updateCurrentStatus ? { status: mappedStatus } : {}),
+    status_note: meta.note ?? null,
+    postponed_date: meta.reported_date ?? null,
+    scheduled_date: meta.scheduled_date ?? null,
+  };
+  const { error: updateError } = await admin.from("orders").update(orderPatch).eq("id", order.id);
   if (updateError) return updateError;
-  await removeRecentSystemDuplicate(admin, order, mappedStatus);
-  if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) return null;
+  if (updateCurrentStatus) await removeRecentSystemDuplicate(admin, order, mappedStatus);
+  const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
+  if (duplicate) {
+    await admin.from("order_status_history").update({ notes: meta.note ?? null, provider_note: meta.note ?? null, reported_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", duplicate.id);
+    return null;
+  }
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
     new_status: mappedStatus,
     changed_by: livreurId,
-    notes: message,
+    notes: meta.note ?? null,
+    provider_note: meta.note ?? null,
+    reported_date: meta.reported_date ?? null,
+    scheduled_date: meta.scheduled_date ?? null,
   });
   return historyError;
 }
@@ -142,7 +161,10 @@ Deno.serve(async (req) => {
   const tracking = getPath(payload, trackingField) || payload.tracking_id || payload.trackingNumber || payload.partnerTrackingID;
   const rawStatus = getPath(payload, statusField);
   const mappedStatus = mapProviderStatus(rawStatus, settings?.status_mapping ?? {});
-  const message = payload.message || payload.msg || payload.description || null;
+  const message = getPath(payload, settings?.webhook_note_field || "note") ?? payload.message ?? payload.msg ?? payload.description ?? null;
+  const reportedDate = parseDateValue(getPath(payload, settings?.webhook_reported_date_field || "reportedDate"));
+  const scheduledDate = parseDateValue(getPath(payload, settings?.webhook_scheduled_date_field || "scheduledDate"));
+  const meta = { note: message, reported_date: reportedDate, scheduled_date: scheduledDate };
   const driverName = getPath(payload, settings?.webhook_driver_name_field || "transport.currentDriverName") ?? null;
   const driverPhone = getPath(payload, settings?.webhook_driver_phone_field || "transport.currentDriverPhone") ?? null;
   const capturedFields = buildCapturedFields(payload, settings?.webhook_extra_fields_mapping ?? {});
@@ -171,22 +193,29 @@ Deno.serve(async (req) => {
 
   const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true;
   if (shouldUpdateCurrentStatus && mappedStatus !== order.status) {
-    const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, message);
+    const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, meta, true);
     if (updateError) {
       await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
       return jsonResponse({ error: "Unable to update order status" }, 500);
     }
   } else {
-    if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) {
-      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status ignored", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+    const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
+    if (duplicate) {
+      await admin.from("order_status_history").update({ notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate }).eq("id", duplicate.id);
+      await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
+      await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status updated with latest metadata", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
       return jsonResponse({ ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus });
     }
+    await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
     const { error: historyError } = await admin.from("order_status_history").insert({
       order_id: order.id,
       old_status: order.status,
       new_status: mappedStatus,
       changed_by: livreurId,
       notes: message,
+      provider_note: message,
+      reported_date: reportedDate,
+      scheduled_date: scheduledDate,
     });
     if (historyError) {
       await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to record status history", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: historyError.message } });
@@ -194,7 +223,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
+  await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "success", message: shouldUpdateCurrentStatus ? "Order status and history updated" : "History updated only", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields } });
 
   return jsonResponse({ ok: true, order_id: order.id, status: mappedStatus, updated_current_status: shouldUpdateCurrentStatus && mappedStatus !== order.status });
 });

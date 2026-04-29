@@ -31,6 +31,9 @@ interface LivreurApiSettings {
   webhook_tracking_field: string;
   webhook_driver_name_field: string;
   webhook_driver_phone_field: string;
+  webhook_note_field: string;
+  webhook_reported_date_field: string;
+  webhook_scheduled_date_field: string;
   webhook_extra_fields_mapping: Record<string, string>;
   polling_enabled: boolean;
   polling_interval_minutes: number;
@@ -41,6 +44,8 @@ interface LivreurApiSettings {
   polling_tracking_field: string;
   polling_status_field: string;
   polling_message_field: string;
+  polling_reported_date_field: string;
+  polling_scheduled_date_field: string;
   rate_limit_per_second: number;
   is_active: boolean;
 }
@@ -97,6 +102,9 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   webhook_tracking_field: "trackingID",
   webhook_driver_name_field: "transport.currentDriverName",
   webhook_driver_phone_field: "transport.currentDriverPhone",
+  webhook_note_field: "note",
+  webhook_reported_date_field: "reportedDate",
+  webhook_scheduled_date_field: "scheduledDate",
   webhook_extra_fields_mapping: {},
   polling_enabled: false,
   polling_interval_minutes: 15,
@@ -107,6 +115,8 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
   polling_tracking_field: "trackingID",
   polling_status_field: "status",
   polling_message_field: "message",
+  polling_reported_date_field: "reportedDate",
+  polling_scheduled_date_field: "scheduledDate",
   rate_limit_per_second: 5,
   is_active: true,
 });
@@ -312,6 +322,9 @@ const AdminLivreurs = () => {
     webhook_tracking_field: "trackingID",
     webhook_driver_name_field: "transport.currentDriverName",
     webhook_driver_phone_field: "transport.currentDriverPhone",
+    webhook_note_field: "note",
+    webhook_reported_date_field: "reportedDate",
+    webhook_scheduled_date_field: "scheduledDate",
     webhook_extra_fields_mapping: "{}",
     polling_enabled: false,
     polling_interval_minutes: 15,
@@ -322,6 +335,8 @@ const AdminLivreurs = () => {
     polling_tracking_field: "trackingID",
     polling_status_field: "status",
     polling_message_field: "message",
+    polling_reported_date_field: "reportedDate",
+    polling_scheduled_date_field: "scheduledDate",
     rate_limit_per_second: 5,
     is_active: true,
   });
@@ -361,6 +376,9 @@ const AdminLivreurs = () => {
       webhook_tracking_field: activeSettings.webhook_tracking_field || "trackingID",
       webhook_driver_name_field: activeSettings.webhook_driver_name_field || "transport.currentDriverName",
       webhook_driver_phone_field: activeSettings.webhook_driver_phone_field || "transport.currentDriverPhone",
+      webhook_note_field: activeSettings.webhook_note_field || "note",
+      webhook_reported_date_field: activeSettings.webhook_reported_date_field || "reportedDate",
+      webhook_scheduled_date_field: activeSettings.webhook_scheduled_date_field || "scheduledDate",
       webhook_extra_fields_mapping: formatJson(activeSettings.webhook_extra_fields_mapping),
       polling_enabled: activeSettings.polling_enabled ?? false,
       polling_interval_minutes: activeSettings.polling_interval_minutes ?? 15,
@@ -371,6 +389,8 @@ const AdminLivreurs = () => {
       polling_tracking_field: activeSettings.polling_tracking_field || "trackingID",
       polling_status_field: activeSettings.polling_status_field || "status",
       polling_message_field: activeSettings.polling_message_field || "message",
+      polling_reported_date_field: activeSettings.polling_reported_date_field || "reportedDate",
+      polling_scheduled_date_field: activeSettings.polling_scheduled_date_field || "scheduledDate",
       rate_limit_per_second: activeSettings.rate_limit_per_second ?? 5,
       is_active: activeSettings.is_active,
     });
@@ -429,6 +449,9 @@ const AdminLivreurs = () => {
         webhook_tracking_field: settingsForm.webhook_tracking_field.trim() || "trackingID",
         webhook_driver_name_field: settingsForm.webhook_driver_name_field.trim() || "transport.currentDriverName",
         webhook_driver_phone_field: settingsForm.webhook_driver_phone_field.trim() || "transport.currentDriverPhone",
+        webhook_note_field: settingsForm.webhook_note_field.trim() || "note",
+        webhook_reported_date_field: settingsForm.webhook_reported_date_field.trim() || "reportedDate",
+        webhook_scheduled_date_field: settingsForm.webhook_scheduled_date_field.trim() || "scheduledDate",
         webhook_extra_fields_mapping: parseJson("Webhook extra fields", settingsForm.webhook_extra_fields_mapping),
         polling_enabled: settingsForm.polling_enabled,
         polling_interval_minutes: Number(settingsForm.polling_interval_minutes) || 15,
@@ -439,6 +462,8 @@ const AdminLivreurs = () => {
         polling_tracking_field: settingsForm.polling_tracking_field.trim() || "trackingID",
         polling_status_field: settingsForm.polling_status_field.trim() || "status",
         polling_message_field: settingsForm.polling_message_field.trim() || "message",
+        polling_reported_date_field: settingsForm.polling_reported_date_field.trim() || "reportedDate",
+        polling_scheduled_date_field: settingsForm.polling_scheduled_date_field.trim() || "scheduledDate",
         rate_limit_per_second: Number((settingsForm as any).rate_limit_per_second) || 5,
         is_active: settingsForm.is_active,
       };
@@ -604,6 +629,9 @@ const AdminLivreurs = () => {
                 <div><Label>Webhook tracking field</Label><Input value={settingsForm.webhook_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_tracking_field: e.target.value })} /><FieldHelp>Field name that contains the tracking number in the webhook body.</FieldHelp></div>
                 <div><Label>Webhook driver name field</Label><Input value={settingsForm.webhook_driver_name_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_driver_name_field: e.target.value })} /><FieldHelp>Path used to capture the driver name shown in order details.</FieldHelp></div>
                 <div><Label>Webhook driver phone field</Label><Input value={settingsForm.webhook_driver_phone_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_driver_phone_field: e.target.value })} /><FieldHelp>Path used to capture the driver phone shown in order details.</FieldHelp></div>
+                <div><Label>Webhook note field</Label><Input value={settingsForm.webhook_note_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_note_field: e.target.value })} /><FieldHelp>Path used to capture the delivery note.</FieldHelp></div>
+                <div><Label>Webhook date Reporté field</Label><Input value={settingsForm.webhook_reported_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_reported_date_field: e.target.value })} /><FieldHelp>Path used to capture postponed delivery date.</FieldHelp></div>
+                <div><Label>Webhook date Programmé field</Label><Input value={settingsForm.webhook_scheduled_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, webhook_scheduled_date_field: e.target.value })} /><FieldHelp>Path used to capture scheduled delivery date.</FieldHelp></div>
               </div>
               <KeyValueEditor label="Webhook extra fields" help="Optional values captured from the webhook body for future use. Left side is the saved key, right side is the webhook body path." value={settingsForm.webhook_extra_fields_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, webhook_extra_fields_mapping: value })} keyPlaceholder="Saved key" valuePlaceholder="Webhook path" />
               <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><span>Webhook updates current status</span><Switch checked={settingsForm.webhook_updates_current_status} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, webhook_updates_current_status: v })} /></label>
@@ -623,6 +651,8 @@ const AdminLivreurs = () => {
                 <div><Label>Tracking field</Label><Input value={settingsForm.polling_tracking_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_tracking_field: e.target.value })} /></div>
                 <div><Label>Status field</Label><Input value={settingsForm.polling_status_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_status_field: e.target.value })} /></div>
                 <div><Label>Message field</Label><Input value={settingsForm.polling_message_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_message_field: e.target.value })} /></div>
+                <div><Label>Date Reporté field</Label><Input value={settingsForm.polling_reported_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_reported_date_field: e.target.value })} /></div>
+                <div><Label>Date Programmé field</Label><Input value={settingsForm.polling_scheduled_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_scheduled_date_field: e.target.value })} /></div>
               </div>
             </Card>
           </div>

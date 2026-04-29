@@ -21,6 +21,9 @@ interface OrderSummary {
   tracking_number: string | null;
   external_tracking_number: string | null;
   comment?: string | null;
+  status_note?: string | null;
+  postponed_date?: string | null;
+  scheduled_date?: string | null;
   created_at: string;
 }
 
@@ -29,6 +32,9 @@ interface HistoryItem {
   status: string;
   old_status?: string | null;
   message?: string | null;
+  note?: string | null;
+  reported_date?: string | null;
+  scheduled_date?: string | null;
   changed_at: string;
   actor?: { full_name?: string | null; username?: string | null; role?: string | null } | null;
 }
@@ -49,7 +55,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const cleanActor = (value?: string | null) => value?.includes("@") ? value.split("@")[0] : value;
-const actorName = (item: HistoryItem) => cleanActor(item.actor?.full_name) || cleanActor(item.actor?.username) || (item.source === "olivraison" ? "Olivraison" : "Système");
+const actorName = (item: HistoryItem) => cleanActor(item.actor?.full_name) || cleanActor(item.actor?.username) || (item.source === "provider" ? "Transport" : "Système");
 const vendeurName = (vendeur?: DetailsData["vendeur"]) => vendeur?.full_name || vendeur?.username || vendeur?.company_name || "Système";
 const isInternalConfirmed = (item: HistoryItem) =>
   item.source === "odit" && [item.status, item.old_status].some((status) => status?.toLowerCase() === "confirmed");
@@ -64,6 +70,7 @@ const historyKey = (item: HistoryItem) => [
   item.changed_at,
   item.actor?.username ?? item.actor?.full_name ?? "",
 ].join("|");
+const hasMeta = (note?: string | null, reported?: string | null, scheduled?: string | null) => Boolean(note || reported || scheduled);
 
 export const OrderDetailsPanel = ({
   order,
@@ -155,6 +162,13 @@ export const OrderDetailsPanel = ({
             {order.comment && (
               <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">{order.comment}</p>
             )}
+            {hasMeta(displayOrder.status_note, displayOrder.postponed_date, displayOrder.scheduled_date) && (
+              <div className="grid gap-2 rounded-lg border border-border p-3 text-sm md:grid-cols-3">
+                <div><p className="text-xs text-muted-foreground">Note</p><p className="font-medium">{displayOrder.status_note || "—"}</p></div>
+                <div><p className="text-xs text-muted-foreground">Date Reporté</p><p className="font-medium">{formatDate(displayOrder.postponed_date)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Date Programmé</p><p className="font-medium">{formatDate(displayOrder.scheduled_date)}</p></div>
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-center gap-2 rounded-lg border border-border p-3">
             {qrSrc ? <img src={qrSrc} alt={`QR code ${tracking}`} className="h-36 w-36" /> : <QrCode className="h-24 w-24 text-muted-foreground" />}
@@ -195,7 +209,7 @@ export const OrderDetailsPanel = ({
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           </Button>
         </div>
-        {data?.package_error && <p className="mb-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Tracking externe indisponible: {data.package_error}</p>}
+        {data?.package_error && <p className="mb-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Tracking externe indisponible</p>}
         <div className="relative space-y-0 pl-7">
           <div className="absolute left-[15px] top-2 h-[calc(100%-1rem)] w-px bg-border" />
           {history.map((item, index) => (
@@ -206,6 +220,13 @@ export const OrderDetailsPanel = ({
               <div className="ml-4 space-y-1">
                 <StatusBadge status={item.status} />
                 <p className="text-sm font-medium">{item.message || `Statut mis à jour vers ${statusLabel(item.status)}`}</p>
+                {hasMeta(item.note, item.reported_date, item.scheduled_date) && (
+                  <div className="grid gap-2 rounded-md bg-muted/50 p-2 text-xs md:grid-cols-3">
+                    <span><strong>Note:</strong> {item.note || "—"}</span>
+                    <span><strong>Date Reporté:</strong> {formatDate(item.reported_date)}</span>
+                    <span><strong>Date Programmé:</strong> {formatDate(item.scheduled_date)}</span>
+                  </div>
+                )}
                 <p className="flex items-center gap-1 text-xs text-muted-foreground"><UserRound className="h-3 w-3" />{actorName(item) === "Système" ? vendeurName(data?.vendeur) : actorName(item)}</p>
                 <p className="text-xs text-muted-foreground">{formatDate(item.changed_at)}</p>
               </div>

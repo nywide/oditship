@@ -30,6 +30,11 @@ async function getOlivraisonPackage(token: string, trackingID: string) {
   return parsed;
 }
 
+function getPath(obj: any, path?: string | null) {
+  if (!path) return undefined;
+  return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
+}
+
 function isInternalConfirmed(status?: string | null) {
   const normalized = status?.toLowerCase();
   return normalized === "confirmed";
@@ -51,6 +56,20 @@ function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
 }
 
+function parseDateValue(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function providerMeta(item: any, settings: any) {
+  return {
+    note: getPath(item, settings?.polling_message_field) ?? item?.msg ?? item?.message ?? item?.note ?? null,
+    reported_date: parseDateValue(getPath(item, settings?.polling_reported_date_field) ?? item?.reportedTo ?? item?.reportedDate ?? item?.reportDate),
+    scheduled_date: parseDateValue(getPath(item, settings?.polling_scheduled_date_field) ?? item?.scheduledTo ?? item?.scheduledDate ?? item?.programmedDate),
+  };
+}
+
 function latestMappedProviderEvent(history: any[], mapping: Record<string, string>) {
   return history
     .map((item) => ({ ...item, mappedStatus: mapProviderStatus(item?.status, mapping) }))
@@ -67,23 +86,23 @@ function removeSystemDuplicates(history: any[]) {
   return (history ?? []).filter((h: any) => h.changed_by || !providerKeys.has(`${h.old_status ?? ""}|${h.new_status ?? ""}`));
 }
 
-async function hasLatestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
+async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
   const { data } = await admin
     .from("order_status_history")
-    .select("new_status, changed_by")
+    .select("id, new_status, changed_by")
     .eq("order_id", orderId)
     .order("changed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.new_status === mappedStatus && data?.changed_by === livreurId;
+  return data?.new_status === mappedStatus && data?.changed_by === livreurId ? data : null;
 }
 
-async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent: any, livreurId: string) {
+async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent: any, livreurId: string, settings: any) {
   if (!latestEvent?.mappedStatus || latestEvent.mappedStatus === order.status) return order;
-  const message = latestEvent.msg ?? null;
+  const meta = providerMeta(latestEvent, settings);
   const { data: updated, error } = await admin
     .from("orders")
-    .update({ status: latestEvent.mappedStatus, status_note: message })
+    .update({ status: latestEvent.mappedStatus, status_note: meta.note, postponed_date: meta.reported_date, scheduled_date: meta.scheduled_date })
     .eq("id", order.id)
     .select("*")
     .single();
@@ -96,13 +115,20 @@ async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent
     .eq("new_status", latestEvent.mappedStatus)
     .is("changed_by", null)
     .gte("changed_at", new Date(Date.now() - 5000).toISOString());
-  if (await hasLatestDuplicate(admin, order.id, latestEvent.mappedStatus, livreurId)) return updated;
+  const duplicate = await latestDuplicate(admin, order.id, latestEvent.mappedStatus, livreurId);
+  if (duplicate) {
+    await admin.from("order_status_history").update({ notes: meta.note, provider_note: meta.note, reported_date: meta.reported_date, scheduled_date: meta.scheduled_date }).eq("id", duplicate.id);
+    return updated;
+  }
   await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
     new_status: latestEvent.mappedStatus,
     changed_by: livreurId,
-    notes: message,
+    notes: meta.note,
+    provider_note: meta.note,
+    reported_date: meta.reported_date,
+    scheduled_date: meta.scheduled_date,
   });
   return updated;
 }
@@ -187,13 +213,11 @@ Deno.serve(async (req) => {
   }
 
   const [{ data: history }, { data: livreur }, { data: vendeur }, { data: settings }, { data: latestWebhookLog }] = await Promise.all([
-    admin.from("order_status_history").select("id, old_status, new_status, changed_at, changed_by, notes").eq("order_id", order.id).order("changed_at", { ascending: true }),
-    order.assigned_livreur_id
-      ? admin.from("profiles").select("id, full_name, username, phone").eq("id", order.assigned_livreur_id).maybeSingle()
-      : Promise.resolve({ data: null }),
+    admin.from("order_status_history").select("id, old_status, new_status, changed_at, changed_by, notes, provider_note, reported_date, scheduled_date").eq("order_id", order.id).order("changed_at", { ascending: true }),
+    Promise.resolve({ data: null }),
     admin.from("profiles").select("id, full_name, username, company_name, phone").eq("id", order.vendeur_id).maybeSingle(),
     order.assigned_livreur_id
-      ? admin.from("livreur_api_settings").select("status_mapping, webhook_updates_current_status").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
+      ? admin.from("livreur_api_settings").select("status_mapping, webhook_updates_current_status, polling_message_field, polling_reported_date_field, polling_scheduled_date_field").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
       : Promise.resolve({ data: null }),
     admin.from("livreur_api_logs").select("details").eq("order_id", order.id).eq("event_type", "webhook_status").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
@@ -213,7 +237,7 @@ Deno.serve(async (req) => {
       const token = await olivraisonLogin(OLI_KEY, OLI_SECRET);
       packageDetails = await getOlivraisonPackage(token, order.external_tracking_number);
     } catch (e) {
-      packageError = e instanceof Error ? e.message : "Olivraison unavailable";
+      packageError = "Tracking externe indisponible";
     }
   }
 
@@ -224,30 +248,38 @@ Deno.serve(async (req) => {
   const latestProviderEvent = latestMappedProviderEvent(apiHistory, statusMapping);
   if (settings?.webhook_updates_current_status === true && order.assigned_livreur_id && latestProviderEvent) {
     try {
-      currentOrder = await syncCurrentStatusFromProvider(admin, order, latestProviderEvent, order.assigned_livreur_id);
+      currentOrder = await syncCurrentStatusFromProvider(admin, order, latestProviderEvent, order.assigned_livreur_id, settings);
     } catch (e) {
-      packageError = e instanceof Error ? e.message : "Synchronisation du statut indisponible";
+      packageError = "Tracking externe indisponible";
     }
   }
   const visibleDbHistory = removeSystemDuplicates(history ?? []);
   const seenTimeline = new Set<string>();
   const mergedHistory = [
     ...visibleDbHistory.filter((h: any) => !isInternalConfirmed(h.new_status) && !isInternalConfirmed(h.old_status) && !(h.changed_by === order.assigned_livreur_id && mappedApiStatuses.has(h.new_status))).map((h: any) => ({
-      source: "odit",
+      source: h.changed_by === order.assigned_livreur_id ? "provider" : "odit",
       status: h.new_status,
       old_status: h.old_status,
       message: h.notes,
+      note: h.provider_note ?? h.notes ?? null,
+      reported_date: h.reported_date ?? null,
+      scheduled_date: h.scheduled_date ?? null,
       changed_at: h.changed_at,
-      actor: h.changed_by ? actors[h.changed_by] ?? null : null,
+      actor: h.changed_by && h.changed_by !== order.assigned_livreur_id ? actors[h.changed_by] ?? null : null,
     })),
-    ...apiHistory.filter((h: any) => mapProviderStatus(h.status, statusMapping) && !isApiCreatedConfirmed(mapProviderStatus(h.status, statusMapping), h.msg)).map((h: any) => ({
-      source: "olivraison",
-      status: mapProviderStatus(h.status, statusMapping),
-      message: h.msg,
-      changed_at: h.updateAt,
-      actor: h.user ? { username: h.user } : null,
-      reported_to: h.reportedTo ?? null,
-    })),
+    ...apiHistory.filter((h: any) => mapProviderStatus(h.status, statusMapping) && !isApiCreatedConfirmed(mapProviderStatus(h.status, statusMapping), h.msg)).map((h: any) => {
+      const meta = providerMeta(h, settings);
+      return {
+        source: "provider",
+        status: mapProviderStatus(h.status, statusMapping),
+        message: meta.note,
+        note: meta.note,
+        reported_date: meta.reported_date,
+        scheduled_date: meta.scheduled_date,
+        changed_at: h.updateAt,
+        actor: h.user ? { username: h.user } : null,
+      };
+    }),
   ]
     .sort((a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime())
     .filter((item: any) => {
@@ -262,8 +294,8 @@ Deno.serve(async (req) => {
     tracking,
     vendeur,
     livreur: {
-      name: packageDetails?.transport?.currentDriverName || latestWebhookLog?.details?.driver_name || livreur?.full_name || livreur?.username || null,
-      phone: packageDetails?.transport?.currentDriverPhone || latestWebhookLog?.details?.driver_phone || livreur?.phone || null,
+      name: latestWebhookLog?.details?.driver_name || null,
+      phone: latestWebhookLog?.details?.driver_phone || null,
     },
     support: null,
     destination: packageDetails?.destination ?? null,

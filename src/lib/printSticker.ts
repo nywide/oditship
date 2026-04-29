@@ -1,3 +1,6 @@
+import QRCode from "qrcode";
+import { supabase } from "@/integrations/supabase/client";
+
 export interface StickerOrder {
   id: number;
   customer_name: string;
@@ -10,74 +13,100 @@ export interface StickerOrder {
   comment?: string | null;
   tracking_number?: string | null;
   external_tracking_number?: string | null;
+  created_at?: string | null;
 }
 
+type StickerTemplate = Record<string, string | boolean>;
+
+export const defaultStickerTemplate: StickerTemplate = {
+  brand_title: "POSTESHIP",
+  brand_subtitle: "logistique & e-com service",
+  sender_label: "Expéditeur",
+  sender_name: "ODiT",
+  phone_label: "Tél",
+  date_label: "Date",
+  recipient_label: "Destinataire",
+  city_label: "Ville",
+  address_label: "Adresse",
+  hub_label: "HUB",
+  qr_label: "QR",
+  tracking_label: "#NUMERO DE SUIVI",
+  product_label: "Produit",
+  open_package_allowed: "AUTORISER D'OUVRIR",
+  open_package_denied: "NE PAS OUVRIR",
+  comment_label: "Commentaire",
+  currency: "DH",
+  show_border: true,
+  show_qr: true,
+  show_barcode: true,
+};
+
+const esc = (value: unknown) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c] as string));
+const text = (template: StickerTemplate, key: string) => String(template[key] ?? defaultStickerTemplate[key] ?? "");
+
+export const getStickerTemplate = async (): Promise<StickerTemplate> => {
+  const { data } = await (supabase as any).from("app_settings").select("value").eq("key", "sticker_template").maybeSingle();
+  return { ...defaultStickerTemplate, ...(data?.value ?? {}) };
+};
+
 const stickerStyles = `
-@page { size: 100mm 150mm; margin: 4mm; }
+@page { size: 100mm 150mm; margin: 2mm; }
 * { box-sizing: border-box; }
-body { font-family: Inter, system-ui, sans-serif; margin:0; padding: 0; color: #111; }
-.sticker { padding: 8px; page-break-after: always; }
-.sticker:last-child { page-break-after: auto; }
-.header { display:flex; justify-content:space-between; align-items:center; border-bottom: 2px solid #000; padding-bottom: 6px; }
-.brand { font-weight: 800; font-size: 18px; }
-.tracking { font-family: 'Courier New', monospace; font-weight: 700; font-size: 14px; }
-h2 { margin: 8px 0 4px; font-size: 13px; text-transform: uppercase; color: #555; letter-spacing: .5px; }
-.row { font-size: 14px; margin: 2px 0; }
-.big { font-size: 18px; font-weight: 700; }
-.barcode { font-family: 'Libre Barcode 39', monospace; font-size: 56px; text-align: center; letter-spacing: 2px; }
-.footer { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #999; font-size: 11px; color: #666; display:flex; justify-content:space-between; }
-.badge { display:inline-block; padding:2px 6px; border:1px solid #000; border-radius: 3px; font-size: 11px; font-weight:700; }
+body { font-family: Arial, Helvetica, sans-serif; margin:0; color:#070707; background:#fff; }
+.sticker { width:96mm; min-height:146mm; padding:3mm; page-break-after:always; border:1mm solid #111; }
+.sticker:last-child { page-break-after:auto; }
+.top { display:grid; grid-template-columns: 1fr auto; gap:4mm; align-items:start; border-bottom:.5mm solid #111; padding-bottom:2.5mm; }
+.brand { font-weight:900; font-size:14mm; line-height:.82; letter-spacing:-.4mm; }
+.subtitle { font-size:4.7mm; margin-top:1mm; }
+.sender { text-align:right; font-size:5mm; line-height:1.35; white-space:nowrap; }
+.section { border-bottom:.5mm solid #111; padding:3mm 0; }
+.recipient { display:grid; grid-template-columns: 1fr 27mm; gap:3mm; }
+.line { font-size:7.2mm; line-height:1.35; }
+.line b, .sender b { font-weight:900; }
+.hub { align-self:center; text-align:center; font-size:6mm; line-height:1.05; }
+.hub b { display:block; font-size:8.2mm; }
+.codes { display:grid; grid-template-columns: 26mm 1fr; gap:8mm; align-items:center; }
+.qr-title { text-align:center; font-weight:900; font-size:6mm; margin-bottom:1.5mm; }
+.qr-box { width:25mm; height:25mm; border:.55mm solid #111; display:flex; align-items:center; justify-content:center; }
+.qr-box img { width:18mm; height:18mm; image-rendering:pixelated; }
+.track-label { text-align:center; font-size:4.6mm; margin-bottom:2mm; }
+.barcode { text-align:center; font-family:'Libre Barcode 39', monospace; font-size:18mm; line-height:.8; }
+.track { text-align:center; font-weight:900; font-size:8mm; letter-spacing:.3mm; }
+.product { font-size:6.5mm; padding-top:4mm; }
+.bottom { display:grid; grid-template-columns: 1fr 39mm; gap:5mm; align-items:start; padding-top:7mm; }
+.open { display:inline-flex; min-width:25mm; min-height:13mm; border:.5mm solid #111; align-items:center; justify-content:center; padding:1mm 2mm; font-size:3.3mm; text-align:center; margin:3mm 0 4mm; }
+.comment { font-size:5.3mm; }
+.price { border:.8mm solid #111; font-weight:900; font-size:10.5mm; text-align:center; padding:3mm 2mm; white-space:nowrap; }
 `;
 
-const stickerHtml = (o: StickerOrder): string => {
+const renderSticker = async (o: StickerOrder, template: StickerTemplate) => {
   const tracking = o.external_tracking_number || o.tracking_number || `ODiT-${o.id}`;
+  const qr = await QRCode.toDataURL(tracking, { width: 120, margin: 1 });
+  const stickerDate = new Date(o.created_at || Date.now()).toLocaleString("fr-FR");
   return `<div class="sticker">
-    <div class="header">
-      <div class="brand">ODiT</div>
-      <div class="tracking">${tracking}</div>
-    </div>
-    <h2>Destinataire</h2>
-    <div class="row big">${o.customer_name}</div>
-    <div class="row">${o.customer_phone}</div>
-    <div class="row">${o.customer_address}</div>
-    <div class="row"><strong>${o.customer_city}</strong></div>
-
-    <h2>Colis</h2>
-    <div class="row">${o.product_name}</div>
-    <div class="row big">${Number(o.order_value).toFixed(2)} MAD</div>
-    <div class="row">
-      ${o.open_package ? '<span class="badge">Ne pas ouvrir</span>' : '<span class="badge">Ouverture autorisée</span>'}
-    </div>
-    ${o.comment ? `<div class="row" style="font-size:12px;color:#555">${o.comment}</div>` : ""}
-
-    <div class="barcode">*${tracking}*</div>
-
-    <div class="footer">
-      <span>Order #${o.id}</span>
-      <span>${new Date().toLocaleDateString("fr-FR")}</span>
-    </div>
+    <div class="top"><div><div class="brand">${esc(text(template, "brand_title"))}</div><div class="subtitle">${esc(text(template, "brand_subtitle"))}</div></div><div class="sender"><b>${esc(text(template, "sender_label"))}:</b> ${esc(text(template, "sender_name"))}<br><b>${esc(text(template, "phone_label"))}:</b> ${esc(o.customer_phone)}<br><b>${esc(text(template, "date_label"))}:</b> ${esc(stickerDate)}</div></div>
+    <div class="section recipient"><div><div class="line"><b>${esc(text(template, "recipient_label"))}:</b> ${esc(o.customer_name)}</div><div class="line"><b>${esc(text(template, "phone_label"))}:</b> ${esc(o.customer_phone)}</div><div class="line"><b>${esc(text(template, "city_label"))}:</b> ${esc(o.customer_city)}</div><div class="line"><b>${esc(text(template, "address_label"))}:</b> ${esc(o.customer_address)}</div></div><div class="hub">${esc(text(template, "hub_label"))}<b>${esc(o.customer_city.split(" ").slice(-1)[0] || o.customer_city)}</b></div></div>
+    <div class="section codes"><div><div class="qr-title">${esc(text(template, "qr_label"))}</div><div class="qr-box">${template.show_qr === false ? "" : `<img src="${qr}" alt="QR">`}</div></div><div><div class="track-label">${esc(text(template, "tracking_label"))}</div>${template.show_barcode === false ? "" : `<div class="barcode">*${esc(tracking)}*</div>`}<div class="track">#${esc(tracking)}</div></div></div>
+    <div class="product"><b>${esc(text(template, "product_label"))}:</b> ${esc(o.product_name)}</div>
+    <div class="bottom"><div><div class="open">${esc(text(template, o.open_package ? "open_package_denied" : "open_package_allowed"))}</div><div class="comment">${esc(text(template, "comment_label"))}: ${esc(o.comment || "")}</div></div><div class="price">${Number(o.order_value).toFixed(2)} ${esc(text(template, "currency"))}</div></div>
   </div>`;
 };
 
 const openPrintWindow = (title: string, body: string) => {
-  const win = window.open("", "_blank", "width=480,height=720");
+  const win = window.open("", "_blank", "width=520,height=780");
   if (!win) return;
-  win.document.write(`<!doctype html><html><head><title>${title}</title>
-  <style>${stickerStyles}</style>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap">
-  </head><body>${body}
-    <script>window.onload = () => { setTimeout(() => window.print(), 300); }</script>
-  </body></html>`);
+  win.document.write(`<!doctype html><html><head><title>${esc(title)}</title><style>${stickerStyles}</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap"></head><body>${body}<script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
   win.document.close();
 };
 
-export const printSticker = (o: StickerOrder) => {
-  const tracking = o.external_tracking_number || o.tracking_number || `ODiT-${o.id}`;
-  openPrintWindow(`Sticker ${tracking}`, stickerHtml(o));
+export const printSticker = async (o: StickerOrder) => {
+  const template = await getStickerTemplate();
+  openPrintWindow(`Sticker ${o.external_tracking_number || o.tracking_number || o.id}`, await renderSticker(o, template));
 };
 
-export const printStickers = (orders: StickerOrder[]) => {
-  if (orders.length === 0) return;
-  if (orders.length === 1) return printSticker(orders[0]);
-  openPrintWindow(`Stickers (${orders.length})`, orders.map(stickerHtml).join(""));
+export const printStickers = async (orders: StickerOrder[]) => {
+  if (!orders.length) return;
+  const template = await getStickerTemplate();
+  const html = (await Promise.all(orders.map((order) => renderSticker(order, template)))).join("");
+  openPrintWindow(`Stickers (${orders.length})`, html);
 };

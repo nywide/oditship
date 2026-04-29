@@ -37,6 +37,12 @@ function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
   return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
 }
 
+function parseDateValue(value: unknown) {
+  if (value === undefined || value === null || value === "") return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function resolveValue(order: Record<string, any>, source: unknown) {
   const value = String(source ?? "");
   if (value === "external_tracking") return order.external_tracking_number || order.tracking_number;
@@ -61,20 +67,20 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
   });
 }
 
-async function hasLatestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
+async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
   const { data } = await admin
     .from("order_status_history")
-    .select("new_status, changed_by")
+    .select("id, new_status, changed_by")
     .eq("order_id", orderId)
     .order("changed_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data?.new_status === mappedStatus && data?.changed_by === livreurId;
+  return data?.new_status === mappedStatus && data?.changed_by === livreurId ? data : null;
 }
 
-async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, message: unknown) {
+async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>) {
   const since = new Date(Date.now() - 5000).toISOString();
-  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: message ?? null }).eq("id", order.id);
+  const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: meta.note ?? null, postponed_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", order.id);
   if (updateError) return updateError;
   await admin
     .from("order_status_history")
@@ -84,13 +90,20 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
     .eq("new_status", mappedStatus)
     .is("changed_by", null)
     .gte("changed_at", since);
-  if (await hasLatestDuplicate(admin, order.id, mappedStatus, livreurId)) return null;
+  const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
+  if (duplicate) {
+    await admin.from("order_status_history").update({ notes: meta.note ?? null, provider_note: meta.note ?? null, reported_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", duplicate.id);
+    return null;
+  }
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
     new_status: mappedStatus,
     changed_by: livreurId,
-    notes: message,
+    notes: meta.note ?? null,
+    provider_note: meta.note ?? null,
+    reported_date: meta.reported_date ?? null,
+    scheduled_date: meta.scheduled_date ?? null,
   });
   return historyError;
 }
@@ -172,14 +185,21 @@ Deno.serve(async (req) => {
           await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
           continue;
         }
-        if (mappedStatus === order.status) continue;
         const message = getPath(body, settings.polling_message_field) ?? null;
-        const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, message);
+        const reportedDate = parseDateValue(getPath(body, settings.polling_reported_date_field || "reportedDate"));
+        const scheduledDate = parseDateValue(getPath(body, settings.polling_scheduled_date_field || "scheduledDate"));
+        if (mappedStatus === order.status) {
+          const duplicate = await latestDuplicate(admin, order.id, mappedStatus, settings.livreur_id);
+          await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
+          if (duplicate) await admin.from("order_status_history").update({ notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate }).eq("id", duplicate.id);
+          continue;
+        }
+        const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, { note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
         if (updateError) {
           await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: "Unable to update order status", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message } });
           continue;
         }
-        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus } });
+        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Order status and history updated", details: { tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
         updated += 1;
       } catch (e) {
         await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "failed", message: e instanceof Error ? e.message : "Unknown polling error", details: { tracking: order.external_tracking_number || order.tracking_number || null } });
