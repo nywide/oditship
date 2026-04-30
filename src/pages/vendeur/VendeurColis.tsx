@@ -332,13 +332,7 @@ const VendeurColis = () => {
                   <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} aria-label={`Sélectionner ${o.id}`} />
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="font-medium">{o.customer_name}</span>
-                    {statusMetaValues(o).map((value, index) => (
-                      <span key={`${o.id}-meta-${index}`} className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{value}</span>
-                    ))}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{o.product_name}</div>
+                  {renderMainCell(o)}
                 </TableCell>
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
@@ -372,7 +366,7 @@ const VendeurColis = () => {
               {expandedOrderId === o.id && (
                 <TableRow key={`${o.id}-details`}>
                   <TableCell colSpan={7} className="bg-muted/20 p-0">
-                    <OrderDetailsPanel order={o} onOrderSynced={syncOrderInList} />
+                    <OrderDetailsPanel order={o} onOrderSynced={syncOrderInList} previewSettings={previewSettings} />
                   </TableCell>
                 </TableRow>
               )}
