@@ -559,6 +559,8 @@ const AdminLivreurs = () => {
       createPackage: Array.from(createPackageSet).sort(sortAlpha),
     };
   }, [editing, apiLogs, settingsForm]);
+
+  const load = async () => {
     const [p, h, hl, s, logs, retentionSetting] = await Promise.all([
       db.from("profiles").select("id, username, full_name, api_enabled, api_token, authentication_config, create_package_config").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
