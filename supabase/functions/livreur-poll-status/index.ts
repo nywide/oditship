@@ -129,19 +129,6 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
   if (error) console.error("livreur_api_logs insert failed", error.message);
 }
 
-async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
-  const { data } = await admin
-    .from("order_status_history")
-    .select("id, new_status, changed_by")
-    .eq("order_id", orderId)
-    .eq("new_status", mappedStatus)
-    .eq("changed_by", livreurId)
-    .order("changed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data ?? null;
-}
-
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>) {
   const since = new Date(Date.now() - 5000).toISOString();
   const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: meta.note ?? null, postponed_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", order.id);
@@ -154,11 +141,6 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
     .eq("new_status", mappedStatus)
     .is("changed_by", null)
     .gte("changed_at", since);
-  const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
-  if (duplicate) {
-    await admin.from("order_status_history").update({ notes: meta.note ?? null, provider_note: meta.note ?? null, reported_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", duplicate.id);
-    return null;
-  }
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
@@ -267,10 +249,9 @@ Deno.serve(async (req) => {
         const scheduledDate = parseDateValue(getPath(body, settings.polling_scheduled_date_field || "scheduledDate"));
         await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "received", message: `Provider status received: ${mappedStatus}`, details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, previous_status: order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
         if (mappedStatus === order.status) {
-          const duplicate = await latestDuplicate(admin, order.id, mappedStatus, settings.livreur_id);
           await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
-          if (duplicate) await admin.from("order_status_history").update({ notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate }).eq("id", duplicate.id);
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status already matches order", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, duplicate_history_id: duplicate?.id ?? null, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
+          await admin.from("order_status_history").insert({ order_id: order.id, old_status: order.status, new_status: mappedStatus, changed_by: settings.livreur_id, notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Provider status metadata saved", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
           continue;
         }
         const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, { note: message, reported_date: reportedDate, scheduled_date: scheduledDate });

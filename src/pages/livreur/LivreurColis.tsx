@@ -17,6 +17,14 @@ const LivreurColis = () => {
   useEffect(() => {
     supabase.from("orders").select("*").order("created_at", { ascending: false })
       .then(({ data }) => { setOrders(data ?? []); setLoading(false); });
+    const channel = supabase.channel("livreur-orders-live").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+      setOrders((current) => {
+        if (payload.eventType === "DELETE") return current.filter((order) => order.id !== (payload.old as any).id);
+        const next = payload.new as any;
+        return current.some((order) => order.id === next.id) ? current.map((order) => order.id === next.id ? { ...order, ...next } : order) : [next, ...current];
+      });
+    }).subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   return (

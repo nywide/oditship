@@ -312,7 +312,7 @@ const AdminLivreurs = () => {
   const [selectedLog, setSelectedLog] = useState<typeof apiLogs[number] | null>(null);
   const [logFilter, setLogFilter] = useState("all");
   const [logSearch, setLogSearch] = useState("");
-  const [retention, setRetention] = useState({ enabled: false, days: 30 });
+  const [retention, setRetention] = useState({ enabled: false, hours: 72 });
   const filteredLogs = useMemo(() => apiLogs.filter((log) => {
     if (logFilter !== "all" && (logFilter === "webhook" ? log.event_type !== "webhook_status" : log.event_type === "webhook_status")) return false;
     const needle = logSearch.trim().toLowerCase();
@@ -385,7 +385,7 @@ const AdminLivreurs = () => {
     setSettings(byLivreur);
     setApiLogs(logs.data ?? []);
     const retentionValue = (retentionSetting.data?.value ?? {}) as Record<string, unknown>;
-    setRetention({ enabled: Boolean(retentionValue.enabled), days: Number(retentionValue.days) || 30 });
+    setRetention({ enabled: Boolean(retentionValue.enabled), hours: Number(retentionValue.hours ?? (Number(retentionValue.days) || 3) * 24) || 72 });
   };
   useEffect(() => { load(); }, []);
 
@@ -531,10 +531,10 @@ const AdminLivreurs = () => {
   };
 
   const saveRetention = async () => {
-    const days = Math.max(Number(retention.days) || 30, 1);
-    const { error } = await db.from("app_settings").upsert({ key: "api_logs_retention", value: { enabled: retention.enabled, days } }, { onConflict: "key" });
+    const hours = Math.max(Number(retention.hours) || 72, 1);
+    const { error } = await db.from("app_settings").upsert({ key: "api_logs_retention", value: { enabled: retention.enabled, hours } }, { onConflict: "key" });
     if (error) toast.error(error.message);
-    else { toast.success("Log cleanup settings saved"); setRetention({ enabled: retention.enabled, days }); }
+    else { toast.success("Log cleanup settings saved"); setRetention({ enabled: retention.enabled, hours }); }
   };
 
   const deleteLog = async (id: number) => {
@@ -689,13 +689,13 @@ const AdminLivreurs = () => {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold">Webhook logs & Driver API logs</h3>
-            <p className="text-sm text-muted-foreground">Showing latest {apiLogs.length} receptions, rejections, polling checks, and provider responses with full details. Cleanup retention is measured in days.</p>
+            <p className="text-sm text-muted-foreground">Showing latest {apiLogs.length} receptions, rejections, polling checks, and provider responses with full details. Cleanup retention is measured in hours.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Input className="h-9 w-64" placeholder="Search order, tracking, status..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
             <Select value={logFilter} onValueChange={setLogFilter}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All logs</SelectItem><SelectItem value="webhook">Webhook logs</SelectItem><SelectItem value="driver">Driver API logs</SelectItem></SelectContent></Select>
             <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Auto clean</label>
-            <div className="flex items-center gap-2"><Input type="number" min={1} className="h-9 w-24" value={retention.days} onChange={(e) => setRetention({ ...retention, days: Number(e.target.value) })} /><span className="text-sm text-muted-foreground">days</span></div>
+            <div className="flex items-center gap-2"><Input type="number" min={1} className="h-9 w-24" value={retention.hours} onChange={(e) => setRetention({ ...retention, hours: Number(e.target.value) })} /><span className="text-sm text-muted-foreground">hours</span></div>
             <Button variant="outline" size="sm" onClick={saveRetention}>Save cleanup</Button>
             <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
           </div>

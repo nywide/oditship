@@ -139,19 +139,6 @@ async function removeRecentSystemDuplicate(admin: any, order: any, mappedStatus:
     .gte("changed_at", since);
 }
 
-async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
-  const { data } = await admin
-    .from("order_status_history")
-    .select("id, new_status, changed_by")
-    .eq("order_id", orderId)
-    .eq("new_status", mappedStatus)
-    .eq("changed_by", livreurId)
-    .order("changed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data ?? null;
-}
-
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>, updateCurrentStatus = true) {
   const orderPatch = {
     ...(updateCurrentStatus ? { status: mappedStatus } : {}),
@@ -162,11 +149,6 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
   const { error: updateError } = await admin.from("orders").update(orderPatch).eq("id", order.id);
   if (updateError) return updateError;
   if (updateCurrentStatus) await removeRecentSystemDuplicate(admin, order, mappedStatus);
-  const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
-  if (duplicate) {
-    await admin.from("order_status_history").update({ notes: meta.note ?? null, provider_note: meta.note ?? null, reported_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", duplicate.id);
-    return null;
-  }
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
@@ -271,13 +253,6 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Unable to update order status" }, 500);
     }
   } else {
-    const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
-    if (duplicate) {
-      await admin.from("order_status_history").update({ notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate }).eq("id", duplicate.id);
-      await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
-    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Duplicate status updated with latest metadata", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields }) });
-      return jsonResponse({ ok: true, ignored: true, reason: "duplicate_status", order_id: order.id, status: mappedStatus });
-    }
     await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
     const { error: historyError } = await admin.from("order_status_history").insert({
       order_id: order.id,
