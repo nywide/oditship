@@ -235,9 +235,10 @@ Deno.serve(async (req) => {
           continue;
         }
         const rawStatus = getPath(body, settings.polling_status_field);
-        const mappedStatus = mapProviderStatus(rawStatus, settings.status_mapping ?? {});
+        const pollingMapping = (settings.polling_status_mapping && Object.keys(settings.polling_status_mapping).length > 0) ? settings.polling_status_mapping : (settings.status_mapping ?? {});
+        const mappedStatus = mapProviderStatus(rawStatus, pollingMapping);
         if (!mappedStatus) {
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, status_mapping: settings.status_mapping ?? {} } });
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status is not mapped", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, status_mapping: pollingMapping } });
           continue;
         }
         const message = getPath(body, settings.polling_message_field) ?? null;
