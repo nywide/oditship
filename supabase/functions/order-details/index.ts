@@ -5,36 +5,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const OLIVRAISON_BASE = "https://partners.olivraison.com";
-
-async function olivraisonLogin(apiKey: string, secretKey: string): Promise<string> {
-  const r = await fetch(`${OLIVRAISON_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ apiKey, secretKey }),
-  });
-  if (!r.ok) throw new Error(`Olivraison auth failed (${r.status})`);
-  const j = await r.json();
-  if (!j.token) throw new Error("Olivraison auth: no token");
-  return j.token;
-}
-
-async function getOlivraisonPackage(token: string, trackingID: string) {
-  const r = await fetch(`${OLIVRAISON_BASE}/package/${encodeURIComponent(trackingID)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const text = await r.text();
-  let parsed: any = null;
-  try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
-  if (!r.ok) {
-    const error = new Error(parsed?.description || `Olivraison package failed (${r.status})`) as Error & { status?: number; body?: unknown };
-    error.status = r.status;
-    error.body = parsed;
-    throw error;
-  }
-  return { body: parsed, status: r.status };
-}
-
 function getPath(obj: any, path?: string | null) {
   if (!path) return undefined;
   return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
@@ -76,58 +46,6 @@ function maskSensitiveHeaders(headers: Record<string, unknown> = {}) {
     }
     return [key, value];
   }));
-}
-
-async function logApi(admin: any, entry: Record<string, unknown>) {
-  const { error } = await admin.from("livreur_api_logs").insert({
-    order_id: entry.order_id ?? null,
-    livreur_id: entry.livreur_id ?? null,
-    event_type: entry.event_type,
-    status: entry.status,
-    message: entry.message ?? null,
-    details: entry.details ?? {},
-  });
-  if (error) console.error("livreur_api_logs insert failed", error.message);
-}
-
-function providerLookupExchange(tracking: string, responseStatus: number | null, responseBody: unknown) {
-  const endpoint = {
-    type: "Outgoing provider status lookup from order details",
-    method: "GET",
-    url: `${OLIVRAISON_BASE}/package/${encodeURIComponent(tracking)}`,
-    tracking_field: "trackingID",
-    status_field: "history.status",
-  };
-  return {
-    endpoint,
-    tracking,
-    sending: {
-      direction: "outgoing",
-      method: endpoint.method,
-      url: endpoint.url,
-      headers: maskSensitiveHeaders({ Authorization: "Bearer provider-token" }),
-    },
-    reception: {
-      direction: "incoming_response",
-      status_code: responseStatus,
-      body: responseBody,
-    },
-  };
-}
-
-function providerMeta(item: any, settings: any) {
-  return {
-    note: getPath(item, settings?.polling_message_field) ?? item?.msg ?? item?.message ?? item?.note ?? null,
-    reported_date: parseDateValue(getPath(item, settings?.polling_reported_date_field) ?? item?.reportedTo ?? item?.reportedDate ?? item?.reportDate),
-    scheduled_date: parseDateValue(getPath(item, settings?.polling_scheduled_date_field) ?? item?.scheduledTo ?? item?.scheduledDate ?? item?.programmedDate),
-  };
-}
-
-function latestMappedProviderEvent(history: any[], mapping: Record<string, string>) {
-  return history
-    .map((item) => ({ ...item, mappedStatus: mapProviderStatus(item?.status, mapping) }))
-    .filter((item) => item.mappedStatus && item.updateAt && !isApiCreatedConfirmed(item.mappedStatus, item.msg))
-    .sort((a, b) => new Date(b.updateAt).getTime() - new Date(a.updateAt).getTime())[0] ?? null;
 }
 
 function removeSystemDuplicates(history: any[]) {
