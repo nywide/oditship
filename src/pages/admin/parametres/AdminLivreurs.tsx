@@ -50,6 +50,10 @@ interface LivreurApiSettings {
   polling_message_field: string;
   polling_reported_date_field: string;
   polling_scheduled_date_field: string;
+  polling_driver_name_field: string;
+  polling_driver_phone_field: string;
+  polling_extra_fields_mapping: Record<string, string>;
+  polling_order_fields_mapping: Record<string, string>;
   rate_limit_per_second: number;
   is_active: boolean;
 }
