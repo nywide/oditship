@@ -129,19 +129,6 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
   if (error) console.error("livreur_api_logs insert failed", error.message);
 }
 
-async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
-  const { data } = await admin
-    .from("order_status_history")
-    .select("id, new_status, changed_by")
-    .eq("order_id", orderId)
-    .eq("new_status", mappedStatus)
-    .eq("changed_by", livreurId)
-    .order("changed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data ?? null;
-}
-
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>) {
   const since = new Date(Date.now() - 5000).toISOString();
   const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: meta.note ?? null, postponed_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", order.id);
@@ -154,11 +141,6 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
     .eq("new_status", mappedStatus)
     .is("changed_by", null)
     .gte("changed_at", since);
-  const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
-  if (duplicate) {
-    await admin.from("order_status_history").update({ notes: meta.note ?? null, provider_note: meta.note ?? null, reported_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", duplicate.id);
-    return null;
-  }
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
