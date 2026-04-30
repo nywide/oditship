@@ -111,6 +111,7 @@ function pollingEndpointInfo(settings: any, url: string, method: string, payload
     message_field: settings.polling_message_field,
     reported_date_field: settings.polling_reported_date_field,
     scheduled_date_field: settings.polling_scheduled_date_field,
+    actor_field: settings.polling_actor_field || "lastmsg",
   };
 }
 
