@@ -263,6 +263,123 @@ const KeyValueEditor = ({ label, help, value, onChange, keyPlaceholder = "Key", 
   );
 };
 
+// All known order/system fields available for mapping.
+const SYSTEM_ORDER_FIELDS: string[] = [
+  "id", "tracking_number", "external_tracking_number", "partner_tracking_id", "barcode",
+  "customer_name", "customer_phone", "customer_address", "customer_city",
+  "product_name", "order_value", "comment", "open_package",
+  "status", "status_note", "return_note",
+  "scheduled_date", "postponed_date", "delivered_at",
+  "vendeur_id", "agent_id", "assigned_livreur_id", "hub_id",
+  "qr_code", "created_at", "updated_at",
+];
+
+// Recursively collect all paths from a JSON object (dot.notation).
+const collectPaths = (obj: any, prefix = "", out: Set<string> = new Set(), depth = 0): Set<string> => {
+  if (depth > 6 || obj === null || obj === undefined) return out;
+  if (typeof obj !== "object" || Array.isArray(obj)) {
+    if (prefix) out.add(prefix);
+    return out;
+  }
+  for (const [key, value] of Object.entries(obj)) {
+    const next = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      out.add(next);
+      collectPaths(value, next, out, depth + 1);
+    } else {
+      out.add(next);
+    }
+  }
+  return out;
+};
+
+// Smart mapping editor: dropdowns for both columns + free-text fallback.
+const SmartMappingEditor = ({
+  label, help, value, onChange,
+  keyOptions, valueOptions,
+  keyPlaceholder = "Provider field", valuePlaceholder = "Order field",
+}: {
+  label: string; help: string; value: string; onChange: (value: string) => void;
+  keyOptions: string[]; valueOptions: string[];
+  keyPlaceholder?: string; valuePlaceholder?: string;
+}) => {
+  const [pairs, setPairs] = useState<Array<[string, string]>>(() => Object.entries(safeRecord(value)));
+  const [keyModes, setKeyModes] = useState<Record<number, "select" | "custom">>({});
+  const [valueModes, setValueModes] = useState<Record<number, "select" | "custom">>({});
+
+  useEffect(() => { setPairs(Object.entries(safeRecord(value))); }, [value]);
+
+  const emit = (nextPairs: Array<[string, string]>) =>
+    onChange(JSON.stringify(
+      Object.fromEntries(nextPairs.filter(([k]) => k.trim()).map(([k, v]) => [k.trim(), v])),
+      null, 2,
+    ));
+  const updatePairs = (nextPairs: Array<[string, string]>) => { setPairs(nextPairs); emit(nextPairs); };
+
+  const renderField = (
+    val: string, opts: string[], mode: "select" | "custom" | undefined,
+    setMode: (m: "select" | "custom") => void, onValChange: (v: string) => void,
+    placeholder: string,
+  ) => {
+    const effectiveMode = mode ?? (val && !opts.includes(val) ? "custom" : "select");
+    if (effectiveMode === "custom") {
+      return (
+        <div className="flex gap-1">
+          <Input value={val} placeholder={placeholder} onChange={(e) => onValChange(e.target.value)} />
+          <Button type="button" variant="ghost" size="sm" className="px-2" title="Use list" onClick={() => setMode("select")}>
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </div>
+      );
+    }
+    return (
+      <Select value={opts.includes(val) ? val : ""} onValueChange={(v) => { if (v === "__custom__") setMode("custom"); else onValChange(v); }}>
+        <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
+        <SelectContent className="max-h-72">
+          {opts.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No suggestions yet</div>}
+          {opts.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+          <SelectItem value="__custom__">✎ Custom value...</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  };
+
+  const rows = pairs.length ? pairs : [["", ""] as [string, string]];
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label>{label}</Label>
+        <FieldHelp>{help}</FieldHelp>
+      </div>
+      <div className="space-y-2">
+        {rows.map(([key, item], index) => (
+          <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px]">
+            {renderField(
+              key, keyOptions, keyModes[index],
+              (m) => setKeyModes({ ...keyModes, [index]: m }),
+              (v) => updatePairs(rows.map((pair, i): [string, string] => i === index ? [v, pair[1]] : pair)),
+              keyPlaceholder,
+            )}
+            {renderField(
+              item, valueOptions, valueModes[index],
+              (m) => setValueModes({ ...valueModes, [index]: m }),
+              (v) => updatePairs(rows.map((pair, i): [string, string] => i === index ? [pair[0], v] : pair)),
+              valuePlaceholder,
+            )}
+            <Button type="button" variant="ghost" size="icon" className="h-10 w-10" onClick={() => updatePairs(pairs.filter((_, i) => i !== index))} disabled={!pairs.length}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={() => updatePairs([...pairs, ["", ""]])}>
+        <Plus className="mr-1 h-4 w-4" /> Add row
+      </Button>
+    </div>
+  );
+};
+
 const AuthConfigEditor = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
   const auth = safeObject(value);
   const update = (patch: Record<string, unknown>) => onChange(JSON.stringify({ ...auth, ...patch }, null, 2));
