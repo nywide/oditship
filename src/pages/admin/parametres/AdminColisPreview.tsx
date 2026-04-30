@@ -44,10 +44,10 @@ const AdminColisPreview = () => {
     if (error) toast.error(error.message); else toast.success("Colis preview saved");
   };
 
-  return <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+  return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_520px]">
     <Card className="p-4">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div><h3 className="font-semibold">Edit preview colis</h3><p className="text-sm text-muted-foreground">Control fields, positions, actions, invoice, courier, support, QR, icons, colors, and background sources.</p></div>
+        <div><h3 className="font-semibold">Info Colis</h3><p className="text-sm text-muted-foreground">Live editor for the order information layout shown across colis screens.</p></div>
         <Button onClick={save} disabled={saving}><Save className="mr-1 h-4 w-4" />{saving ? "Saving..." : "Save"}</Button>
       </div>
       <div className="mb-4 grid gap-2 sm:grid-cols-3">
@@ -82,9 +82,9 @@ const AdminColisPreview = () => {
         <p className="text-xs text-muted-foreground">Available variables: {colisPreviewFieldOptions.map((field) => `{{${field.key}}}`).join(" ")}</p>
       </div>
     </Card>
-    <Card className="p-4">
-      <h4 className="mb-3 font-semibold">Preview</h4>
-      {section.useCustomHtml ? <div className="rounded-md border border-border p-3" style={colisSectionStyle(section, sample)} dangerouslySetInnerHTML={{ __html: previewHtml }} /> : <div className="space-y-2 rounded-md border border-border p-3" style={colisSectionStyle(section, sample)}>
+    <Card className="sticky top-20 h-fit p-4">
+      <h4 className="mb-3 font-semibold">Live canvas</h4>
+      {section.useCustomHtml ? <div className="min-h-72 rounded-md border border-border p-3" style={colisSectionStyle(section, sample)} dangerouslySetInnerHTML={{ __html: previewHtml }} /> : <div className="min-h-72 space-y-2 rounded-md border border-border p-3" style={colisSectionStyle(section, sample)}>
         <div className="text-xs font-semibold uppercase text-muted-foreground">Icon: {section.icon} · layout: {section.layout} · background: {section.backgroundSource}</div>
         {(["primary", "secondary", "meta"] as const).map((slot) => <div key={slot} className="flex flex-wrap gap-2">
           {sortedVisibleFields(section, slot).map((field) => <span key={field.key} className={slot === "primary" ? "font-semibold" : "rounded-md bg-muted px-2 py-1 text-sm text-muted-foreground"}>{renderColisTemplate(`{{${field.key}}}`, sample)}</span>)}
