@@ -139,6 +139,22 @@ async function listPollingOrders(admin: any, livreurId: string) {
   return data ?? [];
 }
 
+// Whitelist of order columns admins can target via order_fields_mapping.
+const ALLOWED_ORDER_COLUMNS = new Set([
+  "status_note", "return_note", "scheduled_date", "postponed_date",
+  "driver_name", "driver_phone", "comment", "delivered_at",
+  "external_tracking_number", "tracking_number", "barcode", "qr_code",
+]);
+
+function pickAllowedExtras(extras: Record<string, unknown> | undefined | null) {
+  const out: Record<string, unknown> = {};
+  if (!extras) return out;
+  for (const [k, v] of Object.entries(extras)) {
+    if (ALLOWED_ORDER_COLUMNS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") out[k] = v;
+  }
+  return out;
+}
+
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>) {
   const updatePayload: Record<string, unknown> = {
     status: mappedStatus,
@@ -152,6 +168,7 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
   if (meta.driver_phone !== undefined && meta.driver_phone !== null && String(meta.driver_phone).trim() !== "") {
     updatePayload.driver_phone = String(meta.driver_phone);
   }
+  Object.assign(updatePayload, pickAllowedExtras(meta.extra_order_updates as Record<string, unknown> | undefined));
   const { error: updateError } = await admin.from("orders").update(updatePayload).eq("id", order.id);
   if (updateError) return updateError;
   const { error: historyError } = await admin.from("order_status_history").insert({
@@ -167,12 +184,16 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
   return historyError;
 }
 
-async function updateDriverInfoOnly(admin: any, order: any, driverName: unknown, driverPhone: unknown) {
+async function updateDriverInfoOnly(admin: any, order: any, driverName: unknown, driverPhone: unknown, extraOrderUpdates?: Record<string, unknown>) {
   const patch: Record<string, unknown> = {};
   const newName = driverName === undefined || driverName === null ? "" : String(driverName).trim();
   const newPhone = driverPhone === undefined || driverPhone === null ? "" : String(driverPhone).trim();
   if (newName && newName !== (order.driver_name ?? "")) patch.driver_name = newName;
   if (newPhone && newPhone !== (order.driver_phone ?? "")) patch.driver_phone = newPhone;
+  const extras = pickAllowedExtras(extraOrderUpdates);
+  for (const [k, v] of Object.entries(extras)) {
+    if (String(v) !== String(order[k] ?? "")) patch[k] = v;
+  }
   if (Object.keys(patch).length === 0) return null;
   const { error } = await admin.from("orders").update(patch).eq("id", order.id);
   return error;
