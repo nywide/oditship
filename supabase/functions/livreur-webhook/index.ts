@@ -288,6 +288,10 @@ Deno.serve(async (req) => {
     const driverPatch: Record<string, unknown> = {};
     if (driverName && String(driverName).trim() && String(driverName) !== (order.driver_name ?? "")) driverPatch.driver_name = String(driverName);
     if (driverPhone && String(driverPhone).trim() && String(driverPhone) !== (order.driver_phone ?? "")) driverPatch.driver_phone = String(driverPhone);
+    const allowedExtras = pickAllowedExtras(extraOrderUpdates);
+    for (const [k, v] of Object.entries(allowedExtras)) {
+      if (String(v) !== String((order as any)[k] ?? "")) driverPatch[k] = v;
+    }
     if (Object.keys(driverPatch).length > 0) {
       await admin.from("orders").update(driverPatch).eq("id", order.id);
     }
