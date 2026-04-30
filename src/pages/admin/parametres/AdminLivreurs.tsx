@@ -695,7 +695,7 @@ const AdminLivreurs = () => {
             <Input className="h-9 w-64" placeholder="Search order, tracking, status..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
             <Select value={logFilter} onValueChange={setLogFilter}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All logs</SelectItem><SelectItem value="webhook">Webhook logs</SelectItem><SelectItem value="driver">Driver API logs</SelectItem></SelectContent></Select>
             <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Auto clean</label>
-            <div className="flex items-center gap-2"><Input type="number" min={1} className="h-9 w-24" value={retention.days} onChange={(e) => setRetention({ ...retention, days: Number(e.target.value) })} /><span className="text-sm text-muted-foreground">days</span></div>
+            <div className="flex items-center gap-2"><Input type="number" min={1} className="h-9 w-24" value={retention.hours} onChange={(e) => setRetention({ ...retention, hours: Number(e.target.value) })} /><span className="text-sm text-muted-foreground">hours</span></div>
             <Button variant="outline" size="sm" onClick={saveRetention}>Save cleanup</Button>
             <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
           </div>
