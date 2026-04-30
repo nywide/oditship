@@ -827,6 +827,7 @@ const AdminLivreurs = () => {
                 <div><Label>Date Reporté field</Label><Input value={settingsForm.polling_reported_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_reported_date_field: e.target.value })} /></div>
                 <div><Label>Date Programmé field</Label><Input value={settingsForm.polling_scheduled_date_field} onChange={(e) => setSettingsForm({ ...settingsForm, polling_scheduled_date_field: e.target.value })} /></div>
               </div>
+              <KeyValueEditor label="Status mapping (Polling)" help="Used only for the scheduled polling job. Left = provider status returned in the polling response, right = internal status used in this app." value={settingsForm.polling_status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, polling_status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
             </Card>
           </div>
           <DialogFooter>
