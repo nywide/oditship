@@ -569,6 +569,7 @@ const AdminLivreurs = () => {
     polling_driver_phone_field: "transport.currentDriverPhone",
     polling_extra_fields_mapping: "{}",
     polling_order_fields_mapping: "{}",
+    polling_actor_field: "lastmsg",
     rate_limit_per_second: 5,
     is_active: true,
   });
