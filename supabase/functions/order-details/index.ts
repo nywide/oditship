@@ -127,8 +127,8 @@ Deno.serve(async (req) => {
     tracking,
     vendeur,
     livreur: {
-      name: latestWebhookLog?.details?.driver_name || null,
-      phone: latestWebhookLog?.details?.driver_phone || null,
+      name: (currentOrder as any)?.driver_name || latestWebhookLog?.details?.driver_name || null,
+      phone: (currentOrder as any)?.driver_phone || latestWebhookLog?.details?.driver_phone || null,
     },
     support: null,
     destination: null,
