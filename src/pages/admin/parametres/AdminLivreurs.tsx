@@ -653,6 +653,7 @@ const AdminLivreurs = () => {
       webhook_reported_date_field: activeSettings.webhook_reported_date_field || "reportedDate",
       webhook_scheduled_date_field: activeSettings.webhook_scheduled_date_field || "scheduledDate",
       webhook_extra_fields_mapping: formatJson(activeSettings.webhook_extra_fields_mapping),
+      webhook_order_fields_mapping: formatJson((activeSettings as any).webhook_order_fields_mapping ?? {}),
       polling_enabled: activeSettings.polling_enabled ?? false,
       polling_interval_minutes: activeSettings.polling_interval_minutes ?? 15,
       polling_status_url: activeSettings.polling_status_url ?? "",
@@ -664,6 +665,10 @@ const AdminLivreurs = () => {
       polling_message_field: activeSettings.polling_message_field || "message",
       polling_reported_date_field: activeSettings.polling_reported_date_field || "reportedDate",
       polling_scheduled_date_field: activeSettings.polling_scheduled_date_field || "scheduledDate",
+      polling_driver_name_field: (activeSettings as any).polling_driver_name_field || "transport.currentDriverName",
+      polling_driver_phone_field: (activeSettings as any).polling_driver_phone_field || "transport.currentDriverPhone",
+      polling_extra_fields_mapping: formatJson((activeSettings as any).polling_extra_fields_mapping ?? {}),
+      polling_order_fields_mapping: formatJson((activeSettings as any).polling_order_fields_mapping ?? {}),
       rate_limit_per_second: activeSettings.rate_limit_per_second ?? 5,
       is_active: activeSettings.is_active,
     });
