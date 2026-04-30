@@ -612,7 +612,7 @@ const AdminLivreurs = () => {
             <TableRow>
               <TableHead>Livreur</TableHead>
               <TableHead>Hubs assignés</TableHead>
-              <TableHead>API enabled</TableHead>
+              <TableHead>API / Webhook</TableHead>
               <TableHead>API Token</TableHead>
               <TableHead>Settings</TableHead>
             </TableRow>
@@ -658,7 +658,12 @@ const AdminLivreurs = () => {
                       </Popover>
                     </div>
                   </TableCell>
-                  <TableCell><Switch checked={l.api_enabled} onCheckedChange={(v) => toggleApi(l, v)} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-2">
+                      <label className="flex items-center gap-2 text-sm"><Switch checked={l.api_enabled} onCheckedChange={(v) => toggleApi(l, v)} /><span>API</span></label>
+                      <label className="flex items-center gap-2 text-sm"><Switch checked={(settings[l.id] as any)?.webhook_enabled ?? false} onCheckedChange={(v) => toggleWebhook(l, v)} /><span>Webhook</span></label>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Input readOnly className="font-mono text-xs h-8 w-64" value={show.has(l.id) ? (l.api_token || "—") : masked(l.api_token)} />
@@ -684,13 +689,13 @@ const AdminLivreurs = () => {
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-semibold">Webhook logs & Driver API logs</h3>
-            <p className="text-sm text-muted-foreground">Showing latest {apiLogs.length} receptions, rejections, polling checks, and provider responses with full details.</p>
+            <p className="text-sm text-muted-foreground">Showing latest {apiLogs.length} receptions, rejections, polling checks, and provider responses with full details. Cleanup retention is measured in days.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Input className="h-9 w-64" placeholder="Search order, tracking, status..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
             <Select value={logFilter} onValueChange={setLogFilter}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All logs</SelectItem><SelectItem value="webhook">Webhook logs</SelectItem><SelectItem value="driver">Driver API logs</SelectItem></SelectContent></Select>
             <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Auto clean</label>
-            <Input type="number" min={1} className="h-9 w-24" value={retention.days} onChange={(e) => setRetention({ ...retention, days: Number(e.target.value) })} />
+            <div className="flex items-center gap-2"><Input type="number" min={1} className="h-9 w-24" value={retention.days} onChange={(e) => setRetention({ ...retention, days: Number(e.target.value) })} /><span className="text-sm text-muted-foreground">days</span></div>
             <Button variant="outline" size="sm" onClick={saveRetention}>Save cleanup</Button>
             <Button variant="outline" size="sm" onClick={load}><RefreshCw className="mr-1 h-4 w-4" /> Refresh</Button>
           </div>
@@ -748,8 +753,8 @@ const AdminLivreurs = () => {
               <div className="flex gap-3">
                 <HelpCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div className="space-y-2">
-                  <p>Connect this driver to any delivery provider API. Configure authentication, package creation, status updates, and request limits without editing code.</p>
-                  <p>Tip: start with the provider documentation, then copy each required field into the matching section below.</p>
+                  <p>API and Webhook are independent. API creates external packages. Webhook receives provider notifications. Polling fetches provider status on schedule.</p>
+                  <p>If API and Webhook are both enabled, webhook notifications are logged first, then polling remains responsible for fetching the full current order status.</p>
                 </div>
               </div>
             </div>
