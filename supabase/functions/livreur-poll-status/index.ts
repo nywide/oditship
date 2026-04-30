@@ -213,12 +213,7 @@ Deno.serve(async (req) => {
     const intervalMs = Math.max(Number(settings.polling_interval_minutes) || 15, 1) * 60_000;
     if (lastRun && now - lastRun < intervalMs) continue;
 
-    const { data: orders } = await admin
-      .from("orders")
-      .select("*")
-      .eq("assigned_livreur_id", settings.livreur_id)
-      .not("external_tracking_number", "is", null)
-      .limit(200);
+    const orders = await listPollingOrders(admin, settings.livreur_id);
     if (!orders?.length) {
       await logApi(admin, { livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling skipped: no tracked orders", details: { rejection_reason: "no_tracked_orders" } });
     }
