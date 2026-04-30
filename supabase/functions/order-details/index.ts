@@ -5,47 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function getPath(obj: any, path?: string | null) {
-  if (!path) return undefined;
-  return path.split(".").reduce((acc: any, key) => acc?.[key], obj);
-}
-
 function isInternalConfirmed(status?: string | null) {
   const normalized = status?.toLowerCase();
   return normalized === "confirmed";
-}
-
-function isApiCreatedConfirmed(status?: string | null, message?: string | null) {
-  const normalizedStatus = status?.toLowerCase();
-  const normalizedMessage = message?.toLowerCase() ?? "";
-  return normalizedStatus === "confirmed" && normalizedMessage.includes("colis cre") && normalizedMessage.includes("azizshop") && normalizedMessage.includes("api");
-}
-
-function mapProviderStatus(status: unknown, mapping: Record<string, string>) {
-  const raw = String(status ?? "").trim();
-  if (!raw) return null;
-  const direct = mapping[raw];
-  if (typeof direct === "string" && direct.trim()) return direct.trim();
-  const normalizedRaw = raw.toLowerCase();
-  const match = Object.entries(mapping ?? {}).find(([providerStatus]) => providerStatus.trim().toLowerCase() === normalizedRaw);
-  return typeof match?.[1] === "string" && match[1].trim() ? match[1].trim() : null;
-}
-
-function parseDateValue(value: unknown) {
-  if (value === undefined || value === null || value === "") return null;
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-function maskSensitiveHeaders(headers: Record<string, unknown> = {}) {
-  return Object.fromEntries(Object.entries(headers).map(([key, value]) => {
-    const name = key.toLowerCase();
-    if (name.includes("authorization") || name.includes("token") || name.includes("secret") || name.includes("key")) {
-      const text = String(value ?? "");
-      return [key, text ? `${text.slice(0, 8)}••••${text.slice(-4)}` : "••••"];
-    }
-    return [key, value];
-  }));
 }
 
 function removeSystemDuplicates(history: any[]) {
@@ -69,8 +31,6 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const ANON = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const OLI_KEY = Deno.env.get("OLIVRAISON_API_KEY");
-  const OLI_SECRET = Deno.env.get("OLIVRAISON_SECRET_KEY");
   const authHeader = req.headers.get("Authorization");
 
   if (!authHeader) {
@@ -136,13 +96,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  const [{ data: history }, { data: livreur }, { data: vendeur }, { data: settings }, { data: latestWebhookLog }] = await Promise.all([
+  const [{ data: history }, { data: vendeur }, { data: latestWebhookLog }] = await Promise.all([
     admin.from("order_status_history").select("id, old_status, new_status, changed_at, changed_by, notes, provider_note, reported_date, scheduled_date").eq("order_id", order.id).order("changed_at", { ascending: true }),
-    Promise.resolve({ data: null }),
     admin.from("profiles").select("id, full_name, username, company_name, phone").eq("id", order.vendeur_id).maybeSingle(),
-    order.assigned_livreur_id
-      ? admin.from("livreur_api_settings").select("status_mapping, webhook_updates_current_status, polling_message_field, polling_reported_date_field, polling_scheduled_date_field").eq("livreur_id", order.assigned_livreur_id).maybeSingle()
-      : Promise.resolve({ data: null }),
     admin.from("livreur_api_logs").select("details").eq("order_id", order.id).eq("event_type", "webhook_status").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
