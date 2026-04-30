@@ -27,6 +27,7 @@ interface LivreurApiSettings {
   api_operations: Array<Record<string, unknown>>;
   validation_rules: Record<string, unknown>;
   status_mapping: Record<string, string>;
+  polling_status_mapping: Record<string, string>;
   webhook_updates_current_status: boolean;
   webhook_enabled: boolean;
   webhook_status_field: string;
@@ -99,6 +100,16 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
     IN_TRANSIT: "En transit",
     PICKUP: "Pickup",
     CONFIRMED: "Confirmé",
+  },
+  polling_status_mapping: {
+    delivered: "Livré",
+    canceled: "Annulé",
+    deleted: "Annulé",
+    refused: "Refusé",
+    returned: "Retourné",
+    transit: "Transit",
+    reported: "Reporté",
+    scheduled: "Programmé",
   },
   webhook_updates_current_status: true,
   webhook_enabled: false,
@@ -343,6 +354,7 @@ const AdminLivreurs = () => {
     api_operations: "[]",
     validation_rules: "{}",
     status_mapping: "{}",
+    polling_status_mapping: "{}",
     webhook_updates_current_status: true,
     webhook_enabled: false,
     webhook_status_field: "status",
@@ -401,6 +413,7 @@ const AdminLivreurs = () => {
       api_operations: JSON.stringify(activeSettings.api_operations ?? [], null, 2),
       validation_rules: formatJson(activeSettings.validation_rules),
       status_mapping: formatJson(activeSettings.status_mapping),
+      polling_status_mapping: formatJson(activeSettings.polling_status_mapping ?? {}),
       webhook_updates_current_status: activeSettings.webhook_updates_current_status,
       webhook_enabled: (activeSettings as any).webhook_enabled ?? false,
       webhook_status_field: activeSettings.webhook_status_field || "status",
@@ -481,7 +494,8 @@ const AdminLivreurs = () => {
         auth_config: parseJson("Authentication", settingsForm.auth_config),
         api_operations: parseJsonArray("Payloads API", settingsForm.api_operations),
         validation_rules: parseJson("Validation", settingsForm.validation_rules),
-        status_mapping: parseJson("Mapping status", settingsForm.status_mapping),
+        status_mapping: parseJson("Mapping status (webhook)", settingsForm.status_mapping),
+        polling_status_mapping: parseJson("Mapping status (polling)", settingsForm.polling_status_mapping),
         webhook_updates_current_status: settingsForm.webhook_updates_current_status,
         webhook_enabled: settingsForm.webhook_enabled,
         webhook_status_field: settingsForm.webhook_status_field.trim() || "status",
@@ -779,7 +793,7 @@ const AdminLivreurs = () => {
             <Card className="p-4 space-y-4">
               <SectionHeader icon={Webhook} title="Validation & webhook" description="Rules checked before sending, plus status mapping for incoming webhook updates." />
               <KeyValueEditor label="Validation rules" help="Input rules such as minimum product length, phone digits, or minimum order value. Values can be plain text, numbers, true/false, or small JSON objects." value={settingsForm.validation_rules} onChange={(value) => setSettingsForm({ ...settingsForm, validation_rules: value })} keyPlaceholder="Order field" valuePlaceholder='Rule, e.g. {"min_alnum":3}' primitiveValues />
-              <KeyValueEditor label="Status mapping" help="Left side is the provider status. Right side is the internal status used in this app." value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
+              <KeyValueEditor label="Status mapping (Webhook)" help="Used only for incoming webhook notifications. Left = provider status as sent in the webhook body, right = internal status used in this app." value={settingsForm.status_mapping} onChange={(value) => setSettingsForm({ ...settingsForm, status_mapping: value })} keyPlaceholder="Provider status" valuePlaceholder="Internal status" />
               <div><Label>Webhook URL</Label><Input readOnly value={editing ? `${functionsBaseUrl}/livreur-webhook/${editing.id}` : ""} /><FieldHelp>Give this URL to the provider with this driver's API token as a Bearer token.</FieldHelp></div>
               <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm"><span>Enable webhook reception</span><Switch checked={settingsForm.webhook_enabled} onCheckedChange={(v) => setSettingsForm({ ...settingsForm, webhook_enabled: v })} /></label>
               <div className="grid gap-3 sm:grid-cols-2">
