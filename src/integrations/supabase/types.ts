@@ -299,6 +299,7 @@ export type Database = {
           polling_scheduled_date_field: string
           polling_status_field: string
           polling_status_headers: Json
+          polling_status_mapping: Json
           polling_status_method: string
           polling_status_payload_mapping: Json
           polling_status_url: string | null
@@ -336,6 +337,7 @@ export type Database = {
           polling_scheduled_date_field?: string
           polling_status_field?: string
           polling_status_headers?: Json
+          polling_status_mapping?: Json
           polling_status_method?: string
           polling_status_payload_mapping?: Json
           polling_status_url?: string | null
@@ -373,6 +375,7 @@ export type Database = {
           polling_scheduled_date_field?: string
           polling_status_field?: string
           polling_status_headers?: Json
+          polling_status_mapping?: Json
           polling_status_method?: string
           polling_status_payload_mapping?: Json
           polling_status_url?: string | null
