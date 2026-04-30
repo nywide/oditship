@@ -129,18 +129,36 @@ async function logApi(admin: any, entry: Record<string, unknown>) {
   if (error) console.error("livreur_api_logs insert failed", error.message);
 }
 
+async function getLivreurCoverage(admin: any, livreurId: string) {
+  const { data: links } = await admin.from("hub_livreur").select("hub_id").eq("livreur_id", livreurId);
+  const hubIds = [...new Set((links ?? []).map((row: any) => row.hub_id).filter(Boolean))];
+  if (!hubIds.length) return { hubIds, cityNames: [] as string[] };
+  const { data: cities } = await admin.from("hub_cities").select("city_name").in("hub_id", hubIds);
+  return { hubIds, cityNames: [...new Set((cities ?? []).map((row: any) => row.city_name).filter(Boolean))] as string[] };
+}
+
+function mergeOrders(rows: any[][]) {
+  const map = new Map<number, any>();
+  rows.flat().forEach((order) => { if (order?.id) map.set(order.id, order); });
+  return Array.from(map.values());
+}
+
+async function listPollingOrders(admin: any, livreurId: string) {
+  const coverage = await getLivreurCoverage(admin, livreurId);
+  const assigned = admin.from("orders").select("*").eq("assigned_livreur_id", livreurId).not("external_tracking_number", "is", null).limit(500);
+  const byHub = coverage.hubIds.length
+    ? admin.from("orders").select("*").in("hub_id", coverage.hubIds).not("external_tracking_number", "is", null).limit(500)
+    : Promise.resolve({ data: [] });
+  const byCity = coverage.cityNames.length
+    ? admin.from("orders").select("*").in("customer_city", coverage.cityNames).not("external_tracking_number", "is", null).limit(500)
+    : Promise.resolve({ data: [] });
+  const [{ data: assignedRows }, { data: hubRows }, { data: cityRows }] = await Promise.all([assigned, byHub, byCity]);
+  return mergeOrders([assignedRows ?? [], hubRows ?? [], cityRows ?? []]);
+}
+
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>) {
-  const since = new Date(Date.now() - 5000).toISOString();
   const { error: updateError } = await admin.from("orders").update({ status: mappedStatus, status_note: meta.note ?? null, postponed_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", order.id);
   if (updateError) return updateError;
-  await admin
-    .from("order_status_history")
-    .delete()
-    .eq("order_id", order.id)
-    .eq("old_status", order.status)
-    .eq("new_status", mappedStatus)
-    .is("changed_by", null)
-    .gte("changed_at", since);
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
@@ -195,12 +213,7 @@ Deno.serve(async (req) => {
     const intervalMs = Math.max(Number(settings.polling_interval_minutes) || 15, 1) * 60_000;
     if (lastRun && now - lastRun < intervalMs) continue;
 
-    const { data: orders } = await admin
-      .from("orders")
-      .select("*")
-      .eq("assigned_livreur_id", settings.livreur_id)
-      .not("external_tracking_number", "is", null)
-      .limit(200);
+    const orders = await listPollingOrders(admin, settings.livreur_id);
     if (!orders?.length) {
       await logApi(admin, { livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Polling skipped: no tracked orders", details: { rejection_reason: "no_tracked_orders" } });
     }

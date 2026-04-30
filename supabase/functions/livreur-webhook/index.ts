@@ -112,31 +112,39 @@ function webhookExchangeDetails(req: Request, livreurId: string | null, settings
 
 async function findOrderByTracking(admin: any, livreurId: string, tracking: string) {
   const baseSelect = "id, status";
-  const external = await admin
+  const directExternal = await admin
     .from("orders")
     .select(baseSelect)
     .eq("assigned_livreur_id", livreurId)
     .eq("external_tracking_number", tracking)
     .maybeSingle();
-  if (external.data || external.error) return external;
-  return admin
+  if (directExternal.data || directExternal.error) return directExternal;
+  const directInternal = await admin
     .from("orders")
     .select(baseSelect)
     .eq("assigned_livreur_id", livreurId)
     .eq("tracking_number", tracking)
     .maybeSingle();
-}
+  if (directInternal.data || directInternal.error) return directInternal;
 
-async function removeRecentSystemDuplicate(admin: any, order: any, mappedStatus: string) {
-  const since = new Date(Date.now() - 5000).toISOString();
-  await admin
-    .from("order_status_history")
-    .delete()
-    .eq("order_id", order.id)
-    .eq("old_status", order.status)
-    .eq("new_status", mappedStatus)
-    .is("changed_by", null)
-    .gte("changed_at", since);
+  const { data: links } = await admin.from("hub_livreur").select("hub_id").eq("livreur_id", livreurId);
+  const hubIds = [...new Set((links ?? []).map((row: any) => row.hub_id).filter(Boolean))];
+  if (hubIds.length) {
+    const byHubExternal = await admin.from("orders").select(baseSelect).in("hub_id", hubIds).eq("external_tracking_number", tracking).maybeSingle();
+    if (byHubExternal.data || byHubExternal.error) return byHubExternal;
+    const byHubInternal = await admin.from("orders").select(baseSelect).in("hub_id", hubIds).eq("tracking_number", tracking).maybeSingle();
+    if (byHubInternal.data || byHubInternal.error) return byHubInternal;
+  }
+
+  const { data: cities } = hubIds.length ? await admin.from("hub_cities").select("city_name").in("hub_id", hubIds) : { data: [] };
+  const cityNames = [...new Set((cities ?? []).map((row: any) => row.city_name).filter(Boolean))];
+  if (cityNames.length) {
+    const byCityExternal = await admin.from("orders").select(baseSelect).in("customer_city", cityNames).eq("external_tracking_number", tracking).maybeSingle();
+    if (byCityExternal.data || byCityExternal.error) return byCityExternal;
+    return admin.from("orders").select(baseSelect).in("customer_city", cityNames).eq("tracking_number", tracking).maybeSingle();
+  }
+
+  return directInternal;
 }
 
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>, updateCurrentStatus = true) {
@@ -148,7 +156,6 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
   };
   const { error: updateError } = await admin.from("orders").update(orderPatch).eq("id", order.id);
   if (updateError) return updateError;
-  if (updateCurrentStatus) await removeRecentSystemDuplicate(admin, order, mappedStatus);
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
@@ -243,9 +250,7 @@ Deno.serve(async (req) => {
 
   await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "received", message: `Webhook received: ${mappedStatus}`, details: webhookExchangeDetails(req, livreurId, settings, payload, 202, { ok: true, received: true, order_id: order.id, status: mappedStatus }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, previous_status: order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields }) });
 
-  const apiEnabled = profile.api_enabled === true;
-  const pollingEnabled = settings.polling_enabled === true;
-  const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true && !(apiEnabled && pollingEnabled);
+  const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true;
   if (shouldUpdateCurrentStatus && mappedStatus !== order.status) {
     const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, meta, true);
     if (updateError) {
