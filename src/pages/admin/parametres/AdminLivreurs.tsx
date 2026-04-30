@@ -271,7 +271,26 @@ const SYSTEM_ORDER_FIELDS: string[] = [
   "status", "status_note", "return_note",
   "scheduled_date", "postponed_date", "delivered_at",
   "vendeur_id", "agent_id", "assigned_livreur_id", "hub_id",
+  "driver_name", "driver_phone",
   "qr_code", "created_at", "updated_at",
+];
+
+// Common provider body paths used as fallback suggestions when log history is thin.
+const COMMON_WEBHOOK_PATHS: string[] = [
+  "trackingID", "tracking_id", "tracking_number", "partnerTrackingID",
+  "status", "state", "currentStatus",
+  "note", "message", "msg", "description",
+  "reportedDate", "scheduledDate", "deliveryDate",
+  "transport.currentDriverName", "transport.currentDriverPhone",
+  "driver.name", "driver.phone", "driver_name", "driver_phone",
+];
+
+const COMMON_POLLING_PATHS: string[] = [
+  "trackingID", "status", "state",
+  "note", "message", "description",
+  "reportedDate", "scheduledDate",
+  "transport.currentDriverName", "transport.currentDriverPhone",
+  "lastUpdateAt", "createdAt",
 ];
 
 // Recursively collect all paths from a JSON object (dot.notation).
