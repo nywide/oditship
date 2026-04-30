@@ -250,8 +250,14 @@ Deno.serve(async (req) => {
 
   await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "received", message: `Webhook received: ${mappedStatus}`, details: webhookExchangeDetails(req, livreurId, settings, payload, 202, { ok: true, received: true, order_id: order.id, status: mappedStatus }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, previous_status: order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields }) });
 
+  // New simple rule: if mapped status equals current order status → do nothing (no update, no history insert).
+  if (mappedStatus === order.status) {
+    await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "ignored", message: "Webhook ignored: status matches current order status", details: webhookExchangeDetails(req, livreurId, settings, payload, 200, { ok: true, ignored: true, reason: "status_unchanged", order_id: order.id, status: mappedStatus }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, current_status: order.status, rejection_reason: "status_unchanged" }) });
+    return jsonResponse({ ok: true, ignored: true, reason: "status_unchanged", order_id: order.id, status: mappedStatus });
+  }
+
   const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true;
-  if (shouldUpdateCurrentStatus && mappedStatus !== order.status) {
+  if (shouldUpdateCurrentStatus) {
     const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, meta, true);
     if (updateError) {
       await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to update order status", details: webhookExchangeDetails(req, livreurId, settings, payload, 500, { error: "Unable to update order status" }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: updateError.message }) });
