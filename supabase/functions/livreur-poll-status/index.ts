@@ -246,9 +246,8 @@ Deno.serve(async (req) => {
         const scheduledDate = parseDateValue(getPath(body, settings.polling_scheduled_date_field || "scheduledDate"));
         await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "received", message: `Provider status received: ${mappedStatus}`, details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, previous_status: order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
         if (mappedStatus === order.status) {
-          await admin.from("orders").update({ status_note: message, postponed_date: reportedDate, scheduled_date: scheduledDate }).eq("id", order.id);
-          await admin.from("order_status_history").insert({ order_id: order.id, old_status: order.status, new_status: mappedStatus, changed_by: settings.livreur_id, notes: message, provider_note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
-          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "success", message: "Provider status metadata saved", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, note: message, reported_date: reportedDate, scheduled_date: scheduledDate } });
+          // Same status as current → no update, no history insert. Just log that it was unchanged.
+          await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "ignored", message: "Provider status matches current order status — no update needed", details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, current_status: order.status, rejection_reason: "status_unchanged" } });
           continue;
         }
         const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, settings.livreur_id, { note: message, reported_date: reportedDate, scheduled_date: scheduledDate });
