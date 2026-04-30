@@ -139,55 +139,6 @@ function removeSystemDuplicates(history: any[]) {
   return (history ?? []).filter((h: any) => h.changed_by || !providerKeys.has(`${h.old_status ?? ""}|${h.new_status ?? ""}`));
 }
 
-async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
-  const { data } = await admin
-    .from("order_status_history")
-    .select("id, new_status, changed_by")
-    .eq("order_id", orderId)
-    .eq("new_status", mappedStatus)
-    .eq("changed_by", livreurId)
-    .order("changed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data ?? null;
-}
-
-async function syncCurrentStatusFromProvider(admin: any, order: any, latestEvent: any, livreurId: string, settings: any) {
-  if (!latestEvent?.mappedStatus || latestEvent.mappedStatus === order.status) return order;
-  const meta = providerMeta(latestEvent, settings);
-  const { data: updated, error } = await admin
-    .from("orders")
-    .update({ status: latestEvent.mappedStatus, status_note: meta.note, postponed_date: meta.reported_date, scheduled_date: meta.scheduled_date })
-    .eq("id", order.id)
-    .select("*")
-    .single();
-  if (error || !updated) throw error ?? new Error("Unable to sync current status");
-  await admin
-    .from("order_status_history")
-    .delete()
-    .eq("order_id", order.id)
-    .eq("old_status", order.status)
-    .eq("new_status", latestEvent.mappedStatus)
-    .is("changed_by", null)
-    .gte("changed_at", new Date(Date.now() - 5000).toISOString());
-  const duplicate = await latestDuplicate(admin, order.id, latestEvent.mappedStatus, livreurId);
-  if (duplicate) {
-    await admin.from("order_status_history").update({ notes: meta.note, provider_note: meta.note, reported_date: meta.reported_date, scheduled_date: meta.scheduled_date }).eq("id", duplicate.id);
-    return updated;
-  }
-  await admin.from("order_status_history").insert({
-    order_id: order.id,
-    old_status: order.status,
-    new_status: latestEvent.mappedStatus,
-    changed_by: livreurId,
-    notes: meta.note,
-    provider_note: meta.note,
-    reported_date: meta.reported_date,
-    scheduled_date: meta.scheduled_date,
-  });
-  return updated;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") {
