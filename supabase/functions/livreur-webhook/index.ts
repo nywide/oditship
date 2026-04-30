@@ -250,9 +250,7 @@ Deno.serve(async (req) => {
 
   await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "received", message: `Webhook received: ${mappedStatus}`, details: webhookExchangeDetails(req, livreurId, settings, payload, 202, { ok: true, received: true, order_id: order.id, status: mappedStatus }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, previous_status: order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, captured_fields: capturedFields }) });
 
-  const apiEnabled = profile.api_enabled === true;
-  const pollingEnabled = settings.polling_enabled === true;
-  const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true && !(apiEnabled && pollingEnabled);
+  const shouldUpdateCurrentStatus = settings.webhook_updates_current_status === true;
   if (shouldUpdateCurrentStatus && mappedStatus !== order.status) {
     const updateError = await updateOrderStatusFromProvider(admin, order, mappedStatus, livreurId, meta, true);
     if (updateError) {
