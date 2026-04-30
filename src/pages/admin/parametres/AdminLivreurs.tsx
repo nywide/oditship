@@ -409,6 +409,40 @@ const SmartMappingEditor = ({
   );
 };
 
+// Single field path picker: dropdown of detected/known paths + free-text fallback.
+const SmartFieldPath = ({
+  label, help, value, onChange, options, placeholder = "Body path",
+}: {
+  label: string; help?: string; value: string; onChange: (value: string) => void;
+  options: string[]; placeholder?: string;
+}) => {
+  const [mode, setMode] = useState<"select" | "custom" | undefined>(undefined);
+  const effectiveMode = mode ?? (value && !options.includes(value) ? "custom" : "select");
+  return (
+    <div>
+      <Label>{label}</Label>
+      {effectiveMode === "custom" ? (
+        <div className="flex gap-1">
+          <Input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+          <Button type="button" variant="ghost" size="sm" className="px-2" title="Use list" onClick={() => setMode("select")}>
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : (
+        <Select value={options.includes(value) ? value : ""} onValueChange={(v) => { if (v === "__custom__") setMode("custom"); else onChange(v); }}>
+          <SelectTrigger><SelectValue placeholder={value || placeholder} /></SelectTrigger>
+          <SelectContent className="max-h-72">
+            {options.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">No suggestions yet</div>}
+            {options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            <SelectItem value="__custom__">✎ Custom value...</SelectItem>
+          </SelectContent>
+        </Select>
+      )}
+      {help && <FieldHelp>{help}</FieldHelp>}
+    </div>
+  );
+};
+
 const AuthConfigEditor = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
   const auth = safeObject(value);
   const update = (patch: Record<string, unknown>) => onChange(JSON.stringify({ ...auth, ...patch }, null, 2));
