@@ -352,6 +352,7 @@ Deno.serve(async (req) => {
       provider_note: message,
       reported_date: reportedDate,
       scheduled_date: scheduledDate,
+      actor_label: actorLabel,
     });
     if (historyError) {
       await logApi(admin, { order_id: order.id, livreur_id: livreurId, event_type: "webhook_status", status: "failed", message: "Unable to record status history", details: webhookExchangeDetails(req, livreurId, settings, payload, 500, { error: "Unable to record status history" }, { tracking, raw_status: rawStatus, mapped_status: mappedStatus, error: historyError.message }) });
