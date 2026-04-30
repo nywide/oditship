@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { statusLabel } from "@/lib/orderStatus";
 import { cn } from "@/lib/utils";
-import { Bike, Download, Headphones, Loader2, MapPin, Package, QrCode, RefreshCw, Truck, UserRound } from "lucide-react";
+import { Bike, Download, Headphones, MapPin, Package, QrCode, Truck, UserRound } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import { colisSectionStyle, defaultColisPreviewSettings, getColisPreviewValue, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
@@ -239,9 +239,6 @@ export const OrderDetailsPanel = ({
       <Card className="p-5 shadow-card">
         <div className="mb-5 flex items-center justify-between gap-3">
           <h3 className="text-lg font-bold">Chronologie d'activité</h3>
-          <Button variant="ghost" size="icon" onClick={load} disabled={loading} aria-label="Actualiser la chronologie">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
         </div>
         {data?.package_error && <p className="mb-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">Tracking externe indisponible</p>}
         <div className="relative space-y-0 pl-7">
