@@ -139,19 +139,6 @@ async function removeRecentSystemDuplicate(admin: any, order: any, mappedStatus:
     .gte("changed_at", since);
 }
 
-async function latestDuplicate(admin: any, orderId: number, mappedStatus: string, livreurId: string) {
-  const { data } = await admin
-    .from("order_status_history")
-    .select("id, new_status, changed_by")
-    .eq("order_id", orderId)
-    .eq("new_status", mappedStatus)
-    .eq("changed_by", livreurId)
-    .order("changed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return data ?? null;
-}
-
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>, updateCurrentStatus = true) {
   const orderPatch = {
     ...(updateCurrentStatus ? { status: mappedStatus } : {}),
@@ -162,11 +149,6 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
   const { error: updateError } = await admin.from("orders").update(orderPatch).eq("id", order.id);
   if (updateError) return updateError;
   if (updateCurrentStatus) await removeRecentSystemDuplicate(admin, order, mappedStatus);
-  const duplicate = await latestDuplicate(admin, order.id, mappedStatus, livreurId);
-  if (duplicate) {
-    await admin.from("order_status_history").update({ notes: meta.note ?? null, provider_note: meta.note ?? null, reported_date: meta.reported_date ?? null, scheduled_date: meta.scheduled_date ?? null }).eq("id", duplicate.id);
-    return null;
-  }
   const { error: historyError } = await admin.from("order_status_history").insert({
     order_id: order.id,
     old_status: order.status,
