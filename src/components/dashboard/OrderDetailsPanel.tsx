@@ -38,6 +38,7 @@ interface HistoryItem {
   scheduled_date?: string | null;
   changed_at: string;
   actor?: { full_name?: string | null; username?: string | null; role?: string | null } | null;
+  actor_label?: string | null;
 }
 
 interface DetailsData {
