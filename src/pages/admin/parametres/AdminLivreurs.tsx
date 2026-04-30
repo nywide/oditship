@@ -28,6 +28,7 @@ interface LivreurApiSettings {
   validation_rules: Record<string, unknown>;
   status_mapping: Record<string, string>;
   webhook_updates_current_status: boolean;
+  webhook_enabled: boolean;
   webhook_status_field: string;
   webhook_tracking_field: string;
   webhook_driver_name_field: string;
@@ -100,6 +101,7 @@ const defaultSettings = (livreurId: string): LivreurApiSettings => ({
     CONFIRMED: "Confirmé",
   },
   webhook_updates_current_status: true,
+  webhook_enabled: false,
   webhook_status_field: "status",
   webhook_tracking_field: "trackingID",
   webhook_driver_name_field: "transport.currentDriverName",
@@ -342,6 +344,7 @@ const AdminLivreurs = () => {
     validation_rules: "{}",
     status_mapping: "{}",
     webhook_updates_current_status: true,
+    webhook_enabled: false,
     webhook_status_field: "status",
     webhook_tracking_field: "trackingID",
     webhook_driver_name_field: "transport.currentDriverName",
@@ -399,6 +402,7 @@ const AdminLivreurs = () => {
       validation_rules: formatJson(activeSettings.validation_rules),
       status_mapping: formatJson(activeSettings.status_mapping),
       webhook_updates_current_status: activeSettings.webhook_updates_current_status,
+      webhook_enabled: (activeSettings as any).webhook_enabled ?? false,
       webhook_status_field: activeSettings.webhook_status_field || "status",
       webhook_tracking_field: activeSettings.webhook_tracking_field || "trackingID",
       webhook_driver_name_field: activeSettings.webhook_driver_name_field || "transport.currentDriverName",
@@ -447,7 +451,14 @@ const AdminLivreurs = () => {
   const toggleApi = async (l: Livreur, v: boolean) => {
     const { error } = await supabase.from("profiles").update({ api_enabled: v }).eq("id", l.id);
     if (error) toast.error(error.message);
-    else { toast.success(v ? "API enabled" : "API disabled"); load(); }
+    else { toast.info(v ? "API enabled: confirmed orders will be sent to the driver's provider to create external tracking." : "API disabled: the app will generate internal tracking numbers instead of creating packages through the provider."); load(); }
+  };
+
+  const toggleWebhook = async (l: Livreur, v: boolean) => {
+    const current = settings[l.id] ?? defaultSettings(l.id);
+    const { error } = await db.from("livreur_api_settings").upsert({ ...current, livreur_id: l.id, webhook_enabled: v }, { onConflict: "livreur_id" });
+    if (error) toast.error(error.message);
+    else { toast.info(v ? "Webhook enabled: incoming provider notifications will be accepted, logged, and used according to this driver's API/polling setup." : "Webhook disabled: incoming provider notifications will be logged as ignored and will not update orders."); load(); }
   };
 
   const regenToken = async (l: Livreur) => {
@@ -472,6 +483,7 @@ const AdminLivreurs = () => {
         validation_rules: parseJson("Validation", settingsForm.validation_rules),
         status_mapping: parseJson("Mapping status", settingsForm.status_mapping),
         webhook_updates_current_status: settingsForm.webhook_updates_current_status,
+        webhook_enabled: settingsForm.webhook_enabled,
         webhook_status_field: settingsForm.webhook_status_field.trim() || "status",
         webhook_tracking_field: settingsForm.webhook_tracking_field.trim() || "trackingID",
         webhook_driver_name_field: settingsForm.webhook_driver_name_field.trim() || "transport.currentDriverName",
