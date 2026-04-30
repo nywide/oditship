@@ -147,6 +147,21 @@ async function findOrderByTracking(admin: any, livreurId: string, tracking: stri
   return directInternal;
 }
 
+const ALLOWED_ORDER_COLUMNS = new Set([
+  "status_note", "return_note", "scheduled_date", "postponed_date",
+  "driver_name", "driver_phone", "comment", "delivered_at",
+  "external_tracking_number", "tracking_number", "barcode", "qr_code",
+]);
+
+function pickAllowedExtras(extras: Record<string, unknown> | undefined | null) {
+  const out: Record<string, unknown> = {};
+  if (!extras) return out;
+  for (const [k, v] of Object.entries(extras)) {
+    if (ALLOWED_ORDER_COLUMNS.has(k) && v !== undefined && v !== null && String(v).trim() !== "") out[k] = v;
+  }
+  return out;
+}
+
 async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatus: string, livreurId: string, meta: Record<string, unknown>, updateCurrentStatus = true) {
   const orderPatch: Record<string, unknown> = {
     ...(updateCurrentStatus ? { status: mappedStatus } : {}),
@@ -160,6 +175,7 @@ async function updateOrderStatusFromProvider(admin: any, order: any, mappedStatu
   if (meta.driver_phone !== undefined && meta.driver_phone !== null && String(meta.driver_phone).trim() !== "") {
     orderPatch.driver_phone = String(meta.driver_phone);
   }
+  Object.assign(orderPatch, pickAllowedExtras(meta.extra_order_updates as Record<string, unknown> | undefined));
   const { error: updateError } = await admin.from("orders").update(orderPatch).eq("id", order.id);
   if (updateError) return updateError;
   const { error: historyError } = await admin.from("order_status_history").insert({
