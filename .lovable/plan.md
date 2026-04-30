@@ -1,54 +1,107 @@
-Voici le plan pour corriger/ajouter les fonctionnalités du module Team côté Vendeur sans toucher aux autres rôles sauf les fonctions backend réutilisées.
 
-1. Ajouter la suppression d’un agent dans Team
-- Ajouter un bouton Supprimer dans la colonne Actions de `VendeurTeam`.
-- Ajouter une confirmation avant suppression.
-- Adapter la fonction backend `delete-user` pour autoriser aussi un vendeur à supprimer uniquement ses propres agents (`profiles.agent_of = vendeur connecté`).
-- Garder l’autorisation admin existante intacte.
-- Après suppression, recharger la liste des agents.
+## السبب الجذري ديال التكرار
 
-2. Ajouter “Login as agent” côté vendeur
-- Ajouter un bouton “Se connecter en tant que” dans la colonne Actions, à côté de Modifier/Supprimer.
-- Adapter `get-impersonation-token` pour autoriser un vendeur à impersonate uniquement ses propres agents.
-- Réutiliser la page `/impersonate` existante pour ouvrir l’agent dans un nouvel onglet, comme côté administrateur.
-- Empêcher toute connexion vers un compte qui n’est pas un agent appartenant au vendeur.
+تأكدت من قاعدة البيانات للطلبية `B9267AB4F42643` (id=42)، ولقيت 3 أسطر فـ `order_status_history`:
 
-3. Ajouter les permissions de visibilité des données pour Colis et Graphique
-- Étendre `agent_pages` pour stocker non seulement les pages autorisées, mais aussi le mode de visibilité :
-  - `colis: true/false`
-  - `colis_scope: "all" | "own"`
-  - `graphique: true/false`
-  - `graphique_scope: "all" | "own"`
-  - `facturation: true/false` reste comme aujourd’hui, sans option supplémentaire.
-- Dans le popup Ajouter/Modifier agent, afficher sous Colis et Graphique un choix clair :
-  - “Toutes les commandes du vendeur”
-  - “Seulement les commandes créées par cet agent”
-- Dans le tableau Team, afficher les permissions de manière lisible, par exemple :
-  - `Colis: Tous` ou `Colis: Agent`
-  - `Graphique: Tous` ou `Graphique: Agent`
-  - `Facturation`
+| id  | old_status | new_status | changed_by   | الوقت        | المصدر                 |
+|-----|------------|------------|--------------|--------------|------------------------|
+| 231 | `Transit`  | `""`       | NULL         | 20:38:33     | trigger (تعديل سابق)   |
+| 232 | `""`       | `Transit`  | NULL         | 20:40:03.843 | **trigger DB تلقائي**  |
+| 233 | `""`       | `Transit`  | livreur_id   | 20:40:03.898 | **polling INSERT يدوي**|
 
-4. Appliquer réellement la visibilité dans les pages agent
-- Dans `VendeurColis`, si l’utilisateur connecté est un agent :
-  - si `colis_scope = "all"`, il voit les commandes du vendeur comme actuellement ;
-  - si `colis_scope = "own"`, il voit uniquement les commandes où `agent_id = user.id`.
-- Dans `VendeurGraphique`, appliquer la même logique :
-  - `graphique_scope = "all"` : statistiques de toutes les commandes du vendeur ;
-  - `graphique_scope = "own"` : statistiques uniquement des commandes créées par l’agent.
-- Pour un vendeur normal, rien ne change : il voit toutes ses données.
+### المشكل بالضبط
 
-5. Sécurité et compatibilité
-- Les anciennes permissions existantes sans `*_scope` continueront à fonctionner avec `all` par défaut, pour ne pas casser les agents déjà créés.
-- Les routes protégées restent basées sur `colis`, `facturation`, `graphique`.
-- La page Team ne sera toujours pas proposée comme permission agent.
-- Aucun changement prévu sur Facturation, comme demandé.
+عندنا **مصدرين** كيكتبو فنفس الـhistory:
 
-Détails techniques
-- Fichiers frontend prévus :
-  - `src/pages/vendeur/VendeurTeam.tsx`
-  - `src/pages/vendeur/VendeurColis.tsx`
-  - `src/pages/vendeur/VendeurGraphique.tsx`
-- Fonctions backend prévues :
-  - `supabase/functions/delete-user/index.ts`
-  - `supabase/functions/get-impersonation-token/index.ts`
-- Pas besoin de nouvelle table : on utilisera la colonne existante `profiles.agent_pages`.
+1. **Trigger `log_order_status_change`** فقاعدة البيانات: كل مرة `orders.status` كيتبدل → كيدير INSERT تلقائي فـ `order_status_history` بـ `changed_by = auth.uid()` (واللي = NULL فحالة edge function بـservice role).
+2. **`livreur-poll-status` edge function**: بعد ما كيدير `update orders.status`، كيدير INSERT يدوي ثاني فـ `order_status_history` بـ `changed_by = livreur_id`.
+
+النتيجة: كل تحديث ناجح من polling = **سطرين** فـ history → التكرار اللي كتشوف فالـchronologie.
+
+الحماية الموجودة فالتريغر (10 ثواني + نفس `old_status`/`new_status`/`changed_by`) **ماكتشتغلش** هنا لأن `changed_by` مختلف (NULL ضد livreur_id) → التريغر مكيشوفش السطر اليدوي كنسخة طبق الأصل.
+
+زائد: السطر 231 (`Transit → ""`) كيبين أنه قبل بدقيقتين الـstatus تبدل ل فارغ (يمكن من تجربة سابقة). دفعها فـ`order.status=""` فاش polling قراها → الشرط `mappedStatus === order.status` (`"Transit" === ""`) كان false → دازت التحديث.
+
+---
+
+## السبب الثاني: `driver_name` / `driver_phone` ماكيتلتقطوش من polling
+
+تأكدت بـSQL: **ماكايناش أعمدة `driver_name` ولا `driver_phone` فجدول `orders`**. 
+
+الكود ديال polling حالياً كيدير:
+```ts
+admin.from("orders").update({ status, status_note, postponed_date, scheduled_date })
+```
+ماكيخزن حتى driver. زائد polling **ماكيقراش** `webhook_driver_name_field` / `webhook_driver_phone_field` ولا كيدير لهم mapping خاص. UI ديال order-details كيقراهم فقط من آخر webhook log، ماشي من polling logs.
+
+وفـAdminLivreurs.tsx، فقائمة `SYSTEM_ORDER_FIELDS` كاينين `driver_name` و `driver_phone`، ولكن أنت كنت كتعمر بيهم خانة "Order field" د polling payload mapping — وهاد الـmapping أصلا كيتسخدم فالـ**body المرسول للـAPI** (POST request body)، ماشي للالتقاط من الـresponse. ف olivraison polling هو GET بلا body، فهاد الـmapping ماعندو معنى هنا أصلا.
+
+---
+
+## الخطة ديال الإصلاح
+
+### 1. حل التكرار بشكل نهائي — مصدر واحد للحقيقة
+
+نختار النهج: **edge functions كيكتبو فـhistory بأنفسهم، والتريغر كيتجاهل التحديثات اللي جاية من service role / polling / webhook**.
+
+**التغييرات:**
+
+a) **تعديل التريغر `log_order_status_change`** (migration):
+   - يكتب history فقط فاش `auth.uid() IS NOT NULL` (يعني تعديل من user حقيقي عبر RLS، ماشي service role).
+   - فحالة service role (`auth.uid() IS NULL`) → ماكيكتبش، لأن الedge function هي اللي مسؤولة على كتابة السطر بـ`changed_by=livreur_id` بشكل صريح.
+   - هكدا التريغر يبقى مفعل للتعديلات اليدوية من vendeur/admin/livreur عبر UI، وعدم ازدواج مع edge functions.
+
+b) **`livreur-poll-status` و `livreur-webhook`**: يبقاو كيديرو INSERT يدوي للـhistory (هما مصدر الحقيقة لتحديثات provider).
+
+c) **تنظيف السطر الشاذ 231** (`Transit → ""`): هاد البيانات الفاسدة كتخلي `order.status=""` اللي كتفشل dedup. بعد إصلاح التريغر، السبب اللي خلقها (حالة سباق سابقة) ميتكررش.
+
+### 2. حماية إضافية فـpolling ضد race conditions
+
+فـ`livreur-poll-status`، نزيد فحص ثاني قبل INSERT للـhistory:
+- نقرا آخر سطر history للorder.
+- إلا كان `new_status` ديالو = `mappedStatus` و `changed_at` فآخر 30 ثانية → نتجاهل (skip).
+
+هذا يحمي من نفس polling الـcron اللي يدوز مرتين بسرعة، أو من webhook+polling اللي يجيو فنفس الوقت بنفس الstatus.
+
+### 3. التقاط `driver_name` و `driver_phone` من polling
+
+**خياران:**
+
+**أ. (موصى به) إضافة عمودين `driver_name` و `driver_phone` لجدول `orders`** (migration)، باش يتخزنو رسمياً ويبانو للبائع و livreur فالتفاصيل وفي كل مكان.
+
+ثم:
+- فـ`livreur-poll-status` ندير قراءة من body باستخدام `settings.webhook_driver_name_field` و `settings.webhook_driver_phone_field` (نفس paths ديال webhook لأن نفس provider) ونحدثهم فـ`orders` بجوج status.
+- نفس الشي فـ`livreur-webhook`: نخزنهم فـ`orders` ماشي فقط فـlogs.
+- فـ`order-details`: نقرا `driver_name`/`driver_phone` مباشرة من `orders` (fallback على آخر log إلا فاضيين).
+- فـAdminLivreurs (UI): نزيد حقول إعدادات منفصلة "Polling driver name field" و "Polling driver phone field" (مع default = نفس قيم webhook)، باش لكل provider يتم التحكم بشكل منفصل.
+
+**ب. (بديل أبسط)** نعمل نفس الشي ولكن نخزن فـ`status_note` أو نضيف عمود واحد `provider_metadata jsonb` بدل عمودين. أقل نظافة ولكن أكثر مرونة.
+
+**نقترح الخيار (أ)** لأنه واضح وكتظهر الحقول مباشرة فأي query أو UI.
+
+### 4. توضيح UI ديال "Polling payload mapping"
+
+حالياً هاد الحقل كيشوش لأنه مخصص للـrequest body (POST/PUT)، ولكن olivraison GET فماكيستعملوش. نزيد:
+- نص توضيحي: "Used only when polling method is POST/PUT/PATCH. For GET requests this is ignored — provider data is captured from the response using the field paths above."
+- ونخفيها بشكل اختياري فاش method = GET.
+
+---
+
+## التغييرات التقنية بالملفات
+
+| ملف                                                         | التعديل                                                                  |
+|-------------------------------------------------------------|--------------------------------------------------------------------------|
+| migration جديدة                                              | تحديث `log_order_status_change` لتخطي service role + إضافة `driver_name`/`driver_phone` لـ`orders` + تنظيف سطر 231 |
+| `supabase/functions/livreur-poll-status/index.ts`           | dedup إضافي (آخر history فـ30s) + قراءة driver fields + update فـ`orders` |
+| `supabase/functions/livreur-webhook/index.ts`               | تخزين `driver_name`/`driver_phone` فـ`orders` (ماشي فقط فـlog)            |
+| `supabase/functions/order-details/index.ts`                 | قراءة driver من `orders` مباشرة (fallback على log)                       |
+| `src/pages/admin/parametres/AdminLivreurs.tsx`              | نص توضيحي لـpolling payload mapping + (اختياري) حقول driver منفصلة لـpolling |
+
+---
+
+## النتيجة المتوقعة
+
+- مصدر **واحد** يكتب فـhistory لكل تحديث provider → لا تكرار.
+- `Transit` يظهر مرة واحدة فالـchronologie.
+- `driver_name` و `driver_phone` يتخزنو فـ`orders` ويبانو فالتفاصيل سواء من webhook أو polling.
+- التحديثات اليدوية من vendeur/admin/livreur عبر UI تبقى مسجلة عادي عبر التريغر.

@@ -458,6 +458,8 @@ export type Database = {
           customer_name: string
           customer_phone: string
           delivered_at: string | null
+          driver_name: string | null
+          driver_phone: string | null
           external_tracking_number: string | null
           hub_id: number | null
           id: number
@@ -487,6 +489,8 @@ export type Database = {
           customer_name: string
           customer_phone: string
           delivered_at?: string | null
+          driver_name?: string | null
+          driver_phone?: string | null
           external_tracking_number?: string | null
           hub_id?: number | null
           id?: number
@@ -516,6 +520,8 @@ export type Database = {
           customer_name?: string
           customer_phone?: string
           delivered_at?: string | null
+          driver_name?: string | null
+          driver_phone?: string | null
           external_tracking_number?: string | null
           hub_id?: number | null
           id?: number
