@@ -267,9 +267,19 @@ Deno.serve(async (req) => {
         const message = getPath(body, settings.polling_message_field) ?? null;
         const reportedDate = parseDateValue(getPath(body, settings.polling_reported_date_field || "reportedDate"));
         const scheduledDate = parseDateValue(getPath(body, settings.polling_scheduled_date_field || "scheduledDate"));
-        const driverName = getPath(body, settings.webhook_driver_name_field || "transport.currentDriverName");
-        const driverPhone = getPath(body, settings.webhook_driver_phone_field || "transport.currentDriverPhone");
-        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "received", message: `Provider status received: ${mappedStatus}`, details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, previous_status: order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone } });
+        const driverName = getPath(body, settings.polling_driver_name_field || settings.webhook_driver_name_field || "transport.currentDriverName");
+        const driverPhone = getPath(body, settings.polling_driver_phone_field || settings.webhook_driver_phone_field || "transport.currentDriverPhone");
+        // Capture extra order columns from response if admin configured a polling_order_fields_mapping.
+        const extraOrderUpdates: Record<string, unknown> = {};
+        const orderFieldsMapping = settings.polling_order_fields_mapping ?? {};
+        for (const [orderField, responsePath] of Object.entries(orderFieldsMapping)) {
+          if (!orderField || !responsePath) continue;
+          const captured = getPath(body, String(responsePath));
+          if (captured !== undefined && captured !== null && String(captured).trim() !== "") {
+            extraOrderUpdates[String(orderField)] = captured;
+          }
+        }
+        await logApi(admin, { order_id: order.id, livreur_id: settings.livreur_id, event_type: "polling_status", status: "received", message: `Provider status received: ${mappedStatus}`, details: { endpoint, ...exchange, tracking, raw_status: rawStatus, mapped_status: mappedStatus, previous_status: order.status, note: message, reported_date: reportedDate, scheduled_date: scheduledDate, driver_name: driverName, driver_phone: driverPhone, extra_order_updates: extraOrderUpdates } });
         if (mappedStatus === order.status) {
           // Same status as current → no status update, no history insert.
           // Still capture driver info if it changed (driver may be assigned without a status change).
