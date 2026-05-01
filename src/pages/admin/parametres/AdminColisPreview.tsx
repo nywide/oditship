@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AdminColisPreviewCanvas from "./AdminColisPreviewCanvas";
 import { COLIS_PREVIEW_SETTING_KEY, colisPreviewFieldOptions, colisSectionStyle, defaultColisPreviewSettings, normalizeColisPreviewSettings, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewLocation, type ColisPreviewSettings } from "@/lib/colisPreview";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
