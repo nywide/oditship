@@ -231,3 +231,133 @@ export const renderColisTemplate = (template: string, data: Record<string, unkno
 export const sanitizeColisHtml = (value: string) => value
   .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
   .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "");
+
+/* =========================================================
+   Canvas-mode template (free drag/resize editor, like Sticker)
+   ========================================================= */
+
+export const COLIS_PREVIEW_CANVAS_KEY = "colis_preview_canvas";
+
+export type ColisCanvasElementType =
+  | "field"
+  | "text"
+  | "emoji"
+  | "icon"
+  | "line"
+  | "qr"
+  | "barcode"
+  | "html"
+  | "action";
+
+export type ColisCanvasActionKind =
+  | "print_sticker"
+  | "update_status"
+  | "call_client"
+  | "open_details"
+  | "copy_tracking";
+
+export interface ColisCanvasElement {
+  id: string;
+  type: ColisCanvasElementType;
+  field?: string;            // for type "field"
+  text?: string;             // for text/emoji/icon name
+  html?: string;             // for html
+  css?: string;              // for html
+  action?: ColisCanvasActionKind;
+  actionLabel?: string;
+  // Position & size in canvas units (percent of canvas width / px height)
+  x: number;                 // px from left
+  y: number;                 // px from top
+  w: number;                 // px width
+  h: number;                 // px height
+  fontSize: number;          // px
+  fontWeight: number;
+  color: string;
+  background: string;
+  border: boolean;
+  borderColor: string;
+  radius: number;
+  align: "left" | "center" | "right";
+  padding: number;
+  rotation: number;
+  visible: boolean;
+  zIndex: number;
+}
+
+export interface ColisCanvasTemplate {
+  enabled: boolean;          // when true, canvas replaces classic in OrderDetailsPanel
+  width: number;             // canvas logical width (px)
+  height: number;            // canvas logical height (px)
+  background: string;
+  border: boolean;
+  elements: ColisCanvasElement[];
+}
+
+export const defaultColisCanvasTemplate: ColisCanvasTemplate = {
+  enabled: false,
+  width: 960,
+  height: 520,
+  background: "hsl(var(--card))",
+  border: true,
+  elements: [],
+};
+
+export const colisCanvasIconNames = [
+  "package", "truck", "bike", "qr", "map", "user", "phone", "support", "invoice", "clock", "check", "alert",
+] as const;
+
+export const colisCanvasActions: { value: ColisCanvasActionKind; label: string }[] = [
+  { value: "print_sticker", label: "Print sticker" },
+  { value: "update_status", label: "Update status" },
+  { value: "call_client", label: "Call client" },
+  { value: "open_details", label: "Open details" },
+  { value: "copy_tracking", label: "Copy tracking" },
+];
+
+export const newColisCanvasElement = (
+  type: ColisCanvasElementType,
+  field?: string,
+): ColisCanvasElement => ({
+  id: crypto.randomUUID(),
+  type,
+  field,
+  text: type === "emoji" ? "⭐" : type === "text" ? "Text" : type === "icon" ? "package" : "",
+  html: type === "html" ? `<div class="cv-box">{{tracking}}</div>` : "",
+  css: type === "html" ? `.cv-box{width:100%;height:100%;display:flex;align-items:center;justify-content:center;border:1px solid #111;font-weight:700;border-radius:6px}` : "",
+  action: type === "action" ? "print_sticker" : undefined,
+  actionLabel: type === "action" ? "Print" : undefined,
+  x: 24,
+  y: 24,
+  w: type === "line" ? 240 : type === "qr" ? 120 : type === "html" ? 240 : type === "action" ? 140 : 200,
+  h: type === "line" ? 2 : type === "qr" ? 120 : type === "html" ? 100 : type === "action" ? 40 : 32,
+  fontSize: type === "emoji" ? 28 : type === "icon" ? 22 : 14,
+  fontWeight: 500,
+  color: "hsl(var(--foreground))",
+  background: type === "action" ? "hsl(var(--primary))" : "transparent",
+  border: false,
+  borderColor: "hsl(var(--border))",
+  radius: type === "action" ? 8 : 4,
+  align: "left",
+  padding: type === "action" ? 8 : 4,
+  rotation: 0,
+  visible: true,
+  zIndex: 1,
+});
+
+export const normalizeColisCanvasTemplate = (value: unknown): ColisCanvasTemplate => {
+  const input = (value && typeof value === "object" ? value : {}) as Partial<ColisCanvasTemplate>;
+  const elements = Array.isArray(input.elements) ? input.elements : [];
+  return {
+    enabled: Boolean(input.enabled),
+    width: typeof input.width === "number" && input.width > 200 ? input.width : defaultColisCanvasTemplate.width,
+    height: typeof input.height === "number" && input.height > 100 ? input.height : defaultColisCanvasTemplate.height,
+    background: typeof input.background === "string" ? input.background : defaultColisCanvasTemplate.background,
+    border: input.border ?? true,
+    elements: elements.map((el: any) => ({
+      ...newColisCanvasElement(el?.type || "text"),
+      ...el,
+      id: el?.id || crypto.randomUUID(),
+      visible: el?.visible !== false,
+    })),
+  };
+};
