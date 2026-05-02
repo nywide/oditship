@@ -23,6 +23,7 @@ export interface StickerOrder {
   seller_affiliation_code?: string | null;
   seller_bank_account_name?: string | null;
   seller_bank_account_number?: string | null;
+  seller_city?: string | null;
   hub_id?: number | null;
   hub_name?: string | null;
 }
