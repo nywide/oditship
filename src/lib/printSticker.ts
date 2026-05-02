@@ -177,7 +177,7 @@ const oditFinalCss = `.odit-label-final * { box-sizing: border-box; -webkit-prin
 export const defaultStickerTemplate: StickerTemplate = {
   version: 2,
   sizeMm: 100,
-  marginMm: 1,
+  marginMm: 0,
   showFrame: false,
   elements: [
     {
@@ -190,8 +190,8 @@ export const defaultStickerTemplate: StickerTemplate = {
       imageData: "",
       x: 0,
       y: 0,
-      w: 98,
-      h: 98,
+      w: 100,
+      h: 100,
       fontSize: 4,
       fontWeight: 400,
       align: "left",
