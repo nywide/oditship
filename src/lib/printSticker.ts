@@ -173,12 +173,23 @@ export const resolveStickerValue = (order: StickerOrder, field?: StickerSystemFi
 };
 
 const elementCss = (el: StickerElement) => `left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;font-size:${el.fontSize}mm;font-weight:${el.fontWeight};text-align:${el.align};border:${el.border ? ".35mm solid #111" : "0"};border-radius:${el.radius}mm;transform:rotate(${el.rotation}deg);`;
-const renderCustomHtml = (order: StickerOrder, el: StickerElement) => {
+const renderCustomHtml = async (order: StickerOrder, el: StickerElement) => {
+  const tracking = String(resolveStickerValue(order, "tracking"));
   const vars = stickerSystemFields.reduce<Record<string, string>>((acc, field) => {
     acc[field.value] = esc(resolveStickerValue(order, field.value));
     return acc;
   }, {});
-  const replaceVars = (value = "") => value.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => vars[key] ?? "");
+  const qrDataUrl = await QRCode.toDataURL(tracking, { width: 200, margin: 1 });
+  const qrImg = `<img src="${qrDataUrl}" alt="QR" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated;" />`;
+  const barcodeText = `*${esc(tracking)}*`;
+  const replaceTriple = (value = "") => value
+    .replace(/{{{\s*qr\s*}}}/g, qrImg)
+    .replace(/{{{\s*barcode\s*}}}/g, barcodeText);
+  const replaceVars = (value = "") => replaceTriple(value).replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => {
+    if (key === "qr_dataurl") return qrDataUrl;
+    if (key === "barcode_text") return barcodeText;
+    return vars[key] ?? "";
+  });
   return `<style>${stripUnsafeHtml(replaceVars(el.css))}</style>${stripUnsafeHtml(replaceVars(el.html || ""))}`;
 };
 
