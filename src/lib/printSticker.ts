@@ -23,6 +23,7 @@ export interface StickerOrder {
   seller_affiliation_code?: string | null;
   seller_bank_account_name?: string | null;
   seller_bank_account_number?: string | null;
+  seller_city?: string | null;
   hub_id?: number | null;
   hub_name?: string | null;
 }
@@ -33,7 +34,7 @@ export type StickerSystemField =
   | "product_name" | "order_value" | "open_package" | "comment" | "created_at" | "order_id"
   | "hub"
   | "seller_username" | "seller_full_name" | "seller_company_name" | "seller_phone" | "seller_cin"
-  | "seller_affiliation_code" | "seller_bank_account_name" | "seller_bank_account_number";
+  | "seller_affiliation_code" | "seller_bank_account_name" | "seller_bank_account_number" | "seller_city";
 
 export interface StickerElement {
   id: string;
@@ -86,14 +87,120 @@ export const stickerSystemFields: { value: StickerSystemField; label: string }[]
   { value: "seller_affiliation_code", label: "Seller affiliation code" },
   { value: "seller_bank_account_name", label: "Seller bank account name" },
   { value: "seller_bank_account_number", label: "Seller bank account number" },
+  { value: "seller_city", label: "Seller city" },
 ];
+
+const oditFinalHtml = `<div class="odit-label-final">
+  <table class="layout-table header-section">
+    <tr>
+      <td style="width:40%;vertical-align:middle;">
+        <div class="brand-title">ODiT</div>
+        <div class="brand-sub">only deliver it.</div>
+      </td>
+      <td style="width:40%;text-align:right;vertical-align:middle;">
+        <div class="date-text">Date: {{created_at}}</div>
+      </td>
+      <td style="width:20%;text-align:right;vertical-align:middle;">
+        <div class="qr-container">{{{qr}}}</div>
+      </td>
+    </tr>
+  </table>
+  <table class="data-table">
+    <tr><td class="col-label">Destinataire</td><td class="col-value client-name">{{customer_name}}</td></tr>
+    <tr><td class="col-label">Téléphone</td><td class="col-value">{{customer_phone}}</td></tr>
+    <tr><td class="col-label">Ville</td><td class="col-value city-text">{{customer_city}}</td></tr>
+    <tr><td class="col-label">Adresse</td><td class="col-value address-box">{{customer_address}}</td></tr>
+    <tr><td class="col-label">Produit</td><td class="col-value nowrap">{{product_name}}</td></tr>
+    <tr><td class="col-label">Commentaire</td><td class="col-value nowrap" style="font-style:italic;">{{comment}}</td></tr>
+  </table>
+  <table class="data-table" style="margin-top:4px;">
+    <tr>
+      <td style="width:55%;text-align:center;vertical-align:middle;padding:5px;">
+        <div class="small-header">À ENCAISSER / C.O.D</div>
+        <div class="price-huge">{{order_value}}</div>
+      </td>
+      <td style="width:45%;text-align:center;vertical-align:middle;padding:5px;background-color:#f2f2f2;">
+        <div class="small-header">HUB / SECTEUR</div>
+        <div class="hub-text">{{hub}}</div>
+      </td>
+    </tr>
+  </table>
+  <div class="barcode-area">
+    <div class="tracking-id">#{{tracking}}</div>
+    <div class="barcode-sim">{{{barcode}}}</div>
+  </div>
+  <table class="w-100 seller-box">
+    <tr><td><b>Expéditeur:</b> {{seller_company_name}} | <b>Tél:</b> {{seller_phone}} | {{seller_city}}</td></tr>
+  </table>
+  <table class="layout-table footer-section">
+    <tr>
+      <td style="width:50%;vertical-align:middle;">
+        <div class="opening-status">{{open_package}}</div>
+      </td>
+      <td style="width:50%;text-align:right;vertical-align:middle;">
+        <div class="arabic-tagline" dir="rtl">شركتنا مكلفة بتوصيل فقط</div>
+        <div class="site-link">www.odit.ma</div>
+      </td>
+    </tr>
+  </table>
+</div>`;
+
+const oditFinalCss = `.odit-label-final * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+.odit-label-final { width:100%; height:100%; padding:5px; font-family: Arial, Helvetica, sans-serif; display:flex; flex-direction:column; overflow:hidden; color:#000; background:#fff; }
+.odit-label-final .w-100 { width:100%; border-collapse:collapse; }
+.odit-label-final .layout-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.odit-label-final .data-table { width:100%; border-collapse:collapse; table-layout:fixed; border:2px solid #000; }
+.odit-label-final .data-table td { border:1px solid #000; padding:3px 6px; font-size:11px; vertical-align:middle; }
+.odit-label-final .header-section { border-bottom:2px solid #000; padding-bottom:4px; margin-bottom:6px; }
+.odit-label-final .brand-title { font-size:30px; font-weight:900; line-height:0.8; }
+.odit-label-final .brand-sub { font-size:11px; font-weight:bold; }
+.odit-label-final .date-text { font-size:11px; font-weight:bold; }
+.odit-label-final .qr-container { width:50px; height:50px; border:1px solid #000; float:right; overflow:hidden; }
+.odit-label-final .col-label { width:30%; font-weight:bold; background-color:#f2f2f2; }
+.odit-label-final .col-value { width:70%; font-weight:bold; }
+.odit-label-final .client-name { font-size:14px; text-transform:uppercase; }
+.odit-label-final .city-text { font-size:16px; text-transform:uppercase; font-weight:900; }
+.odit-label-final .address-box { height:26px; line-height:1.1; overflow:hidden; }
+.odit-label-final .nowrap { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.odit-label-final .small-header { font-size:9px; font-weight:bold; text-decoration:underline; margin-bottom:2px; }
+.odit-label-final .price-huge { font-size:24px; font-weight:900; }
+.odit-label-final .hub-text { font-size:16px; font-weight:900; text-transform:uppercase; }
+.odit-label-final .barcode-area { text-align:center; margin:5px 0; }
+.odit-label-final .tracking-id { font-size:14px; font-weight:bold; letter-spacing:2px; }
+.odit-label-final .barcode-sim { font-family:'Libre Barcode 39', monospace; font-size:45px; line-height:1; height:38px; overflow:hidden; }
+.odit-label-final .seller-box { border:1px solid #000; padding:4px; font-size:10px; margin-top:auto; margin-bottom:4px; background-color:#fafafa; }
+.odit-label-final .footer-section { border-top:1px solid #000; padding-top:4px; }
+.odit-label-final .opening-status { border:2px solid #000; padding:3px 8px; font-size:12px; font-weight:900; display:inline-block; }
+.odit-label-final .arabic-tagline { font-size:10px; font-weight:bold; }
+.odit-label-final .site-link { font-size:11px; font-weight:900; }`;
 
 export const defaultStickerTemplate: StickerTemplate = {
   version: 2,
   sizeMm: 100,
-  marginMm: 2,
-  showFrame: true,
-  elements: [],
+  marginMm: 1,
+  showFrame: false,
+  elements: [
+    {
+      id: "odit-final-template",
+      type: "html",
+      label: "ODiT Final label",
+      text: "",
+      html: oditFinalHtml,
+      css: oditFinalCss,
+      imageData: "",
+      x: 0,
+      y: 0,
+      w: 98,
+      h: 98,
+      fontSize: 4,
+      fontWeight: 400,
+      align: "left",
+      border: false,
+      radius: 0,
+      rotation: 0,
+      visible: true,
+    },
+  ],
 };
 
 const esc = (value: unknown) => String(value ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c] as string));
@@ -165,17 +272,29 @@ export const resolveStickerValue = (order: StickerOrder, field?: StickerSystemFi
     case "seller_affiliation_code": return order.seller_affiliation_code || "";
     case "seller_bank_account_name": return order.seller_bank_account_name || "";
     case "seller_bank_account_number": return order.seller_bank_account_number || "";
+    case "seller_city": return order.seller_city || "";
     default: return "";
   }
 };
 
 const elementCss = (el: StickerElement) => `left:${el.x}mm;top:${el.y}mm;width:${el.w}mm;height:${el.h}mm;font-size:${el.fontSize}mm;font-weight:${el.fontWeight};text-align:${el.align};border:${el.border ? ".35mm solid #111" : "0"};border-radius:${el.radius}mm;transform:rotate(${el.rotation}deg);`;
-const renderCustomHtml = (order: StickerOrder, el: StickerElement) => {
+const renderCustomHtml = async (order: StickerOrder, el: StickerElement) => {
+  const tracking = String(resolveStickerValue(order, "tracking"));
   const vars = stickerSystemFields.reduce<Record<string, string>>((acc, field) => {
     acc[field.value] = esc(resolveStickerValue(order, field.value));
     return acc;
   }, {});
-  const replaceVars = (value = "") => value.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => vars[key] ?? "");
+  const qrDataUrl = await QRCode.toDataURL(tracking, { width: 200, margin: 1 });
+  const qrImg = `<img src="${qrDataUrl}" alt="QR" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated;" />`;
+  const barcodeText = `*${esc(tracking)}*`;
+  const replaceTriple = (value = "") => value
+    .replace(/{{{\s*qr\s*}}}/g, qrImg)
+    .replace(/{{{\s*barcode\s*}}}/g, barcodeText);
+  const replaceVars = (value = "") => replaceTriple(value).replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key) => {
+    if (key === "qr_dataurl") return qrDataUrl;
+    if (key === "barcode_text") return barcodeText;
+    return vars[key] ?? "";
+  });
   return `<style>${stripUnsafeHtml(replaceVars(el.css))}</style>${stripUnsafeHtml(replaceVars(el.html || ""))}`;
 };
 
@@ -225,7 +344,7 @@ const renderElement = async (order: StickerOrder, el: StickerElement) => {
     return `<div class="${classes}" style="${elementCss(el)}"><img src="${qr}" alt="QR"></div>`;
   }
   if (el.type === "barcode") return `<div class="${classes}" style="${elementCss(el)}">*${esc(tracking)}*</div>`;
-  if (el.type === "html") return `<div class="${classes}" style="${elementCss(el)}">${renderCustomHtml(order, el)}</div>`;
+  if (el.type === "html") return `<div class="${classes}" style="${elementCss(el)}">${await renderCustomHtml(order, el)}</div>`;
   const value = el.type === "field" ? resolveStickerValue(order, el.field) : el.text;
   return `<div class="${classes}" style="${elementCss(el)}">${esc(value)}</div>`;
 };
