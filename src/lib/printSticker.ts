@@ -323,9 +323,10 @@ const withSellerProfile = async (order: StickerOrder): Promise<StickerOrder> => 
 const stickerStyles = (template: StickerTemplate) => `
 @page { size: ${template.sizeMm}mm ${template.sizeMm}mm; margin: ${template.marginMm}mm; }
 * { box-sizing: border-box; }
-body { font-family: Arial, Helvetica, sans-serif; margin:0; color:#070707; background:#fff; }
-.sticker { position:relative; width:${Math.max(20, template.sizeMm - template.marginMm * 2)}mm; height:${Math.max(20, template.sizeMm - template.marginMm * 2)}mm; page-break-after:always; overflow:hidden; border:${template.showFrame ? ".35mm solid #111" : "0"}; }
-.sticker:last-child { page-break-after:auto; }
+html, body { margin:0; padding:0; }
+body { font-family: Arial, Helvetica, sans-serif; color:#070707; background:#fff; }
+.sticker { position:relative; width:${Math.max(20, template.sizeMm - template.marginMm * 2)}mm; height:${Math.max(20, template.sizeMm - template.marginMm * 2)}mm; overflow:hidden; border:${template.showFrame ? ".35mm solid #111" : "0"}; page-break-inside:avoid; break-inside:avoid; }
+.sticker + .sticker { page-break-before:always; break-before:page; }
 .el { position:absolute; overflow:hidden; line-height:1.05; word-break:break-word; display:flex; align-items:center; padding:.5mm; transform-origin:center; }
 .el.center { justify-content:center; } .el.right { justify-content:flex-end; } .el.left { justify-content:flex-start; }
 .el-line { padding:0; border-top:.45mm solid #111 !important; height:0 !important; min-height:0; }
