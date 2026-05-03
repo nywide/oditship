@@ -16,7 +16,7 @@ const Signup = () => {
   const [accepted, setAccepted] = useState(false);
   const [form, setForm] = useState({
     username: "", email: "", password: "",
-    full_name: "", phone: "", cin: "", affiliation_code: "",
+    full_name: "", phone: "", cin: "", city: "", affiliation_code: "",
   });
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
