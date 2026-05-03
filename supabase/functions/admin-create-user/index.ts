@@ -22,6 +22,7 @@ interface Body {
   full_name?: string;
   phone?: string;
   cin?: string;
+  city?: string;
   role: string;
   agent_of?: string | null;
   is_active?: boolean;
