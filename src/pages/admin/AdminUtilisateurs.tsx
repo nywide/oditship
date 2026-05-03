@@ -28,6 +28,7 @@ interface ProfileRow {
   full_name: string | null;
   phone: string | null;
   cin: string | null;
+  city: string | null;
   role: string;
   is_active: boolean;
   created_at: string;
@@ -37,7 +38,7 @@ interface ProfileRow {
 
 const emptyForm = {
   username: "", email: "", password: "",
-  full_name: "", phone: "", cin: "",
+  full_name: "", phone: "", cin: "", city: "",
   role: "vendeur", is_active: true,
   bank_account_name: "", bank_account_number: "",
   current_password: "",
