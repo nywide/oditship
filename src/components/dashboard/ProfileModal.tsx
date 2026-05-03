@@ -13,7 +13,7 @@ interface Props { open: boolean; onOpenChange: (v: boolean) => void; }
 export const ProfileModal = ({ open, onOpenChange }: Props) => {
   const { user, profile, role, refresh } = useAuth();
   const isVendeur = role === "vendeur";
-  const [form, setForm] = useState({ username: "", full_name: "", phone: "", email: "", password: "" });
+  const [form, setForm] = useState({ username: "", full_name: "", phone: "", city: "", email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
