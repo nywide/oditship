@@ -299,7 +299,7 @@ const renderCustomHtml = async (order: StickerOrder, el: StickerElement) => {
 };
 
 const withSellerProfile = async (order: StickerOrder): Promise<StickerOrder> => {
-  const needsSeller = order.vendeur_id && !order.seller_username && !order.seller_full_name && !order.seller_company_name;
+  const needsSeller = !!order.vendeur_id;
   const needsHub = order.hub_id && !order.hub_name;
   if (!needsSeller && !needsHub) return order;
   const [sellerResult, hubResult] = await Promise.all([
