@@ -39,9 +39,10 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
     }
     setSubmitting(true);
     try {
-      const updates: { full_name: string | null; phone: string | null; username?: string } = {
+      const updates: { full_name: string | null; phone: string | null; city: string | null; username?: string } = {
         full_name: form.full_name || null,
         phone: form.phone || null,
+        city: form.city || null,
       };
       if (newUsername !== profile?.username) updates.username = newUsername;
       const { error: pErr } = await supabase.from("profiles").update(updates).eq("id", user.id);
