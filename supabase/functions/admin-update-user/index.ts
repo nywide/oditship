@@ -19,6 +19,7 @@ interface Body {
   full_name?: string | null;
   phone?: string | null;
   cin?: string | null;
+  city?: string | null;
   role?: string;
   is_active?: boolean;
   bank_account_name?: string | null;
