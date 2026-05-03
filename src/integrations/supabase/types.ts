@@ -670,6 +670,7 @@ export type Database = {
           bank_account_name: string | null
           bank_account_number: string | null
           cin: string | null
+          city: string | null
           company_name: string | null
           create_package_config: Json | null
           created_at: string
@@ -691,6 +692,7 @@ export type Database = {
           bank_account_name?: string | null
           bank_account_number?: string | null
           cin?: string | null
+          city?: string | null
           company_name?: string | null
           create_package_config?: Json | null
           created_at?: string
@@ -712,6 +714,7 @@ export type Database = {
           bank_account_name?: string | null
           bank_account_number?: string | null
           cin?: string | null
+          city?: string | null
           company_name?: string | null
           create_package_config?: Json | null
           created_at?: string
