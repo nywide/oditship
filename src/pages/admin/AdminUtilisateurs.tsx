@@ -141,7 +141,7 @@ const AdminUtilisateurs = () => {
         const { data, error } = await supabase.functions.invoke("admin-create-user", {
           body: {
             email: form.email, password: form.password, username: form.username.toLowerCase().trim(),
-            full_name: form.full_name, phone: form.phone, cin: form.cin,
+            full_name: form.full_name, phone: form.phone, cin: form.cin, city: form.city,
             role: form.role, is_active: form.is_active,
             bank_account_name: form.role === "vendeur" ? form.bank_account_name : null,
             bank_account_number: form.role === "vendeur" ? form.bank_account_number : null,
