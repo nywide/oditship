@@ -348,6 +348,7 @@ const AdminUtilisateurs = () => {
               <div><Label>Téléphone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
               <div><Label>CIN</Label><Input value={form.cin} onChange={(e) => setForm({ ...form, cin: e.target.value })} /></div>
             </div>
+            <div><Label>Ville de Ramassage</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
             <div>
               <Label>Rôle *</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
