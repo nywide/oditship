@@ -303,19 +303,21 @@ const withSellerProfile = async (order: StickerOrder): Promise<StickerOrder> => 
   const needsHub = order.hub_id && !order.hub_name;
   if (!needsSeller && !needsHub) return order;
   const [sellerResult, hubResult] = await Promise.all([
-    needsSeller ? (supabase as any).from("profiles").select("username, full_name, company_name, phone, cin, affiliation_code, bank_account_name, bank_account_number").eq("id", order.vendeur_id).maybeSingle() : Promise.resolve({ data: null }),
+    needsSeller ? (supabase as any).from("profiles").select("username, full_name, company_name, phone, cin, affiliation_code, bank_account_name, bank_account_number, city").eq("id", order.vendeur_id).maybeSingle() : Promise.resolve({ data: null }),
     needsHub ? (supabase as any).from("hubs").select("name").eq("id", order.hub_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const sellerCompany = sellerResult.data?.company_name || sellerResult.data?.full_name || sellerResult.data?.username || order.seller_company_name || order.seller_full_name || order.seller_username || null;
   return {
     ...order,
     seller_username: sellerResult.data?.username ?? order.seller_username ?? null,
     seller_full_name: sellerResult.data?.full_name ?? order.seller_full_name ?? null,
-    seller_company_name: sellerResult.data?.company_name ?? order.seller_company_name ?? null,
+    seller_company_name: sellerCompany,
     seller_phone: sellerResult.data?.phone ?? order.seller_phone ?? null,
     seller_cin: sellerResult.data?.cin ?? order.seller_cin ?? null,
     seller_affiliation_code: sellerResult.data?.affiliation_code ?? order.seller_affiliation_code ?? null,
     seller_bank_account_name: sellerResult.data?.bank_account_name ?? order.seller_bank_account_name ?? null,
     seller_bank_account_number: sellerResult.data?.bank_account_number ?? order.seller_bank_account_number ?? null,
+    seller_city: sellerResult.data?.city ?? order.seller_city ?? null,
     hub_name: hubResult.data?.name ?? order.hub_name ?? null,
   };
 };
