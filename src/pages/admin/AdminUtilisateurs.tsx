@@ -123,6 +123,7 @@ const AdminUtilisateurs = () => {
           full_name: form.full_name || null,
           phone: form.phone || null,
           cin: form.cin || null,
+          city: form.city || null,
           role: form.role,
           is_active: form.is_active,
         };
