@@ -94,6 +94,7 @@ const AdminUtilisateurs = () => {
       full_name: r.full_name ?? "",
       phone: r.phone ?? "",
       cin: r.cin ?? "",
+      city: r.city ?? "",
       role: r.role,
       is_active: r.is_active,
       bank_account_name: r.bank_account_name ?? "",
