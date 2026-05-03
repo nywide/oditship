@@ -16,7 +16,7 @@ const Signup = () => {
   const [accepted, setAccepted] = useState(false);
   const [form, setForm] = useState({
     username: "", email: "", password: "",
-    full_name: "", phone: "", cin: "", affiliation_code: "",
+    full_name: "", phone: "", cin: "", city: "", affiliation_code: "",
   });
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -55,6 +55,7 @@ const Signup = () => {
             full_name: form.full_name,
             phone: form.phone,
             cin: form.cin,
+            city: form.city,
             affiliation_code: form.affiliation_code || null,
             role: "vendeur",
           },
@@ -132,6 +133,10 @@ const Signup = () => {
                   <Label htmlFor="aff">Code d'affiliation</Label>
                   <Input id="aff" value={form.affiliation_code} onChange={(e) => update("affiliation_code", e.target.value)} className="mt-1.5" />
                 </div>
+              </div>
+              <div>
+                <Label htmlFor="city">Ville de Ramassage *</Label>
+                <Input id="city" value={form.city} onChange={(e) => update("city", e.target.value)} required className="mt-1.5" />
               </div>
               <div className="flex items-start gap-2 pt-2">
                 <Checkbox id="terms" checked={accepted} onCheckedChange={(v) => setAccepted(v === true)} />

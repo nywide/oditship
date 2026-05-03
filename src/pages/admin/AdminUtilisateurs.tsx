@@ -28,6 +28,7 @@ interface ProfileRow {
   full_name: string | null;
   phone: string | null;
   cin: string | null;
+  city: string | null;
   role: string;
   is_active: boolean;
   created_at: string;
@@ -37,7 +38,7 @@ interface ProfileRow {
 
 const emptyForm = {
   username: "", email: "", password: "",
-  full_name: "", phone: "", cin: "",
+  full_name: "", phone: "", cin: "", city: "",
   role: "vendeur", is_active: true,
   bank_account_name: "", bank_account_number: "",
   current_password: "",
@@ -93,6 +94,7 @@ const AdminUtilisateurs = () => {
       full_name: r.full_name ?? "",
       phone: r.phone ?? "",
       cin: r.cin ?? "",
+      city: r.city ?? "",
       role: r.role,
       is_active: r.is_active,
       bank_account_name: r.bank_account_name ?? "",
@@ -121,6 +123,7 @@ const AdminUtilisateurs = () => {
           full_name: form.full_name || null,
           phone: form.phone || null,
           cin: form.cin || null,
+          city: form.city || null,
           role: form.role,
           is_active: form.is_active,
         };
@@ -138,7 +141,7 @@ const AdminUtilisateurs = () => {
         const { data, error } = await supabase.functions.invoke("admin-create-user", {
           body: {
             email: form.email, password: form.password, username: form.username.toLowerCase().trim(),
-            full_name: form.full_name, phone: form.phone, cin: form.cin,
+            full_name: form.full_name, phone: form.phone, cin: form.cin, city: form.city,
             role: form.role, is_active: form.is_active,
             bank_account_name: form.role === "vendeur" ? form.bank_account_name : null,
             bank_account_number: form.role === "vendeur" ? form.bank_account_number : null,
@@ -345,6 +348,7 @@ const AdminUtilisateurs = () => {
               <div><Label>Téléphone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
               <div><Label>CIN</Label><Input value={form.cin} onChange={(e) => setForm({ ...form, cin: e.target.value })} /></div>
             </div>
+            <div><Label>Ville de Ramassage</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
             <div>
               <Label>Rôle *</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>

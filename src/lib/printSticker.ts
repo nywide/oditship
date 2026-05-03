@@ -299,23 +299,25 @@ const renderCustomHtml = async (order: StickerOrder, el: StickerElement) => {
 };
 
 const withSellerProfile = async (order: StickerOrder): Promise<StickerOrder> => {
-  const needsSeller = order.vendeur_id && !order.seller_username && !order.seller_full_name && !order.seller_company_name;
+  const needsSeller = !!order.vendeur_id;
   const needsHub = order.hub_id && !order.hub_name;
   if (!needsSeller && !needsHub) return order;
   const [sellerResult, hubResult] = await Promise.all([
-    needsSeller ? (supabase as any).from("profiles").select("username, full_name, company_name, phone, cin, affiliation_code, bank_account_name, bank_account_number").eq("id", order.vendeur_id).maybeSingle() : Promise.resolve({ data: null }),
+    needsSeller ? (supabase as any).from("profiles").select("username, full_name, company_name, phone, cin, affiliation_code, bank_account_name, bank_account_number, city").eq("id", order.vendeur_id).maybeSingle() : Promise.resolve({ data: null }),
     needsHub ? (supabase as any).from("hubs").select("name").eq("id", order.hub_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const sellerCompany = sellerResult.data?.company_name || sellerResult.data?.full_name || sellerResult.data?.username || order.seller_company_name || order.seller_full_name || order.seller_username || null;
   return {
     ...order,
     seller_username: sellerResult.data?.username ?? order.seller_username ?? null,
     seller_full_name: sellerResult.data?.full_name ?? order.seller_full_name ?? null,
-    seller_company_name: sellerResult.data?.company_name ?? order.seller_company_name ?? null,
+    seller_company_name: sellerCompany,
     seller_phone: sellerResult.data?.phone ?? order.seller_phone ?? null,
     seller_cin: sellerResult.data?.cin ?? order.seller_cin ?? null,
     seller_affiliation_code: sellerResult.data?.affiliation_code ?? order.seller_affiliation_code ?? null,
     seller_bank_account_name: sellerResult.data?.bank_account_name ?? order.seller_bank_account_name ?? null,
     seller_bank_account_number: sellerResult.data?.bank_account_number ?? order.seller_bank_account_number ?? null,
+    seller_city: sellerResult.data?.city ?? order.seller_city ?? null,
     hub_name: hubResult.data?.name ?? order.hub_name ?? null,
   };
 };
@@ -357,7 +359,19 @@ const renderSticker = async (order: StickerOrder, template: StickerTemplate) => 
 const openPrintWindow = (title: string, body: string, template: StickerTemplate) => {
   const win = window.open("", "_blank", "width=620,height=620");
   if (!win) return;
-  win.document.write(`<!doctype html><html><head><title>${esc(title)}</title><style>${stickerStyles(template)}</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap"></head><body>${body}<script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+  const printScript = `
+    (function(){
+      var doPrint = function(){ try { window.focus(); window.print(); } catch(e){} };
+      var ready = function(){
+        var p = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+        p.then(function(){ setTimeout(doPrint, 250); }).catch(function(){ setTimeout(doPrint, 600); });
+      };
+      if (document.readyState === 'complete') ready();
+      else window.addEventListener('load', ready);
+    })();
+  `;
+  win.document.open();
+  win.document.write(`<!doctype html><html><head><title>${esc(title)}</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39&display=swap"><style>${stickerStyles(template)}</style></head><body>${body}<script>${printScript}<\/script></body></html>`);
   win.document.close();
 };
 

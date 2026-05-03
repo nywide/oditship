@@ -13,7 +13,7 @@ interface Props { open: boolean; onOpenChange: (v: boolean) => void; }
 export const ProfileModal = ({ open, onOpenChange }: Props) => {
   const { user, profile, role, refresh } = useAuth();
   const isVendeur = role === "vendeur";
-  const [form, setForm] = useState({ username: "", full_name: "", phone: "", email: "", password: "" });
+  const [form, setForm] = useState({ username: "", full_name: "", phone: "", city: "", email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -22,6 +22,7 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
         username: profile?.username ?? "",
         full_name: profile?.full_name ?? "",
         phone: profile?.phone ?? "",
+        city: profile?.city ?? "",
         email: user?.email ?? "",
         password: "",
       });
@@ -38,9 +39,10 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
     }
     setSubmitting(true);
     try {
-      const updates: { full_name: string | null; phone: string | null; username?: string } = {
+      const updates: { full_name: string | null; phone: string | null; city: string | null; username?: string } = {
         full_name: form.full_name || null,
         phone: form.phone || null,
+        city: form.city || null,
       };
       if (newUsername !== profile?.username) updates.username = newUsername;
       const { error: pErr } = await supabase.from("profiles").update(updates).eq("id", user.id);
@@ -89,6 +91,10 @@ export const ProfileModal = ({ open, onOpenChange }: Props) => {
           <div>
             <Label>Téléphone</Label>
             <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+          <div>
+            <Label>Ville de Ramassage</Label>
+            <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
           </div>
           <div>
             <Label>Email</Label>

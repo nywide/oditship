@@ -48,6 +48,7 @@ const sampleOrder = {
   seller_affiliation_code: "VD-2048",
   seller_bank_account_name: "Demo Seller",
   seller_bank_account_number: "007780000000000000000000",
+  seller_city: "Casablanca",
 };
 
 const newElement = (type: StickerElementType, field?: StickerSystemField): StickerElement => ({

@@ -22,6 +22,7 @@ interface Body {
   full_name?: string;
   phone?: string;
   cin?: string;
+  city?: string;
   role: string;
   agent_of?: string | null;
   is_active?: boolean;
@@ -82,6 +83,7 @@ Deno.serve(async (req) => {
       full_name: body.full_name ?? null,
       phone: body.phone ?? null,
       cin: body.cin ?? null,
+      city: body.city ?? null,
     },
   });
 
@@ -96,6 +98,7 @@ Deno.serve(async (req) => {
     full_name: body.full_name ?? null,
     phone: body.phone ?? null,
     cin: body.cin ?? null,
+    city: body.city ?? null,
     agent_of: body.agent_of ?? null,
     is_active: body.is_active ?? true,
     agent_pages: body.role === "agent" ? (body.agent_pages ?? null) : null,
