@@ -263,7 +263,16 @@ const VendeurColis = () => {
           }}
           detailsRenderer={(o) => <OrderDetailsPanel order={o as any} previewSettings={previewSettings} />}
         />
-        <OrderFormDialog open={formOpen} onOpenChange={setFormOpen} initialValues={editing ?? undefined} onSaved={load} />
+        {user && (
+          <OrderFormDialog
+            open={formOpen}
+            onOpenChange={setFormOpen}
+            initial={editing}
+            vendeurId={isAgent ? (profile?.agent_of as string) : user.id}
+            agentId={isAgent ? user.id : null}
+            onSaved={load}
+          />
+        )}
         <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
