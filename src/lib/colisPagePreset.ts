@@ -34,6 +34,9 @@ export interface ColisPagePreset {
        Page: {{title}} {{count}} {{filters}} {{toolbar}} {{rows}}
    ----------------------------------------------------------- */
 
+// NOTE: enabled=false by default. The classic shadcn table + OrderDetailsPanel
+// is the default. Activate this preset from Admin → Paramètres → "Page template"
+// to take over the page rendering with the HTML/CSS below.
 export const defaultColisPagePreset: ColisPagePreset = {
   enabled: false,
   appliesTo: { admin: true, vendeur: true, livreur: true },
