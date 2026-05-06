@@ -295,7 +295,7 @@ const AdminLivreurWorkflows = () => {
       {/* Sidebar */}
       <aside className="w-72 border-r bg-card flex flex-col">
         <div className="p-4 border-b flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => { if (window.history.length > 1) navigate(-1); else navigate("/dashboard/administrateur/parametres"); }}><ArrowLeft className="h-4 w-4" /></Button>
           <div className="flex-1 min-w-0">
             <div className="text-xs text-muted-foreground">Workflows de</div>
             <div className="font-semibold truncate">{livreurName}</div>
