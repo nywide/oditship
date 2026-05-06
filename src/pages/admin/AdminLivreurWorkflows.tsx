@@ -694,12 +694,7 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
             </div>
           )}
           {step.type === "validate" && (
-            <div className="text-xs text-muted-foreground">
-              Définir les règles via JSON. Exemple: <code>{`{ "customer_phone": { "regex": "^[0-9]{10}$" } }`}</code>
-              <Textarea className="mt-2 font-mono text-xs" rows={5}
-                value={JSON.stringify(step.config?.rules || {}, null, 2)}
-                onChange={(e) => { try { onChange({ config: { ...step.config, rules: JSON.parse(e.target.value) } }); } catch {} }} />
-            </div>
+            <ValidateRulesEditor step={step} onChange={onChange} />
           )}
           {/* Advanced */}
           <details className="border-t pt-3">
@@ -721,6 +716,81 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
         </div>
       )}
     </Card>
+  );
+};
+
+const ValidateRulesEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
+  const rules: Json = step.config?.rules || {};
+  const entries = Object.entries(rules);
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [jsonText, setJsonText] = useState(() => JSON.stringify(rules, null, 2));
+
+  const updateRule = (field: string, patch: Json) => {
+    const next = { ...rules, [field]: { ...(rules[field] || {}), ...patch } };
+    onChange({ config: { ...step.config, rules: next } });
+  };
+  const renameField = (oldName: string, newName: string) => {
+    if (!newName || newName === oldName) return;
+    const next: Json = {};
+    for (const [k, v] of Object.entries(rules)) next[k === oldName ? newName : k] = v;
+    onChange({ config: { ...step.config, rules: next } });
+  };
+  const removeField = (field: string) => {
+    const next = { ...rules };
+    delete next[field];
+    onChange({ config: { ...step.config, rules: next } });
+  };
+  const addField = () => {
+    let name = "champ";
+    let i = 1;
+    while (rules[name]) name = `champ_${++i}`;
+    onChange({ config: { ...step.config, rules: { ...rules, [name]: { required: true } } } });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Règles de validation</Label>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setJsonText(JSON.stringify(rules, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+      </div>
+      {mode === "fields" ? (
+        <div className="space-y-2">
+          {entries.length === 0 && <div className="text-xs text-muted-foreground">Aucune règle. Ajoutez un champ ci-dessous.</div>}
+          {entries.map(([field, rule]: [string, any]) => (
+            <div key={field} className="border rounded-md p-2 space-y-2 bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Input className="flex-1 font-mono text-xs" defaultValue={field} onBlur={(e) => renameField(field, e.target.value.trim())} placeholder="customer_phone" />
+                <Button type="button" size="sm" variant="ghost" onClick={() => removeField(field)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 text-xs">
+                  <Switch checked={!!rule?.required} onCheckedChange={(v) => updateRule(field, { required: v })} />
+                  Obligatoire
+                </label>
+                <Input type="number" placeholder="min_length" value={rule?.min_length ?? ""} onChange={(e) => updateRule(field, { min_length: e.target.value === "" ? undefined : Number(e.target.value) })} />
+              </div>
+              <Input className="font-mono text-xs" placeholder="Regex (ex: ^[0-9]{10}$)" value={rule?.regex ?? ""} onChange={(e) => updateRule(field, { regex: e.target.value || undefined })} />
+              <Input className="text-xs" placeholder="Message d'erreur (optionnel)" value={rule?.message ?? ""} onChange={(e) => updateRule(field, { message: e.target.value || undefined })} />
+            </div>
+          ))}
+          <Button type="button" size="sm" variant="outline" onClick={addField}><Plus className="h-4 w-4 mr-1" /> Ajouter un champ</Button>
+        </div>
+      ) : (
+        <Textarea
+          className="font-mono text-xs"
+          rows={8}
+          value={jsonText}
+          onChange={(e) => {
+            setJsonText(e.target.value);
+            try { onChange({ config: { ...step.config, rules: JSON.parse(e.target.value) } }); } catch {}
+          }}
+        />
+      )}
+      <div className="text-xs text-muted-foreground">Champ = chemin (ex: <code>customer_phone</code> ou <code>order.customer_phone</code>).</div>
+    </div>
   );
 };
 
