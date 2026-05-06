@@ -110,10 +110,29 @@ const AdminLivreurWorkflows = () => {
   }, [livreurId]);
 
   const loadRuns = useCallback(async () => {
-    if (!activeId) return;
-    const { data } = await db.from("livreur_workflow_runs").select("*").eq("workflow_id", activeId).order("started_at", { ascending: false }).limit(20);
-    setRecentRuns(data || []);
-  }, [activeId]);
+    if (!activeId || !livreurId) return;
+    const [{ data: runs }, { data: logs }] = await Promise.all([
+      db.from("livreur_workflow_runs").select("*").eq("workflow_id", activeId).order("started_at", { ascending: false }).limit(20),
+      db.from("livreur_api_logs").select("*").eq("livreur_id", livreurId).order("created_at", { ascending: false }).limit(20),
+    ]);
+    const legacyAsRuns = (logs || []).map((l: any) => ({
+      id: `legacy-${l.id}`,
+      workflow_id: activeId,
+      livreur_id: livreurId,
+      order_id: l.order_id,
+      trigger_type: l.event_type || "legacy",
+      status: l.status === "success" || l.status === "ok" ? "success" : "failed",
+      started_at: l.created_at,
+      duration_ms: 0,
+      step_results: [{ name: l.message || l.event_type, status: l.status, details: l.details }],
+      error_message: l.status !== "success" && l.status !== "ok" ? (l.message || null) : null,
+      _legacy: true,
+    }));
+    const merged = [...(runs || []), ...legacyAsRuns]
+      .sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+      .slice(0, 40);
+    setRecentRuns(merged);
+  }, [activeId, livreurId]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadRuns(); }, [loadRuns]);
