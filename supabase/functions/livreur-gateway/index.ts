@@ -171,6 +171,17 @@ async function logApi(admin: any, entry: JsonRecord) {
   });
 }
 
+function triggerWorkflowEvent(livreur_id: string, order: JsonRecord, from_status: string | null, to_status: string) {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const ANON = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!;
+  // Fire-and-forget so we don't block the response
+  fetch(`${SUPABASE_URL}/functions/v1/livreur-workflow-runner`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: ANON, Authorization: `Bearer ${ANON}` },
+    body: JSON.stringify({ action: "trigger_event", event: "order_status_changed", livreur_id, order, from_status, to_status }),
+  }).catch(() => {});
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
@@ -245,6 +256,7 @@ Deno.serve(async (req) => {
     if (error) return jsonResponse({ error: error.message }, 500);
     await insertPickupHistory(`Pickup — tracking interne ${trackingNumber}`);
     await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: "Internal tracking generated because driver API is disabled", details: { mode: "internal_tracking", webhook_enabled: legacySettings?.webhook_enabled === true, generated_tracking: trackingNumber } });
+    triggerWorkflowEvent(livreur.id, { ...order, status: "Pickup", tracking_number: trackingNumber }, "Confirmé", "Pickup");
     return jsonResponse({ ok: true, mode: "internal_tracking", message: "External API disabled for this driver; internal tracking generated.", tracking_number: trackingNumber });
   }
 
@@ -294,6 +306,7 @@ Deno.serve(async (req) => {
     if (error) return jsonResponse({ error: `Provider succeeded but database update failed: ${error.message}`, tracking_id: String(tracking) }, 500);
     await insertPickupHistory(`Pickup — tracking ${String(tracking)}`);
     await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: `Tracking ${String(tracking)}`, details: { endpoint, sending: exchanges[0]?.sending, reception: exchanges[0]?.reception, exchanges, tracking_path: trackingPath } });
+    triggerWorkflowEvent(livreur.id, { ...order, status: "Pickup", external_tracking_number: String(tracking) }, "Confirmé", "Pickup");
 
     return jsonResponse({ ok: true, mode: "external_api", tracking_id: String(tracking) });
   } catch (error) {
