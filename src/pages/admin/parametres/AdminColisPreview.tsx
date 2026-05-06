@@ -44,7 +44,7 @@ const AdminColisPreview = () => {
     const { data: userData } = await supabase.auth.getUser();
     const { error } = await db.from("app_settings").upsert({ key: COLIS_PREVIEW_SETTING_KEY, value: settings, updated_by: userData.user?.id ?? null }, { onConflict: "key" });
     setSaving(false);
-    if (error) toast.error(error.message); else toast.success("Colis preview saved");
+    if (error) toast.error(error.message); else { try { sessionStorage.removeItem(`app_settings:${COLIS_PREVIEW_SETTING_KEY}`); } catch { /* */ } toast.success("Colis preview saved"); }
   };
 
   return <Tabs defaultValue="page" className="space-y-4">
