@@ -55,15 +55,15 @@ const AdminColis = () => {
 
   useEffect(() => {
     Promise.all([
-      supabase.from("orders").select("*").order("created_at", { ascending: false }),
+      supabase.from("orders").select(ORDERS_COLUMNS).order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, username, full_name").eq("role", "vendeur").order("username"),
-      (supabase as any).from("app_settings").select("value").eq("key", COLIS_PREVIEW_SETTING_KEY).maybeSingle(),
-      (supabase as any).from("app_settings").select("value").eq("key", COLIS_PAGE_PRESET_KEY).maybeSingle(),
+      getAppSetting(COLIS_PREVIEW_SETTING_KEY),
+      getAppSetting(COLIS_PAGE_PRESET_KEY),
     ]).then(([o, v, settings, page]) => {
       setOrders((o.data ?? []) as Order[]);
       setVendeurs((v.data ?? []) as Vendeur[]);
-      setPreviewSettings(normalizeColisPreviewSettings(settings.data?.value));
-      setPagePreset(normalizeColisPagePreset((page as any).data?.value));
+      setPreviewSettings(normalizeColisPreviewSettings(settings));
+      setPagePreset(normalizeColisPagePreset(page));
       setLoading(false);
     });
     const channel = supabase.channel("admin-orders-live").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
