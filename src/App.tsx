@@ -30,6 +30,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminColis from "./pages/admin/AdminColis";
 import AdminUtilisateurs from "./pages/admin/AdminUtilisateurs";
 import AdminParametres from "./pages/admin/AdminParametres";
+import AdminLivreurWorkflows from "./pages/admin/AdminLivreurWorkflows";
 
 import LivreurDashboard from "./pages/livreur/LivreurDashboard";
 import LivreurColis from "./pages/livreur/LivreurColis";
