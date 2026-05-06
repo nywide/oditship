@@ -359,7 +359,7 @@ Deno.serve(async (req) => {
       });
       const runs = [];
       for (const wf of matching) {
-        const ctx: Json = { order, trigger: body, user_id: userId };
+        const ctx: Json = { order, trigger: body, user_id: userId, webhook: webhookPayload };
         const r = await runWorkflow(wf, ctx, admin, { triggerType: event, triggerPayload: body });
         runs.push(r);
       }
