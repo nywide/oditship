@@ -730,6 +730,7 @@ const RunCard = ({ run }: { run: Json }) => {
         <span className={`h-2 w-2 rounded-full ${run.status === "success" ? "bg-green-500" : "bg-destructive"}`} />
         <span className="font-medium text-sm">{run.trigger_type}</span>
         {run.order_id && <Badge variant="outline">#{run.order_id}</Badge>}
+        {run._legacy && <Badge variant="secondary" className="text-[10px]">legacy</Badge>}
         <span className="text-xs text-muted-foreground flex-1">{new Date(run.started_at).toLocaleString()}</span>
         <span className="text-xs text-muted-foreground">{run.duration_ms}ms</span>
         <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
