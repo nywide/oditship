@@ -699,6 +699,9 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
           {step.type === "validate" && (
             <ValidateRulesEditor step={step} onChange={onChange} />
           )}
+          {step.type === "filter" && (
+            <FilterStepEditor step={step} onChange={onChange} />
+          )}
           {/* Advanced */}
           <details className="border-t pt-3">
             <summary className="text-sm cursor-pointer text-muted-foreground">Avancé (retry, erreurs, condition)</summary>
