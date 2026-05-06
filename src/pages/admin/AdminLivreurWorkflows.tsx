@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, ChevronDown, Clipboard, Copy, GitBranch, Globe, Layers, Play, Plus, RefreshCw, Save, Settings as SettingsIcon, TestTube, Trash2, Webhook, Zap } from "lucide-react";
+import { ArrowLeft, ChevronDown, Clipboard, Copy, Download, GitBranch, GripVertical, Globe, Layers, Play, Plus, RefreshCw, Save, Settings as SettingsIcon, TestTube, Trash2, Upload, Webhook, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 type Json = Record<string, any>;
@@ -110,10 +110,29 @@ const AdminLivreurWorkflows = () => {
   }, [livreurId]);
 
   const loadRuns = useCallback(async () => {
-    if (!activeId) return;
-    const { data } = await db.from("livreur_workflow_runs").select("*").eq("workflow_id", activeId).order("started_at", { ascending: false }).limit(20);
-    setRecentRuns(data || []);
-  }, [activeId]);
+    if (!activeId || !livreurId) return;
+    const [{ data: runs }, { data: logs }] = await Promise.all([
+      db.from("livreur_workflow_runs").select("*").eq("workflow_id", activeId).order("started_at", { ascending: false }).limit(20),
+      db.from("livreur_api_logs").select("*").eq("livreur_id", livreurId).order("created_at", { ascending: false }).limit(20),
+    ]);
+    const legacyAsRuns = (logs || []).map((l: any) => ({
+      id: `legacy-${l.id}`,
+      workflow_id: activeId,
+      livreur_id: livreurId,
+      order_id: l.order_id,
+      trigger_type: l.event_type || "legacy",
+      status: l.status === "success" || l.status === "ok" ? "success" : "failed",
+      started_at: l.created_at,
+      duration_ms: 0,
+      step_results: [{ name: l.message || l.event_type, status: l.status, details: l.details }],
+      error_message: l.status !== "success" && l.status !== "ok" ? (l.message || null) : null,
+      _legacy: true,
+    }));
+    const merged = [...(runs || []), ...legacyAsRuns]
+      .sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+      .slice(0, 40);
+    setRecentRuns(merged);
+  }, [activeId, livreurId]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadRuns(); }, [loadRuns]);
@@ -218,6 +237,57 @@ const AdminLivreurWorkflows = () => {
     } catch (e: any) { toast.error(e.message); } finally { setTestRunning(false); }
   };
 
+  const exportWorkflow = () => {
+    if (!active) return;
+    const payload = {
+      _type: "livreur_workflow",
+      _version: 1,
+      exported_at: new Date().toISOString(),
+      workflow: {
+        name: active.name,
+        description: active.description,
+        enabled: active.enabled,
+        is_default: active.is_default,
+        triggers: active.triggers,
+        steps: active.steps,
+        variables: active.variables,
+        settings: active.settings,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `workflow-${active.name.replace(/\s+/g, "_")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Workflow exporté");
+  };
+
+  const importWorkflow = async (file: File) => {
+    if (!livreurId) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const wf = parsed.workflow || parsed;
+      const { data, error } = await db.from("livreur_workflows").insert({
+        livreur_id: livreurId,
+        name: `${wf.name || "Import"} (copie)`,
+        description: wf.description ?? null,
+        enabled: wf.enabled ?? true,
+        is_default: false,
+        triggers: (wf.triggers || []).map((t: Json) => ({ ...t, id: newId() })),
+        steps: (wf.steps || []).map((s: Json) => ({ ...s, id: newId() })),
+        variables: wf.variables || {},
+        settings: wf.settings || {},
+      }).select().single();
+      if (error) throw error;
+      setWorkflows((p) => [...p, data]);
+      setActiveId(data.id);
+      toast.success("Workflow importé");
+    } catch (e: any) { toast.error("Import échoué: " + e.message); }
+  };
+
   if (loading) return <div className="p-8">Chargement...</div>;
 
   return (
@@ -263,6 +333,11 @@ const AdminLivreurWorkflows = () => {
             </div>
             <div className="flex-1" />
             <Button variant="outline" size="sm" onClick={() => { setCurlTargetStepId(null); setCurlOpen(true); }}><Copy className="h-4 w-4 mr-1" /> Import cURL</Button>
+            <Button variant="outline" size="sm" onClick={exportWorkflow}><Download className="h-4 w-4 mr-1" /> Export</Button>
+            <label className="inline-flex">
+              <Button variant="outline" size="sm" asChild><span className="cursor-pointer"><Upload className="h-4 w-4 mr-1" /> Import</span></Button>
+              <input type="file" accept="application/json,.json" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importWorkflow(f); e.currentTarget.value = ""; }} />
+            </label>
             <Button variant="outline" size="sm" onClick={() => setTestOpen(true)}><TestTube className="h-4 w-4 mr-1" /> Tester</Button>
             <Button variant="destructive" size="sm" onClick={() => deleteWorkflow(active.id)}><Trash2 className="h-4 w-4" /></Button>
             <Button onClick={save} disabled={saving}><Save className="h-4 w-4 mr-1" /> {saving ? "..." : "Enregistrer"}</Button>
@@ -282,23 +357,41 @@ const AdminLivreurWorkflows = () => {
               <OutputDestinationPanel steps={active.steps} />
               <div className="space-y-2">
                 {active.steps.map((step, idx) => (
-                  <StepCard
+                  <div
                     key={step.id}
-                    step={step}
-                    index={idx}
-                    total={active.steps.length}
-                    onChange={(p) => updateStep(step.id, p)}
-                    onRemove={() => updateActive({ steps: active.steps.filter((s) => s.id !== step.id) })}
-                    onMove={(dir) => {
-                      const i = active.steps.findIndex((s) => s.id === step.id);
-                      const j = i + dir;
-                      if (j < 0 || j >= active.steps.length) return;
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.setData("text/plain", step.id); e.dataTransfer.effectAllowed = "move"; }}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const fromId = e.dataTransfer.getData("text/plain");
+                      if (!fromId || fromId === step.id) return;
                       const arr = [...active.steps];
-                      [arr[i], arr[j]] = [arr[j], arr[i]];
+                      const fromIdx = arr.findIndex((s) => s.id === fromId);
+                      const toIdx = arr.findIndex((s) => s.id === step.id);
+                      if (fromIdx < 0 || toIdx < 0) return;
+                      const [moved] = arr.splice(fromIdx, 1);
+                      arr.splice(toIdx, 0, moved);
                       updateActive({ steps: arr });
                     }}
-                    onImportCurl={() => { setCurlTargetStepId(step.id); setCurlOpen(true); }}
-                  />
+                  >
+                    <StepCard
+                      step={step}
+                      index={idx}
+                      total={active.steps.length}
+                      onChange={(p) => updateStep(step.id, p)}
+                      onRemove={() => updateActive({ steps: active.steps.filter((s) => s.id !== step.id) })}
+                      onMove={(dir) => {
+                        const i = active.steps.findIndex((s) => s.id === step.id);
+                        const j = i + dir;
+                        if (j < 0 || j >= active.steps.length) return;
+                        const arr = [...active.steps];
+                        [arr[i], arr[j]] = [arr[j], arr[i]];
+                        updateActive({ steps: arr });
+                      }}
+                      onImportCurl={() => { setCurlTargetStepId(step.id); setCurlOpen(true); }}
+                    />
+                  </div>
                 ))}
               </div>
               <AddStepMenu onAdd={(type) => updateActive({ steps: [...active.steps, defaultStep(type)] })} />
@@ -498,6 +591,7 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
   return (
     <Card className={`overflow-hidden ${step.enabled === false ? "opacity-50" : ""}`}>
       <div className="flex items-center gap-2 p-3 bg-muted/30 border-b">
+        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
         <Badge variant="outline">{index + 1}</Badge>
         <Icon className="h-4 w-4 text-muted-foreground" />
         <Input value={step.name || ""} onChange={(e) => onChange({ name: e.target.value })} className="font-medium flex-1 max-w-sm h-8" />
@@ -636,6 +730,7 @@ const RunCard = ({ run }: { run: Json }) => {
         <span className={`h-2 w-2 rounded-full ${run.status === "success" ? "bg-green-500" : "bg-destructive"}`} />
         <span className="font-medium text-sm">{run.trigger_type}</span>
         {run.order_id && <Badge variant="outline">#{run.order_id}</Badge>}
+        {run._legacy && <Badge variant="secondary" className="text-[10px]">legacy</Badge>}
         <span className="text-xs text-muted-foreground flex-1">{new Date(run.started_at).toLocaleString()}</span>
         <span className="text-xs text-muted-foreground">{run.duration_ms}ms</span>
         <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
