@@ -294,6 +294,7 @@ Deno.serve(async (req) => {
     if (error) return jsonResponse({ error: `Provider succeeded but database update failed: ${error.message}`, tracking_id: String(tracking) }, 500);
     await insertPickupHistory(`Pickup — tracking ${String(tracking)}`);
     await logApi(admin, { order_id: order.id, livreur_id: livreur.id, event_type: "create_package", status: "success", message: `Tracking ${String(tracking)}`, details: { endpoint, sending: exchanges[0]?.sending, reception: exchanges[0]?.reception, exchanges, tracking_path: trackingPath } });
+    triggerWorkflowEvent(livreur.id, { ...order, status: "Pickup", external_tracking_number: String(tracking) }, "Confirmé", "Pickup");
 
     return jsonResponse({ ok: true, mode: "external_api", tracking_id: String(tracking) });
   } catch (error) {
