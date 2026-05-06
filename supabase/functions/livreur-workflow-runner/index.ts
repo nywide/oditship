@@ -323,10 +323,20 @@ Deno.serve(async (req) => {
       return json({ ok: run.status === "success", run });
     }
 
-    if (action === "trigger_event") {
-      // Find all enabled workflows for the livreur with matching trigger
+    if (action === "trigger_event" || action === "webhook") {
+      // For webhook: validate token
       const livreurId = body.livreur_id;
-      const event = body.event; // e.g. "order_status_changed"
+      let event = body.event;
+      let webhookPayload: Json | null = null;
+      if (action === "webhook") {
+        event = "webhook";
+        const auth = req.headers.get("Authorization") ?? "";
+        const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+        if (!livreurId || !token) return json({ error: "livreur_id + bearer token required" }, 401);
+        const { data: prof } = await admin.from("profiles").select("api_token").eq("id", livreurId).maybeSingle();
+        if (!prof || prof.api_token !== token) return json({ error: "Invalid credentials" }, 401);
+        webhookPayload = body.payload || body;
+      }
       const order = body.order;
       const { data: workflows } = await admin
         .from("livreur_workflows")
