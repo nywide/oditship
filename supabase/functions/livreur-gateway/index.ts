@@ -155,7 +155,7 @@ function normalizeCreateConfig(profileConfig: any, legacySettings: any) {
   };
 }
 
-// ✅ دالة مساعدة لتحويل النصوص التي تمثل JSON Array إلى مصفوفات حقيقية
+// ✅ دالة قوية لتحويل النصوص التي تمثل JSON Array إلى مصفوفات (تتعامل مع escape characters)
 function parseArrayStrings(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map((item) => parseArrayStrings(item));
@@ -168,13 +168,19 @@ function parseArrayStrings(obj: any): any {
     return newObj;
   }
   if (typeof obj === "string") {
-    const trimmed = obj.trim();
+    let trimmed = obj.trim();
+    // إزالة علامات الاقتباس المزدوجة الخارجية إذا كانت موجودة
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      trimmed = trimmed.slice(1, -1);
+    }
+    // إزالة backslashes من الأقواس والاقتباسات
+    trimmed = trimmed.replace(/\\([\[\]\"])/g, "$1");
     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
       try {
         const parsed = JSON.parse(trimmed);
         if (Array.isArray(parsed)) return parsed;
-      } catch {
-        // ليس JSON صحيح، نتركه كنص
+      } catch (e) {
+        console.warn("parseArrayStrings: failed to parse", trimmed, e);
       }
     }
   }
@@ -189,7 +195,7 @@ async function sendRequest(config: JsonRecord, order: JsonRecord, context: JsonR
     ? renderObject(config.payload, context)
     : buildMappedPayload(order, config.payload_mapping ?? {}, context);
 
-  // ✅ تحويل أي نص يبدو كمصفوفة JSON إلى مصفوفة حقيقية
+  // ✅ تحويل النصوص التي تشبه JSON Array إلى مصفوفات حقيقية
   payload = parseArrayStrings(payload);
 
   const response = await fetch(config.url, {
