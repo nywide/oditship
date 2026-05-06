@@ -29,33 +29,16 @@ const AdminLivreurs = () => {
   const [hubLivreurs, setHubLivreurs] = useState<HubLivreur[]>([]);
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [apiLogs, setApiLogs] = useState<Array<{ id: number; order_id: number | null; livreur_id: string | null; event_type: string; status: string; message: string | null; details: Record<string, unknown>; created_at: string }>>([]);
-  const [selectedLog, setSelectedLog] = useState<typeof apiLogs[number] | null>(null);
-  const [logFilter, setLogFilter] = useState("all");
-  const [logSearch, setLogSearch] = useState("");
-  const [retention, setRetention] = useState({ enabled: false, hours: 72 });
-
-  const filteredLogs = useMemo(() => apiLogs.filter((log) => {
-    if (logFilter !== "all" && log.event_type !== logFilter) return false;
-    const needle = logSearch.trim().toLowerCase();
-    if (!needle) return true;
-    return [log.order_id, log.livreur_id, log.event_type, log.status, log.message, JSON.stringify(log.details ?? {})].some((value) => String(value ?? "").toLowerCase().includes(needle));
-  }), [apiLogs, logFilter, logSearch]);
 
   const load = async () => {
-    const [p, h, hl, logs, retentionSetting] = await Promise.all([
+    const [p, h, hl] = await Promise.all([
       db.from("profiles").select("id, username, full_name, api_enabled, api_token").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
-      db.from("livreur_api_logs").select("id, order_id, livreur_id, event_type, status, message, details, created_at").order("created_at", { ascending: false }).limit(5000),
-      db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle(),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
     setHubs((h.data ?? []) as Hub[]);
     setHubLivreurs((hl.data ?? []) as HubLivreur[]);
-    setApiLogs(logs.data ?? []);
-    const retentionValue = (retentionSetting.data?.value ?? {}) as Record<string, unknown>;
-    setRetention({ enabled: Boolean(retentionValue.enabled), hours: Number(retentionValue.hours ?? 72) || 72 });
   };
   useEffect(() => { load(); }, []);
 
