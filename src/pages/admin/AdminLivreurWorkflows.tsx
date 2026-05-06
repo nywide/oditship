@@ -484,9 +484,7 @@ const TriggerCard = ({ trigger, onChange, onRemove }: { trigger: Json; onChange:
         </div>
       )}
       {trigger.type === "webhook" && (
-        <div className="text-sm bg-muted p-3 rounded font-mono break-all">
-          {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/livreur-webhook?livreur_id=...`}
-        </div>
+        <WebhookTriggerInfo />
       )}
     </Card>
   );
