@@ -280,10 +280,19 @@ Deno.serve(async (req) => {
   const userClient = authHeader ? createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } }) : null;
   const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
 
-  let body: Json;
-  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  // Detect path-based webhook: /livreur-workflow-runner/webhook/{livreur_id}
+  const url = new URL(req.url);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const wIdx = parts.indexOf("webhook");
+  const pathLivreurId = wIdx >= 0 ? parts[wIdx + 1] : null;
 
-  const action = body.action || "run";
+  let body: Json;
+  try { body = await req.json(); } catch { body = {}; }
+
+  let action = body.action || (pathLivreurId ? "webhook" : "run");
+  if (pathLivreurId && !body.livreur_id) body.livreur_id = pathLivreurId;
+  if (pathLivreurId) { action = "webhook"; body.payload = body; }
+
 
   // Auth check (optional for cron, required for user actions)
   let userId: string | null = null;
@@ -323,10 +332,20 @@ Deno.serve(async (req) => {
       return json({ ok: run.status === "success", run });
     }
 
-    if (action === "trigger_event") {
-      // Find all enabled workflows for the livreur with matching trigger
+    if (action === "trigger_event" || action === "webhook") {
+      // For webhook: validate token
       const livreurId = body.livreur_id;
-      const event = body.event; // e.g. "order_status_changed"
+      let event = body.event;
+      let webhookPayload: Json | null = null;
+      if (action === "webhook") {
+        event = "webhook";
+        const auth = req.headers.get("Authorization") ?? "";
+        const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+        if (!livreurId || !token) return json({ error: "livreur_id + bearer token required" }, 401);
+        const { data: prof } = await admin.from("profiles").select("api_token").eq("id", livreurId).maybeSingle();
+        if (!prof || prof.api_token !== token) return json({ error: "Invalid credentials" }, 401);
+        webhookPayload = body.payload || body;
+      }
       const order = body.order;
       const { data: workflows } = await admin
         .from("livreur_workflows")
@@ -349,7 +368,7 @@ Deno.serve(async (req) => {
       });
       const runs = [];
       for (const wf of matching) {
-        const ctx: Json = { order, trigger: body, user_id: userId };
+        const ctx: Json = { order, trigger: body, user_id: userId, webhook: webhookPayload };
         const r = await runWorkflow(wf, ctx, admin, { triggerType: event, triggerPayload: body });
         runs.push(r);
       }

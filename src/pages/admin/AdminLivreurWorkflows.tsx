@@ -279,6 +279,7 @@ const AdminLivreurWorkflows = () => {
 
             <TabsContent value="builder" className="flex-1 overflow-auto p-4 space-y-3">
               <Textarea value={active.description || ""} onChange={(e) => updateActive({ description: e.target.value })} placeholder="Description du workflow..." className="min-h-16" />
+              <OutputDestinationPanel steps={active.steps} />
               <div className="space-y-2">
                 {active.steps.map((step, idx) => (
                   <StepCard
@@ -442,16 +443,16 @@ const TriggerCard = ({ trigger, onChange, onRemove }: { trigger: Json; onChange:
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>De (statut)</Label>
-            <Select value={trigger.from_status || ""} onValueChange={(v) => onChange({ from_status: v })}>
-              <SelectTrigger><SelectValue placeholder="N'importe lequel" /></SelectTrigger>
-              <SelectContent><SelectItem value="">N'importe lequel</SelectItem>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+            <Select value={trigger.from_status || "__any__"} onValueChange={(v) => onChange({ from_status: v === "__any__" ? "" : v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="__any__">N'importe lequel</SelectItem>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
             <Label>Vers (statut)</Label>
-            <Select value={trigger.to_status || ""} onValueChange={(v) => onChange({ to_status: v })}>
-              <SelectTrigger><SelectValue placeholder="N'importe lequel" /></SelectTrigger>
-              <SelectContent><SelectItem value="">N'importe lequel</SelectItem>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+            <Select value={trigger.to_status || "__any__"} onValueChange={(v) => onChange({ to_status: v === "__any__" ? "" : v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="__any__">N'importe lequel</SelectItem>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         </div>
@@ -484,9 +485,7 @@ const TriggerCard = ({ trigger, onChange, onRemove }: { trigger: Json; onChange:
         </div>
       )}
       {trigger.type === "webhook" && (
-        <div className="text-sm bg-muted p-3 rounded font-mono break-all">
-          {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/livreur-webhook?livreur_id=...`}
-        </div>
+        <WebhookTriggerInfo />
       )}
     </Card>
   );
@@ -647,6 +646,83 @@ const RunCard = ({ run }: { run: Json }) => {
           <pre className="text-xs overflow-auto max-h-64">{JSON.stringify(run.step_results, null, 2)}</pre>
         </div>
       )}
+    </Card>
+  );
+};
+
+const WebhookTriggerInfo = () => {
+  const { livreurId } = useParams<{ livreurId: string }>();
+  const [token, setToken] = useState<string>("");
+  useEffect(() => {
+    if (!livreurId) return;
+    db.from("profiles").select("api_token").eq("id", livreurId).maybeSingle().then(({ data }: any) => setToken(data?.api_token || ""));
+  }, [livreurId]);
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/livreur-workflow-runner/webhook/${livreurId}`;
+  const curl = `curl -X POST '${url}' \\\n  -H 'Authorization: Bearer ${token || "<API_TOKEN>"}' \\\n  -H 'Content-Type: application/json' \\\n  -d '{"trackingID":"...","status":"DELIVERED"}'`;
+  return (
+    <div className="space-y-2">
+      <div className="text-xs text-muted-foreground">Le livreur appelle cette URL pour déclencher le workflow. Le payload reçu est disponible via <code className="bg-muted px-1 rounded">{`{{webhook.field}}`}</code>.</div>
+      <div className="text-sm bg-muted p-2 rounded font-mono break-all flex items-start gap-2">
+        <span className="flex-1">{url}</span>
+        <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(url); toast.success("Copié"); }}><Copy className="h-3 w-3" /></Button>
+      </div>
+      <div>
+        <Label className="text-xs">Token Bearer requis</Label>
+        <div className="text-sm bg-muted p-2 rounded font-mono break-all flex items-center gap-2">
+          <span className="flex-1">{token || "(api_token vide — configurez-le dans le profil livreur)"}</span>
+          {token && <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(token); toast.success("Copié"); }}><Copy className="h-3 w-3" /></Button>}
+        </div>
+      </div>
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground">Exemple cURL</summary>
+        <pre className="bg-muted p-2 rounded mt-1 overflow-auto text-xs">{curl}</pre>
+      </details>
+    </div>
+  );
+};
+
+const OutputDestinationPanel = ({ steps }: { steps: Json[] }) => {
+  const destinations: { label: string; detail: string; tone: string }[] = [];
+  for (const s of steps || []) {
+    if (s.enabled === false) continue;
+    if (s.type === "update_order") {
+      const fields = Object.keys(s.config?.updates || {}).join(", ") || "(aucun champ)";
+      destinations.push({ label: "Ligne principale (table orders)", detail: `Étape « ${s.name} » → met à jour : ${fields}`, tone: "bg-blue-500/10 text-blue-700 dark:text-blue-300" });
+      if (s.config?.updates?.status) {
+        destinations.push({ label: "Statut courant + badge", detail: `Nouveau statut : ${s.config.updates.status}`, tone: "bg-amber-500/10 text-amber-700 dark:text-amber-300" });
+      }
+    }
+    if (s.type === "log_status") {
+      destinations.push({ label: "Chronologie d'activité (order_status_history)", detail: `Nouvelle ligne : ${s.config?.new_status || "?"} — ${s.config?.note || "(sans note)"}`, tone: "bg-purple-500/10 text-purple-700 dark:text-purple-300" });
+    }
+    if (s.type === "http") {
+      destinations.push({ label: "Logs d'exécution (onglet Exécutions)", detail: `${s.config?.method || "POST"} ${s.config?.url || ""} — réponse visible dans l'historique`, tone: "bg-muted text-foreground" });
+    }
+    if (s.type === "set_variable" || s.type === "extract") {
+      destinations.push({ label: "Variables internes (mémoire workflow)", detail: `Étape « ${s.name} » — réutilisable via {{steps.${s.id}.x}} dans les étapes suivantes`, tone: "bg-muted text-muted-foreground" });
+    }
+    if (s.type === "validate" || s.type === "delay") {
+      destinations.push({ label: "Aucune sortie persistée", detail: `Étape « ${s.name} » — uniquement contrôle de flux`, tone: "bg-muted text-muted-foreground" });
+    }
+  }
+  if (!destinations.length) {
+    return (
+      <Card className="p-3 text-sm text-muted-foreground">
+        Aucun effet de bord. Ajoutez une étape <strong>Update order</strong>, <strong>Log status</strong> ou <strong>HTTP</strong> pour produire un résultat visible.
+      </Card>
+    );
+  }
+  return (
+    <Card className="p-3 space-y-2">
+      <div className="text-sm font-semibold flex items-center gap-2">📍 Où apparaîtra le résultat</div>
+      <div className="space-y-1">
+        {destinations.map((d, i) => (
+          <div key={i} className={`text-xs p-2 rounded ${d.tone}`}>
+            <div className="font-medium">{d.label}</div>
+            <div className="opacity-80">{d.detail}</div>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 };
