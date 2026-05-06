@@ -10,6 +10,9 @@ import { ChevronDown, Printer } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 import { COLIS_PAGE_PRESET_KEY, defaultColisPagePreset, normalizeColisPagePreset, type ColisPagePreset } from "@/lib/colisPagePreset";
 import { ColisCanvasPage } from "@/components/dashboard/ColisCanvasPage";
+import { getAppSetting } from "@/lib/appSettingsCache";
+
+const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,vendeur_id,assigned_livreur_id,driver_name,driver_phone";
 
 const LivreurColis = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -18,10 +21,9 @@ const LivreurColis = () => {
   const [pagePreset, setPagePreset] = useState<ColisPagePreset>(defaultColisPagePreset);
 
   useEffect(() => {
-    supabase.from("orders").select("*").order("created_at", { ascending: false })
+    supabase.from("orders").select(ORDERS_COLUMNS).order("created_at", { ascending: false }).limit(500)
       .then(({ data }) => { setOrders(data ?? []); setLoading(false); });
-    (supabase as any).from("app_settings").select("value").eq("key", COLIS_PAGE_PRESET_KEY).maybeSingle()
-      .then(({ data }: any) => setPagePreset(normalizeColisPagePreset(data?.value)));
+    getAppSetting(COLIS_PAGE_PRESET_KEY).then((v) => setPagePreset(normalizeColisPagePreset(v)));
     const channel = supabase.channel("livreur-orders-live").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
       setOrders((current) => {
         if (payload.eventType === "DELETE") return current.filter((order) => order.id !== (payload.old as any).id);
