@@ -83,6 +83,7 @@ const App = () => (
               <Route path="utilisateurs" element={<AdminUtilisateurs />} />
               <Route path="parametres" element={<AdminParametres />} />
             </Route>
+            <Route path="/admin/livreurs/:livreurId/workflows" element={<ProtectedRoute allowedRoles={["administrateur"]}><AdminLivreurWorkflows /></ProtectedRoute>} />
 
             {/* Livreur */}
             <Route path="/dashboard/livreur" element={<ProtectedRoute allowedRoles={["livreur","administrateur"]}><LivreurDashboard /></ProtectedRoute>}>
