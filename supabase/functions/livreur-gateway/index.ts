@@ -171,6 +171,17 @@ async function logApi(admin: any, entry: JsonRecord) {
   });
 }
 
+function triggerWorkflowEvent(livreur_id: string, order: JsonRecord, from_status: string | null, to_status: string) {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const ANON = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY")!;
+  // Fire-and-forget so we don't block the response
+  fetch(`${SUPABASE_URL}/functions/v1/livreur-workflow-runner`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: ANON, Authorization: `Bearer ${ANON}` },
+    body: JSON.stringify({ action: "trigger_event", event: "order_status_changed", livreur_id, order, from_status, to_status }),
+  }).catch(() => {});
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
