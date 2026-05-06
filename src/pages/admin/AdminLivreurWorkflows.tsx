@@ -591,6 +591,7 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
   return (
     <Card className={`overflow-hidden ${step.enabled === false ? "opacity-50" : ""}`}>
       <div className="flex items-center gap-2 p-3 bg-muted/30 border-b">
+        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
         <Badge variant="outline">{index + 1}</Badge>
         <Icon className="h-4 w-4 text-muted-foreground" />
         <Input value={step.name || ""} onChange={(e) => onChange({ name: e.target.value })} className="font-medium flex-1 max-w-sm h-8" />
