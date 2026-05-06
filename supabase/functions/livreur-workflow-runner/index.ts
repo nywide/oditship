@@ -271,6 +271,7 @@ async function runWorkflow(workflow: Json, ctx: Json, admin: any, opts: { isTest
       }
       const { log } = await runStep(step, ctx, admin);
       stepResults.push(log);
+      if ((ctx as any).__filter_stop) break;
     }
   } catch (e: any) {
     status = "failed";
