@@ -469,28 +469,113 @@ const AuthConfigEditor = ({ value, onChange }: { value: string; onChange: (value
   );
 };
 
+const TRIGGER_OPTIONS = [
+  { value: "before_create", label: "Avant création" },
+  { value: "after_create", label: "Après création (par défaut)" },
+  { value: "on_status_change", label: "Au changement de statut" },
+  { value: "manual", label: "Manuel uniquement" },
+  { value: "scheduled", label: "Planifié (date/heure)" },
+  { value: "recurring", label: "Récurrent (intervalle)" },
+  { value: "on_webhook", label: "À la réception webhook" },
+];
+const ORDER_STATUS_OPTIONS = ["Crée","Confirmé","Pickup","InHouse","Receptionné","Livré","Refusé","Annulé","Reporté","Retourné"];
+
 const ApiOperationsEditor = ({ value, onChange }: { value: string; onChange: (value: string) => void }) => {
   const operations = safeArray(value);
   const updateOperation = (index: number, patch: Record<string, unknown>) => onChange(JSON.stringify(operations.map((operation, i) => i === index ? { ...operation, ...patch } : operation), null, 2));
   const removeOperation = (index: number) => onChange(JSON.stringify(operations.filter((_, i) => i !== index), null, 2));
-  const addOperation = () => onChange(JSON.stringify([...operations, { name: "", url: "", method: "POST", headers: {}, payload_mapping: {} }], null, 2));
+  const addOperation = () => onChange(JSON.stringify([...operations, { name: "", url: "", method: "POST", headers: {}, payload_mapping: {}, trigger: "after_create", enabled: true }], null, 2));
 
   return (
     <div className="space-y-3">
-      <div><Label>Extra API operations</Label><FieldHelp>Optional requests executed in order when a provider needs more than one API call.</FieldHelp></div>
-      {operations.map((operation, index) => (
-        <div key={index} className="space-y-3 rounded-md border border-border p-3">
-          <div className="grid gap-3 sm:grid-cols-[1fr_120px_40px]">
-            <Input value={String(operation.url ?? "")} onChange={(e) => updateOperation(index, { url: e.target.value })} placeholder="Operation URL" />
-            <Input value={String(operation.method ?? "POST")} onChange={(e) => updateOperation(index, { method: e.target.value })} placeholder="Method" />
-            <Button type="button" variant="ghost" size="icon" onClick={() => removeOperation(index)}><Trash2 className="h-4 w-4" /></Button>
+      <div><Label>Extra API operations</Label><FieldHelp>Requêtes additionnelles déclenchées avant/après création, au changement de statut, planifiées ou récurrentes.</FieldHelp></div>
+      {operations.map((operation, index) => {
+        const trigger = String(operation.trigger ?? "after_create");
+        return (
+          <div key={index} className="space-y-3 rounded-md border border-border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Input value={String(operation.name ?? "")} onChange={(e) => updateOperation(index, { name: e.target.value })} placeholder="Nom de l'opération" className="max-w-xs" />
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Switch checked={operation.enabled !== false} onCheckedChange={(v) => updateOperation(index, { enabled: v })} /> Activé
+                </label>
+                <Button type="button" variant="ghost" size="icon" onClick={() => removeOperation(index)}><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+              <div><Label className="text-xs">URL</Label><Input value={String(operation.url ?? "")} onChange={(e) => updateOperation(index, { url: e.target.value })} placeholder="https://..." /></div>
+              <div><Label className="text-xs">Méthode</Label>
+                <Select value={String(operation.method ?? "POST")} onValueChange={(v) => updateOperation(index, { method: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{["GET","POST","PUT","PATCH","DELETE"].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-dashed border-border p-3 space-y-3 bg-muted/30">
+              <div>
+                <Label className="text-xs">Déclencheur</Label>
+                <Select value={trigger} onValueChange={(v) => updateOperation(index, { trigger: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{TRIGGER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                </Select>
+                <FieldHelp>Quand cette opération doit-elle s'exécuter ?</FieldHelp>
+              </div>
+
+              {trigger === "on_status_change" && (
+                <div>
+                  <Label className="text-xs">Statut déclencheur</Label>
+                  <Select value={String(operation.trigger_status ?? "Pickup")} onValueChange={(v) => updateOperation(index, { trigger_status: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{ORDER_STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {trigger === "scheduled" && (
+                <div>
+                  <Label className="text-xs">Date/heure d'exécution</Label>
+                  <Input type="datetime-local" value={String(operation.scheduled_at ?? "")} onChange={(e) => updateOperation(index, { scheduled_at: e.target.value })} />
+                  <FieldHelp>Exécution unique à cette date.</FieldHelp>
+                </div>
+              )}
+
+              {trigger === "recurring" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label className="text-xs">Intervalle</Label>
+                    <Input type="number" min={1} value={Number(operation.interval_value ?? 60)} onChange={(e) => updateOperation(index, { interval_value: Number(e.target.value) })} />
+                  </div>
+                  <div><Label className="text-xs">Unité</Label>
+                    <Select value={String(operation.interval_unit ?? "minutes")} onValueChange={(v) => updateOperation(index, { interval_unit: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="minutes">Minutes</SelectItem>
+                        <SelectItem value="hours">Heures</SelectItem>
+                        <SelectItem value="days">Jours</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {(trigger === "scheduled" || trigger === "recurring") && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400">⚠️ Nécessite l'activation du planificateur côté serveur (cron).</p>
+              )}
+            </div>
+
+            <KeyValueEditor label="Headers" help="Headers spécifiques à cette opération." value={formatJson(operation.headers ?? {})} onChange={(headers) => updateOperation(index, { headers: safeRecord(headers) })} />
+            <KeyValueEditor label="Payload mapping" help="Mapping des champs envoyés. Utilisez {{create_response.field}} pour récupérer un champ de la création." value={formatJson(operation.payload_mapping ?? {})} onChange={(payload_mapping) => updateOperation(index, { payload_mapping: safeRecord(payload_mapping) })} keyPlaceholder="Champ provider" valuePlaceholder="Champ commande ou {{template}}" />
+            {operation.payload && (
+              <div>
+                <Label className="text-xs">Payload JSON brut (optionnel)</Label>
+                <Textarea className="font-mono text-xs min-h-20" value={typeof operation.payload === "string" ? operation.payload : JSON.stringify(operation.payload, null, 2)} onChange={(e) => { try { updateOperation(index, { payload: JSON.parse(e.target.value) }); } catch { updateOperation(index, { payload: e.target.value }); } }} />
+              </div>
+            )}
           </div>
-          <Input value={String(operation.name ?? "")} onChange={(e) => updateOperation(index, { name: e.target.value })} placeholder="Operation name" />
-          <KeyValueEditor label="Operation headers" help="Headers for this operation only." value={formatJson(operation.headers ?? {})} onChange={(headers) => updateOperation(index, { headers: safeRecord(headers) })} />
-          <KeyValueEditor label="Operation payload mapping" help="Provider fields and the values sent for this operation." value={formatJson(operation.payload_mapping ?? {})} onChange={(payload_mapping) => updateOperation(index, { payload_mapping: safeRecord(payload_mapping) })} keyPlaceholder="Provider field" valuePlaceholder="Order field or value" />
-        </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" onClick={addOperation}><Plus className="mr-1 h-4 w-4" /> Add operation</Button>
+        );
+      })}
+      <Button type="button" variant="outline" size="sm" onClick={addOperation}><Plus className="mr-1 h-4 w-4" /> Ajouter une opération</Button>
     </div>
   );
 };
