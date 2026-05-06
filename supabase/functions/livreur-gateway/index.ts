@@ -195,12 +195,26 @@ async function sendRequest(config: JsonRecord, order: JsonRecord, context: JsonR
     ? renderObject(config.payload, context)
     : buildMappedPayload(order, config.payload_mapping ?? {}, context);
 
-  // تحويل النصوص التي تشبه JSON Array
+  // تحويل النصوص التي تشبه JSON Array (لأي حقل بشكل عام)
   payload = parseArrayStrings(payload);
 
-  // معالجة خاصة لنقطة نهاية pickup: تحويل packages إلى مصفوفة إذا كانت نصاً
-  if (config.url?.includes("/pickup") && payload.packages && typeof payload.packages === "string") {
-    payload.packages = [payload.packages];
+  // معالجة خاصة لنقطة نهاية pickup: تأكد من أن packages هي مصفوفة
+  if (config.url?.includes("/pickup") && payload.packages !== undefined) {
+    let packagesValue = payload.packages;
+    if (typeof packagesValue === "string") {
+      // حالة مثل "[\"TRACK123\"]" أو "[\"TRACK123\"]"
+      let match = packagesValue.match(/\["?([^"\]]+)"?\]/);
+      if (match && match[1]) {
+        payload.packages = [match[1]];
+      } else {
+        // إزالة أي أقواس أو اقتباسات أو backslashes
+        let cleaned = packagesValue.replace(/[\[\]\"\\]/g, "");
+        payload.packages = [cleaned];
+      }
+    } else if (!Array.isArray(packagesValue)) {
+      payload.packages = [String(packagesValue)];
+    }
+    // إذا كانت مصفوفة بالفعل، نتركها
   }
 
   const response = await fetch(config.url, {
