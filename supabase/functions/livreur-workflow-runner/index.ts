@@ -212,6 +212,21 @@ async function runStep(step: Json, ctx: Json, admin: any): Promise<{ output: any
             if (rule.regex && !(new RegExp(rule.regex).test(String(v ?? "")))) throw new Error(`Validation: ${field} invalid format`);
           }
           output = { valid: true };
+        } else if (step.type === "filter") {
+          const cfg = step.config || {};
+          const ok = evalConditions({ mode: cfg.mode, conditions: cfg.conditions }, ctx);
+          output = { passed: ok };
+          if (!ok) {
+            const onFalse = cfg.on_false || "stop";
+            if (onFalse === "fail") throw new Error(`Filter "${step.name}" non satisfait`);
+            // stop / skip_rest → mark step as filtered and stop the loop gracefully
+            log.status = "filtered";
+            log.output = output;
+            log.finished_at = new Date().toISOString();
+            if (step.id) ctx.steps = { ...(ctx.steps || {}), [step.id]: output };
+            (ctx as any).__filter_stop = true;
+            return { output, log };
+          }
         } else {
           throw new Error(`Unknown step type: ${step.type}`);
         }
@@ -256,6 +271,7 @@ async function runWorkflow(workflow: Json, ctx: Json, admin: any, opts: { isTest
       }
       const { log } = await runStep(step, ctx, admin);
       stepResults.push(log);
+      if ((ctx as any).__filter_stop) break;
     }
   } catch (e: any) {
     status = "failed";
