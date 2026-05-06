@@ -155,6 +155,16 @@ function normalizeCreateConfig(profileConfig: any, legacySettings: any) {
   };
 }
 
+// ✅ دالة مساعدة لتحويل packages إلى مصفوفة
+function fixPackagesArray(payload: any): any {
+  if (!payload || typeof payload !== "object") return payload;
+  const fixed = { ...payload };
+  if (fixed.packages && typeof fixed.packages === "string") {
+    fixed.packages = [fixed.packages];
+  }
+  return fixed;
+}
+
 async function sendRequest(config: JsonRecord, order: JsonRecord, context: JsonRecord, label = "Create package") {
   if (!config?.url) throw new Error(`${label} URL is missing`);
   const method = String(config.method || "POST").toUpperCase();
@@ -163,11 +173,9 @@ async function sendRequest(config: JsonRecord, order: JsonRecord, context: JsonR
     ? renderObject(config.payload, context)
     : buildMappedPayload(order, config.payload_mapping ?? {}, context);
 
-  // ✅ التعديل الجديد: تحويل packages من نص إلى مصفوفة إذا كان مطلوباً
-  if (payload && typeof payload === "object") {
-    if (payload.packages && typeof payload.packages === "string") {
-      payload.packages = [payload.packages];
-    }
+  // ✅ التعديل الرئيسي: تحويل packages إلى مصفوفة إذا كان المطلوب هو pickup endpoint
+  if (config.url?.includes("/pickup")) {
+    payload = fixPackagesArray(payload);
   }
 
   const response = await fetch(config.url, {
