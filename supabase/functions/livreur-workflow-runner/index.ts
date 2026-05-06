@@ -280,10 +280,19 @@ Deno.serve(async (req) => {
   const userClient = authHeader ? createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } }) : null;
   const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
 
-  let body: Json;
-  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  // Detect path-based webhook: /livreur-workflow-runner/webhook/{livreur_id}
+  const url = new URL(req.url);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const wIdx = parts.indexOf("webhook");
+  const pathLivreurId = wIdx >= 0 ? parts[wIdx + 1] : null;
 
-  const action = body.action || "run";
+  let body: Json;
+  try { body = await req.json(); } catch { body = {}; }
+
+  let action = body.action || (pathLivreurId ? "webhook" : "run");
+  if (pathLivreurId && !body.livreur_id) body.livreur_id = pathLivreurId;
+  if (pathLivreurId) { action = "webhook"; body.payload = body; }
+
 
   // Auth check (optional for cron, required for user actions)
   let userId: string | null = null;
