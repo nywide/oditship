@@ -165,6 +165,12 @@ const AdminLivreurWorkflows = () => {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadRuns(); }, [loadRuns]);
+  useEffect(() => {
+    db.from("app_settings").select("value").eq("key", "api_logs_retention").maybeSingle().then(({ data }: any) => {
+      const v = (data?.value ?? {}) as Record<string, unknown>;
+      setRetention({ enabled: Boolean(v.enabled), hours: Number(v.hours ?? 72) || 72 });
+    });
+  }, []);
 
   const updateActive = (patch: Partial<Workflow>) => {
     if (!active) return;
