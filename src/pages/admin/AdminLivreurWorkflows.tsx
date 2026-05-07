@@ -11,7 +11,8 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, ChevronDown, Clipboard, Copy, Download, GitBranch, GripVertical, Globe, Layers, Play, Plus, RefreshCw, Save, Settings as SettingsIcon, TestTube, Trash2, Upload, Webhook, Zap } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, Clipboard, Copy, Download, GitBranch, GripVertical, Globe, Layers, Play, Plus, RefreshCw, Save, Settings as SettingsIcon, Sparkles, TestTube, Trash2, Upload, Webhook, Zap } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 type Json = Record<string, any>;
@@ -100,15 +101,21 @@ const AdminLivreurWorkflows = () => {
   const [runSearch, setRunSearch] = useState("");
   const [retention, setRetention] = useState({ enabled: false, hours: 72 });
   const [selectedRun, setSelectedRun] = useState<Json | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [tutorialOpen, setTutorialOpen] = useState(false);
 
   const filteredRuns = useMemo(() => recentRuns.filter((r) => {
-    if (runFilter === "workflow" && r._legacy) return false;
-    if (runFilter === "legacy" && !r._legacy) return false;
-    if (runFilter !== "all" && runFilter !== "workflow" && runFilter !== "legacy" && r.trigger_type !== runFilter) return false;
+    if (runFilter !== "all" && r.trigger_type !== runFilter) return false;
     const n = runSearch.trim().toLowerCase();
     if (!n) return true;
     return [r.order_id, r.trigger_type, r.status, r.error_message, JSON.stringify(r.step_results || {})].some((v) => String(v ?? "").toLowerCase().includes(n));
   }), [recentRuns, runFilter, runSearch]);
+
+  const triggerTypesInRuns = useMemo(() => {
+    const set = new Set<string>();
+    recentRuns.forEach((r) => r.trigger_type && set.add(r.trigger_type));
+    return Array.from(set);
+  }, [recentRuns]);
 
   const saveRetention = async () => {
     const hours = Math.max(Number(retention.hours) || 72, 1);
@@ -117,13 +124,44 @@ const AdminLivreurWorkflows = () => {
     else { toast.success("Cleanup enregistré"); setRetention({ enabled: retention.enabled, hours }); }
   };
 
+  const runCleanupNow = async () => {
+    const hours = Math.max(Number(retention.hours) || 72, 1);
+    const cutoff = new Date(Date.now() - hours * 3600000).toISOString();
+    const [r1, r2] = await Promise.all([
+      db.from("livreur_workflow_runs").delete().lt("started_at", cutoff),
+      db.from("livreur_api_logs").delete().lt("created_at", cutoff),
+    ]);
+    if (r1.error || r2.error) toast.error(r1.error?.message || r2.error?.message);
+    else { toast.success(`Nettoyage effectué (> ${hours}h)`); loadRuns(); }
+  };
+
   const deleteRun = async (run: Json) => {
     if (!confirm("Supprimer cette exécution ?")) return;
-    const table = run._legacy ? "livreur_api_logs" : "livreur_workflow_runs";
-    const id = run._legacy ? Number(String(run.id).replace("legacy-", "")) : run.id;
-    const { error } = await db.from(table).delete().eq("id", id);
+    const { error } = await db.from("livreur_workflow_runs").delete().eq("id", run.id);
     if (error) toast.error(error.message);
     else { toast.success("Supprimé"); setSelectedRun(null); loadRuns(); }
+  };
+
+  const bulkDelete = async () => {
+    if (!selectedIds.size) return;
+    if (!confirm(`Supprimer ${selectedIds.size} exécution(s) ?`)) return;
+    const { error } = await db.from("livreur_workflow_runs").delete().in("id", Array.from(selectedIds));
+    if (error) toast.error(error.message);
+    else { toast.success("Supprimé"); setSelectedIds(new Set()); loadRuns(); }
+  };
+
+  const bulkExport = () => {
+    if (!selectedIds.size) return;
+    const rows = recentRuns.filter((r) => selectedIds.has(r.id));
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `executions-${Date.now()}.json`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredRuns.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredRuns.map((r) => r.id)));
   };
 
   const active = workflows.find((w) => w.id === activeId) || null;
@@ -143,27 +181,14 @@ const AdminLivreurWorkflows = () => {
 
   const loadRuns = useCallback(async () => {
     if (!activeId || !livreurId) return;
-    const [{ data: runs }, { data: logs }] = await Promise.all([
-      db.from("livreur_workflow_runs").select("*").eq("workflow_id", activeId).order("started_at", { ascending: false }).limit(20),
-      db.from("livreur_api_logs").select("*").eq("livreur_id", livreurId).order("created_at", { ascending: false }).limit(20),
-    ]);
-    const legacyAsRuns = (logs || []).map((l: any) => ({
-      id: `legacy-${l.id}`,
-      workflow_id: activeId,
-      livreur_id: livreurId,
-      order_id: l.order_id,
-      trigger_type: l.event_type || "legacy",
-      status: l.status === "success" || l.status === "ok" ? "success" : "failed",
-      started_at: l.created_at,
-      duration_ms: 0,
-      step_results: [{ name: l.message || l.event_type, status: l.status, details: l.details }],
-      error_message: l.status !== "success" && l.status !== "ok" ? (l.message || null) : null,
-      _legacy: true,
-    }));
-    const merged = [...(runs || []), ...legacyAsRuns]
-      .sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
-      .slice(0, 40);
-    setRecentRuns(merged);
+    const { data: runs } = await db
+      .from("livreur_workflow_runs")
+      .select("*")
+      .eq("workflow_id", activeId)
+      .order("started_at", { ascending: false })
+      .limit(100);
+    setRecentRuns(runs || []);
+    setSelectedIds(new Set());
   }, [activeId, livreurId]);
 
   useEffect(() => { load(); }, [load]);
@@ -326,6 +351,64 @@ const AdminLivreurWorkflows = () => {
     } catch (e: any) { toast.error("Import échoué: " + e.message); }
   };
 
+  const insertOlivraisonPollingPreset = () => {
+    if (!active) return;
+    const loginId = newId();
+    const listId = newId();
+    const filterId = newId();
+    const findId = newId();
+    const mapId = newId();
+    const filterStatusId = newId();
+    const updId = newId();
+    const logId = newId();
+    const presetSteps: Json[] = [
+      { id: loginId, name: "Login Olivraison", type: "http", enabled: true, on_error: "stop", retry: { max_attempts: 2, backoff_ms: 1000 },
+        config: { method: "POST", url: "https://partners.olivraison.com/auth/login", headers: { "Content-Type": "application/json" },
+          body: { apiKey: "{{$secret.OLIVRAISON_API_KEY}}", secretKey: "{{$secret.OLIVRAISON_SECRET_KEY}}" }, body_type: "json" } },
+      { id: "set_token_" + newId(), name: "Stocker token", type: "set_variable", enabled: true, on_error: "stop", retry: {},
+        config: { values: { token: `{{steps.${loginId}.token}}` } } },
+      { id: listId, name: "Lister packages récents", type: "http", enabled: true, on_error: "stop", retry: { max_attempts: 2, backoff_ms: 2000 },
+        config: { method: "GET", url: "https://partners.olivraison.com/packages?limit=50", headers: { Authorization: "Bearer {{vars.token}}" }, body: {}, body_type: "json" } },
+      { id: filterId, name: "Si packages présents", type: "filter", enabled: true, on_error: "stop", retry: {},
+        config: { mode: "all", on_false: "stop", conditions: [{ left: `{{steps.${listId}.0.trackingID}}`, operator: "exists", right: "" }] } },
+      { id: findId, name: "Charger commande locale", type: "find_order", enabled: true, on_error: "continue", retry: {},
+        config: { field: "external_tracking_number", value: `{{steps.${listId}.0.trackingID}}`, optional: true } },
+      { id: mapId, name: "Mapper status Olivraison → local", type: "set_variable", enabled: true, on_error: "stop", retry: {},
+        config: { values: {
+          remote_status: `{{steps.${listId}.0.status}}`,
+          local_status: `{{steps.${listId}.0.status}}`,
+          note: `{{steps.${listId}.0.note}}`,
+          tracking: `{{steps.${listId}.0.trackingID}}`,
+          driver_name: `{{steps.${listId}.0.transport.currentDriverName}}`,
+          driver_phone: `{{steps.${listId}.0.transport.currentDriverPhone}}`,
+          reported_date: `{{steps.${listId}.0.reportedDate}}`,
+          scheduled_date: `{{steps.${listId}.0.scheduledDate}}`,
+        } },
+        // Status mapping rule (for documentation / future use)
+        status_mapping: {
+          DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé", TRANSIT: "Transit",
+          CANCELED: "Annulé", REPORTED: "Reporté", RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé",
+        },
+      },
+      { id: filterStatusId, name: "Skip si même statut", type: "filter", enabled: true, on_error: "stop", retry: {},
+        config: { mode: "all", on_false: "stop",
+          conditions: [
+            { left: "{{order.id}}", operator: "exists", right: "" },
+            { left: "{{order.status}}", operator: "neq", right: "{{vars.local_status}}" },
+          ] } },
+      { id: updId, name: "Mettre à jour la commande", type: "update_order", enabled: true, on_error: "stop", retry: {},
+        config: { updates: { status: "{{vars.local_status}}", status_note: "{{vars.note}}", driver_name: "{{vars.driver_name}}", driver_phone: "{{vars.driver_phone}}", external_tracking_number: "{{vars.tracking}}" } } },
+      { id: logId, name: "Historique statut", type: "log_status", enabled: true, on_error: "continue", retry: {},
+        config: { new_status: "{{vars.local_status}}", note: "Polling Olivraison: {{vars.remote_status}} — {{vars.note}}" } },
+    ];
+    const newTriggers = [...(active.triggers || [])];
+    if (!newTriggers.some((t) => t.type === "recurring")) {
+      newTriggers.push({ ...defaultTrigger("recurring"), name: "Polling Olivraison (5 min)", interval_value: 5, interval_unit: "minutes" });
+    }
+    updateActive({ steps: [...(active.steps || []), ...presetSteps], triggers: newTriggers });
+    toast.success("Preset Olivraison ajouté — n'oubliez pas d'enregistrer");
+  };
+
   if (loading) return <div className="p-8">Chargement...</div>;
 
   return (
@@ -370,6 +453,8 @@ const AdminLivreurWorkflows = () => {
               <span className="text-sm">{active.enabled ? "Activé" : "Désactivé"}</span>
             </div>
             <div className="flex-1" />
+            <Button variant="outline" size="sm" onClick={() => setTutorialOpen(true)}><BookOpen className="h-4 w-4 mr-1" /> Tutoriel</Button>
+            <Button variant="outline" size="sm" onClick={() => insertOlivraisonPollingPreset()}><Sparkles className="h-4 w-4 mr-1" /> Preset Olivraison</Button>
             <Button variant="outline" size="sm" onClick={() => { setCurlTargetStepId(null); setCurlOpen(true); }}><Copy className="h-4 w-4 mr-1" /> Import cURL</Button>
             <Button variant="outline" size="sm" onClick={exportWorkflow}><Download className="h-4 w-4 mr-1" /> Export</Button>
             <label className="inline-flex">
@@ -466,30 +551,39 @@ const AdminLivreurWorkflows = () => {
                   <Select value={runFilter} onValueChange={setRunFilter}>
                     <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Toutes</SelectItem>
-                      <SelectItem value="workflow">Workflow uniquement</SelectItem>
-                      <SelectItem value="legacy">Legacy uniquement</SelectItem>
-                      <SelectItem value="create_package">create_package</SelectItem>
-                      <SelectItem value="webhook_status">webhook_status</SelectItem>
-                      <SelectItem value="polling_status">polling_status</SelectItem>
+                      <SelectItem value="all">Tous triggers</SelectItem>
+                      {triggerTypesInRuns.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <Button variant="outline" size="sm" onClick={loadRuns}><RefreshCw className="h-4 w-4 mr-1" /> Rafraîchir</Button>
                 </div>
               </div>
               <Card className="p-3 flex flex-wrap items-center gap-3 bg-muted/30">
-                <div className="text-sm font-medium">Nettoyage automatique des logs</div>
-                <label className="flex items-center gap-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Activer</label>
+                <div className="text-sm font-medium">Nettoyage des logs</div>
+                <label className="flex items-center gap-2 text-sm"><Switch checked={retention.enabled} onCheckedChange={(enabled) => setRetention({ ...retention, enabled })} /> Auto</label>
                 <div className="flex items-center gap-2"><Input type="number" min={1} className="h-9 w-24" value={retention.hours} onChange={(e) => setRetention({ ...retention, hours: Number(e.target.value) })} /><span className="text-sm text-muted-foreground">heures</span></div>
                 <Button variant="outline" size="sm" onClick={saveRetention}>Enregistrer</Button>
+                <Button variant="destructive" size="sm" onClick={runCleanupNow}>Nettoyer maintenant</Button>
               </Card>
+              {filteredRuns.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 p-2 bg-muted/30 rounded">
+                  <Checkbox checked={selectedIds.size === filteredRuns.length && filteredRuns.length > 0} onCheckedChange={toggleSelectAll} />
+                  <span className="text-sm">{selectedIds.size} sélectionné(s)</span>
+                  <div className="flex-1" />
+                  <Button variant="outline" size="sm" onClick={bulkExport} disabled={!selectedIds.size}><Download className="h-4 w-4 mr-1" /> Exporter</Button>
+                  <Button variant="destructive" size="sm" onClick={bulkDelete} disabled={!selectedIds.size}><Trash2 className="h-4 w-4 mr-1" /> Supprimer</Button>
+                </div>
+              )}
               {filteredRuns.map((r) => (
-                <div key={r.id} className="relative group">
-                  <RunCard run={r} />
-                  <Button variant="ghost" size="icon" className="absolute top-2 right-10 h-6 w-6 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); deleteRun(r); }}><Trash2 className="h-3 w-3" /></Button>
+                <div key={r.id} className="relative group flex gap-2 items-start">
+                  <Checkbox className="mt-4" checked={selectedIds.has(r.id)} onCheckedChange={(v) => {
+                    setSelectedIds((prev) => { const n = new Set(prev); if (v) n.add(r.id); else n.delete(r.id); return n; });
+                  }} />
+                  <div className="flex-1 min-w-0"><RunCard run={r} /></div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteRun(r)}><Trash2 className="h-3 w-3" /></Button>
                 </div>
               ))}
-              {!filteredRuns.length && <div className="text-sm text-muted-foreground text-center p-8">Aucune exécution</div>}
+              {!filteredRuns.length && <div className="text-sm text-muted-foreground text-center p-8">Aucune exécution pour ce workflow</div>}
             </TabsContent>
 
 
@@ -547,9 +641,78 @@ const AdminLivreurWorkflows = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Tutorial Dialog */}
+      <Dialog open={tutorialOpen} onOpenChange={setTutorialOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-auto">
+          <DialogHeader><DialogTitle>📘 Tutoriel — Créer un workflow d'intégration livreur</DialogTitle></DialogHeader>
+          <TutorialContent />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+const TutorialContent = () => (
+  <div className="space-y-4 text-sm leading-relaxed">
+    <section>
+      <h3 className="font-semibold text-base mb-1">1. Concept général</h3>
+      <p>Un <b>workflow</b> est une suite d'étapes (HTTP, Set variable, Filter, Update order…) déclenchée par un <b>trigger</b> (création de commande, demande de pickup, webhook entrant, polling récurrent, etc.).</p>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">2. Authentification API tierce</h3>
+      <ol className="list-decimal pl-5 space-y-1">
+        <li>Stocker les credentials dans les <b>Secrets</b> (ex: <code>OLIVRAISON_API_KEY</code>).</li>
+        <li>Étape HTTP <code>POST /auth/login</code> avec body <code>{`{ "apiKey": "{{$secret.OLIVRAISON_API_KEY}}", "secretKey": "{{$secret.OLIVRAISON_SECRET_KEY}}" }`}</code>.</li>
+        <li>Étape <b>Set variable</b> pour stocker <code>token = {`{{steps.&lt;login_id&gt;.token}}`}</code>.</li>
+        <li>Réutiliser le token dans les headers : <code>Authorization: Bearer {`{{vars.token}}`}</code>.</li>
+      </ol>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">3. Création d'un colis (trigger : Demande de Pickup)</h3>
+      <pre className="bg-muted p-2 rounded text-xs overflow-auto">{`Trigger: on_pickup_request
+Steps:
+  1. HTTP Login → vars.token
+  2. HTTP POST /packages avec body mappé depuis {{order.*}}
+  3. Update order: external_tracking_number = {{steps.<create_id>.trackingID}}, status = "Pickup"
+  4. Log status: "Envoyé au livreur"`}</pre>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">4. Polling de statuts (recurring)</h3>
+      <p>Trigger <b>Récurrent</b> toutes les 5 min → liste packages → pour chaque, <b>find_order</b> par <code>external_tracking_number</code> → mapper status distant → <b>filter</b> "skip si même statut" → <b>update_order</b> + <b>log_status</b>.</p>
+      <p className="text-xs text-muted-foreground mt-1">Le bouton <b>Preset Olivraison</b> en haut crée tout cela automatiquement.</p>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">5. Webhook entrant (push depuis le livreur)</h3>
+      <p>Ajouter trigger <b>Webhook entrant</b> → l'URL et le token apparaissent dans la carte. Le payload reçu est exposé via <code>{`{{webhook.field}}`}</code>.</p>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">6. Logique métier — règles à respecter</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li>Toujours <b>find_order</b> avant update si le déclencheur ne fournit pas l'order_id.</li>
+        <li>Filter "skip si même statut" : <code>{`{{order.status}} != {{vars.local_status}}`}</code>.</li>
+        <li>Filter "order existe" : <code>{`{{order.id}} exists`}</code>.</li>
+        <li>Pour les statuts terminaux (Livré/Annulé/Refusé) : ne pas re-déclencher d'envoi API.</li>
+        <li>Validation des champs obligatoires via étape <b>Validate</b> avant tout appel HTTP.</li>
+      </ul>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">7. Variables disponibles</h3>
+      <ul className="list-disc pl-5">
+        <li><code>{`{{order.id}}`}</code>, <code>{`{{order.customer_phone}}`}</code>, <code>{`{{order.status}}`}</code>…</li>
+        <li><code>{`{{steps.<step_id>.path}}`}</code> — sortie d'une étape précédente</li>
+        <li><code>{`{{vars.NAME}}`}</code> — variables internes / set_variable</li>
+        <li><code>{`{{webhook.*}}`}</code> — payload reçu (trigger webhook)</li>
+        <li><code>{`{{$secret.NAME}}`}</code>, <code>{`{{$now}}`}</code>, <code>{`{{$uuid}}`}</code></li>
+      </ul>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">8. Exporter / importer le workflow</h3>
+      <p>Bouton <b>Export</b> → fichier JSON réutilisable pour un autre livreur via <b>Import</b>.</p>
+    </section>
+  </div>
+);
+
 
 // ====== Subcomponents ======
 
@@ -680,21 +843,14 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
             </div>
           )}
           {step.type === "update_order" && (
-            <div>
-              <Label>Champs à mettre à jour</Label>
-              <KeyValueEditor value={step.config?.updates || {}} onChange={(v) => onChange({ config: { ...step.config, updates: v } })} />
-            </div>
+            <KeyValueOrJsonEditor
+              label="Champs à mettre à jour"
+              value={step.config?.updates || {}}
+              onChange={(v) => onChange({ config: { ...step.config, updates: v } })}
+            />
           )}
           {step.type === "log_status" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Nouveau statut</Label>
-                <Select value={step.config?.new_status || "Pickup"} onValueChange={(v) => onChange({ config: { ...step.config, new_status: v } })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div><Label>Note</Label><Input value={step.config?.note || ""} onChange={(e) => onChange({ config: { ...step.config, note: e.target.value } })} /></div>
-            </div>
+            <LogStatusEditor step={step} onChange={onChange} />
           )}
           {step.type === "validate" && (
             <ValidateRulesEditor step={step} onChange={onChange} />
@@ -947,26 +1103,143 @@ const KeyValueEditor = ({ value, onChange, placeholderK, placeholderV }: { value
 
 const RunCard = ({ run }: { run: Json }) => {
   const [open, setOpen] = useState(false);
+  const stepResults: Json[] = Array.isArray(run.step_results) ? run.step_results : [];
   return (
     <Card className="overflow-hidden">
       <button className="w-full flex items-center gap-3 p-3 text-left" onClick={() => setOpen(!open)}>
         <span className={`h-2 w-2 rounded-full ${run.status === "success" ? "bg-green-500" : "bg-destructive"}`} />
         <span className="font-medium text-sm">{run.trigger_type}</span>
         {run.order_id && <Badge variant="outline">#{run.order_id}</Badge>}
-        {run._legacy && <Badge variant="secondary" className="text-[10px]">legacy</Badge>}
+        {run.is_test && <Badge variant="secondary" className="text-[10px]">test</Badge>}
         <span className="text-xs text-muted-foreground flex-1">{new Date(run.started_at).toLocaleString()}</span>
-        <span className="text-xs text-muted-foreground">{run.duration_ms}ms</span>
+        <span className="text-xs text-muted-foreground">{run.duration_ms ?? 0}ms</span>
+        <Badge variant={run.status === "success" ? "default" : "destructive"}>{run.status}</Badge>
         <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="p-3 border-t bg-muted/30">
-          {run.error_message && <div className="text-destructive text-sm mb-2">{run.error_message}</div>}
-          <pre className="text-xs overflow-auto max-h-64">{JSON.stringify(run.step_results, null, 2)}</pre>
+        <div className="p-3 border-t bg-muted/30 space-y-3 text-xs">
+          {run.error_message && (
+            <div className="bg-destructive/10 text-destructive p-2 rounded">
+              <div className="font-semibold mb-1">Message d'erreur complet</div>
+              <pre className="whitespace-pre-wrap break-all">{run.error_message}</pre>
+            </div>
+          )}
+          {run.trigger_payload && Object.keys(run.trigger_payload).length > 0 && (
+            <details>
+              <summary className="cursor-pointer font-medium">📥 Payload du trigger (reçu)</summary>
+              <pre className="bg-background p-2 rounded mt-1 overflow-auto max-h-48">{JSON.stringify(run.trigger_payload, null, 2)}</pre>
+            </details>
+          )}
+          <div className="space-y-2">
+            <div className="font-medium">Étapes ({stepResults.length})</div>
+            {stepResults.map((s: Json, i: number) => {
+              const ex = (s.exchanges && s.exchanges[0]) || s.exchange;
+              return (
+                <details key={i} className="border rounded bg-background">
+                  <summary className="cursor-pointer p-2 flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${s.status === "success" ? "bg-green-500" : s.status === "failed" ? "bg-destructive" : "bg-muted-foreground"}`} />
+                    <span className="font-medium">{i + 1}. {s.name || s.id}</span>
+                    <Badge variant="outline" className="text-[10px]">{s.type}</Badge>
+                    <span className="ml-auto text-muted-foreground">{s.status}</span>
+                  </summary>
+                  <div className="p-2 space-y-2 border-t">
+                    {ex && (
+                      <>
+                        <div><span className="font-semibold">URL endpoint:</span> <code className="break-all">{ex.request?.method} {ex.request?.url}</code></div>
+                        <div><span className="font-semibold">Status réception:</span> <code>{ex.response?.status}</code> · {ex.duration_ms}ms</div>
+                        <details>
+                          <summary className="cursor-pointer">Headers (request / response)</summary>
+                          <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-40">{JSON.stringify({ request: ex.request?.headers, response: ex.response?.headers }, null, 2)}</pre>
+                        </details>
+                        <details>
+                          <summary className="cursor-pointer">Body envoyé (payload request)</summary>
+                          <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-40">{JSON.stringify(ex.request?.body, null, 2)}</pre>
+                        </details>
+                        <details open={s.status === "failed"}>
+                          <summary className="cursor-pointer">Body reçu (réponse)</summary>
+                          <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-60">{JSON.stringify(ex.response?.body, null, 2)}</pre>
+                        </details>
+                      </>
+                    )}
+                    {s.output && !ex && (
+                      <details><summary className="cursor-pointer">Output</summary>
+                        <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-40">{JSON.stringify(s.output, null, 2)}</pre>
+                      </details>
+                    )}
+                    {s.error && (
+                      <div className="bg-destructive/10 text-destructive p-2 rounded">
+                        <div className="font-semibold">Erreur étape</div>
+                        <pre className="whitespace-pre-wrap break-all">{s.error}</pre>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+          <details>
+            <summary className="cursor-pointer text-muted-foreground">JSON brut</summary>
+            <pre className="overflow-auto max-h-64 mt-1">{JSON.stringify(run, null, 2)}</pre>
+          </details>
         </div>
       )}
     </Card>
   );
 };
+
+const KeyValueOrJsonEditor = ({ label, value, onChange }: { label: string; value: Json; onChange: (v: Json) => void }) => {
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [text, setText] = useState(() => JSON.stringify(value || {}, null, 2));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>{label}</Label>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(value || {}, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+      </div>
+      {mode === "fields" ? (
+        <KeyValueEditor value={value} onChange={onChange} />
+      ) : (
+        <Textarea className="font-mono text-xs" rows={8} value={text} onChange={(e) => {
+          setText(e.target.value);
+          try { onChange(JSON.parse(e.target.value)); } catch {}
+        }} />
+      )}
+    </div>
+  );
+};
+
+const LogStatusEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [text, setText] = useState(() => JSON.stringify(step.config || {}, null, 2));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Configuration</Label>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(step.config || {}, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+      </div>
+      {mode === "fields" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Nouveau statut</Label>
+            <Input value={step.config?.new_status || ""} onChange={(e) => onChange({ config: { ...step.config, new_status: e.target.value } })} placeholder="Pickup ou {{vars.status}}" />
+          </div>
+          <div><Label>Note</Label><Input value={step.config?.note || ""} onChange={(e) => onChange({ config: { ...step.config, note: e.target.value } })} /></div>
+        </div>
+      ) : (
+        <Textarea className="font-mono text-xs" rows={6} value={text} onChange={(e) => {
+          setText(e.target.value);
+          try { onChange({ config: JSON.parse(e.target.value) }); } catch {}
+        }} />
+      )}
+    </div>
+  );
+};
+
 
 const WebhookTriggerInfo = () => {
   const { livreurId } = useParams<{ livreurId: string }>();
