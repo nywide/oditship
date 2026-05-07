@@ -641,9 +641,78 @@ const AdminLivreurWorkflows = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Tutorial Dialog */}
+      <Dialog open={tutorialOpen} onOpenChange={setTutorialOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-auto">
+          <DialogHeader><DialogTitle>📘 Tutoriel — Créer un workflow d'intégration livreur</DialogTitle></DialogHeader>
+          <TutorialContent />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+const TutorialContent = () => (
+  <div className="space-y-4 text-sm leading-relaxed">
+    <section>
+      <h3 className="font-semibold text-base mb-1">1. Concept général</h3>
+      <p>Un <b>workflow</b> est une suite d'étapes (HTTP, Set variable, Filter, Update order…) déclenchée par un <b>trigger</b> (création de commande, demande de pickup, webhook entrant, polling récurrent, etc.).</p>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">2. Authentification API tierce</h3>
+      <ol className="list-decimal pl-5 space-y-1">
+        <li>Stocker les credentials dans les <b>Secrets</b> (ex: <code>OLIVRAISON_API_KEY</code>).</li>
+        <li>Étape HTTP <code>POST /auth/login</code> avec body <code>{`{ "apiKey": "{{$secret.OLIVRAISON_API_KEY}}", "secretKey": "{{$secret.OLIVRAISON_SECRET_KEY}}" }`}</code>.</li>
+        <li>Étape <b>Set variable</b> pour stocker <code>token = {`{{steps.&lt;login_id&gt;.token}}`}</code>.</li>
+        <li>Réutiliser le token dans les headers : <code>Authorization: Bearer {`{{vars.token}}`}</code>.</li>
+      </ol>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">3. Création d'un colis (trigger : Demande de Pickup)</h3>
+      <pre className="bg-muted p-2 rounded text-xs overflow-auto">{`Trigger: on_pickup_request
+Steps:
+  1. HTTP Login → vars.token
+  2. HTTP POST /packages avec body mappé depuis {{order.*}}
+  3. Update order: external_tracking_number = {{steps.<create_id>.trackingID}}, status = "Pickup"
+  4. Log status: "Envoyé au livreur"`}</pre>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">4. Polling de statuts (recurring)</h3>
+      <p>Trigger <b>Récurrent</b> toutes les 5 min → liste packages → pour chaque, <b>find_order</b> par <code>external_tracking_number</code> → mapper status distant → <b>filter</b> "skip si même statut" → <b>update_order</b> + <b>log_status</b>.</p>
+      <p className="text-xs text-muted-foreground mt-1">Le bouton <b>Preset Olivraison</b> en haut crée tout cela automatiquement.</p>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">5. Webhook entrant (push depuis le livreur)</h3>
+      <p>Ajouter trigger <b>Webhook entrant</b> → l'URL et le token apparaissent dans la carte. Le payload reçu est exposé via <code>{`{{webhook.field}}`}</code>.</p>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">6. Logique métier — règles à respecter</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li>Toujours <b>find_order</b> avant update si le déclencheur ne fournit pas l'order_id.</li>
+        <li>Filter "skip si même statut" : <code>{`{{order.status}} != {{vars.local_status}}`}</code>.</li>
+        <li>Filter "order existe" : <code>{`{{order.id}} exists`}</code>.</li>
+        <li>Pour les statuts terminaux (Livré/Annulé/Refusé) : ne pas re-déclencher d'envoi API.</li>
+        <li>Validation des champs obligatoires via étape <b>Validate</b> avant tout appel HTTP.</li>
+      </ul>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">7. Variables disponibles</h3>
+      <ul className="list-disc pl-5">
+        <li><code>{`{{order.id}}`}</code>, <code>{`{{order.customer_phone}}`}</code>, <code>{`{{order.status}}`}</code>…</li>
+        <li><code>{`{{steps.<step_id>.path}}`}</code> — sortie d'une étape précédente</li>
+        <li><code>{`{{vars.NAME}}`}</code> — variables internes / set_variable</li>
+        <li><code>{`{{webhook.*}}`}</code> — payload reçu (trigger webhook)</li>
+        <li><code>{`{{$secret.NAME}}`}</code>, <code>{`{{$now}}`}</code>, <code>{`{{$uuid}}`}</code></li>
+      </ul>
+    </section>
+    <section>
+      <h3 className="font-semibold text-base mb-1">8. Exporter / importer le workflow</h3>
+      <p>Bouton <b>Export</b> → fichier JSON réutilisable pour un autre livreur via <b>Import</b>.</p>
+    </section>
+  </div>
+);
+
 
 // ====== Subcomponents ======
 
