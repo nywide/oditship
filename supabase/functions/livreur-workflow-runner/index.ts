@@ -571,14 +571,14 @@ Deno.serve(async (req) => {
             let claimed = false;
             if (sched) {
               const prevLastRun = sched.last_run_at;
-              const upd: any = await admin
+              let q: any = admin
                 .from("livreur_workflow_schedules")
                 .update({ last_run_at: claimedAt, last_status: "running", updated_at: claimedAt })
                 .eq("workflow_id", wf.id)
-                .eq("trigger_key", key)
-                .filter("last_run_at", prevLastRun ? "eq" : "is", prevLastRun ?? null)
-                .select();
-              claimed = Array.isArray(upd.data) && upd.data.length > 0;
+                .eq("trigger_key", key);
+              q = prevLastRun ? q.eq("last_run_at", prevLastRun) : q.is("last_run_at", null);
+              const upd: any = await q.select();
+              claimed = !upd.error && Array.isArray(upd.data) && upd.data.length > 0;
             } else {
               const ins: any = await admin
                 .from("livreur_workflow_schedules")
