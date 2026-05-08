@@ -52,6 +52,7 @@ const STEP_TYPES = [
   { value: "loop", label: "Loop (N fois)", icon: RefreshCw, desc: "Répéter des étapes N fois" },
   { value: "find_order", label: "Find order (DB)", icon: Layers, desc: "Charger une commande depuis la DB par un champ" },
   { value: "find_active_orders", label: "Find active orders (DB)", icon: Layers, desc: "Lister les commandes locales (pour polling) — à utiliser avec for_each" },
+  { value: "find_last_history", label: "Find last history (chronologie)", icon: Layers, desc: "Charger la dernière ligne d'historique d'une commande pour comparer (anti-doublon)" },
   { value: "map_value", label: "Map value (status mapping)", icon: GitBranch, desc: "Mapper une valeur (ex: DELETED → Annulé)" },
   { value: "extract", label: "Extract fields", icon: Layers, desc: "Extraire des valeurs de la réponse" },
   { value: "set_variable", label: "Set variables", icon: SettingsIcon, desc: "Définir des variables intermédiaires" },
@@ -79,6 +80,7 @@ function defaultStep(type: string): Json {
   if (type === "loop") base.config = { times: 3, index_var: "i", on_iteration_error: "continue", steps: [] };
   if (type === "find_order") base.config = { field: "external_tracking_number", value: "{{item.trackingID}}", optional: true };
   if (type === "find_active_orders") base.config = { exclude_statuses: ["Crée", "Confirmé", "Pickup"], include_statuses: [], tracking_field: "external_tracking_number", require_tracking: true, livreur_scope: "workflow", limit: 200 };
+  if (type === "find_last_history") base.config = { order_id: "{{order.id}}", optional: true };
   if (type === "map_value") base.config = { value: "{{item.status}}", output_var: "local_status", default: "{{item.status}}", mapping: { DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé", TRANSIT: "En transit", CANCELED: "Annulé", REPORTED: "Reporté", RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé" } };
   return base;
 }
@@ -707,6 +709,7 @@ const TutorialContent = () => (
         <div><b>set_variable</b> — Stocke des paires clé/valeur dans <code>vars</code>. Idéal pour mémoriser un token ou un ID.</div>
         <div><b>find_order</b> — Charge UNE commande locale par champ (par défaut <code>external_tracking_number</code>). Met le résultat dans <code>ctx.order</code>.</div>
         <div><b>find_active_orders</b> — Liste les commandes locales selon des filtres (<code>exclude_statuses</code>, <code>include_statuses</code>, <code>require_tracking</code>, <code>livreur_scope</code>). Renvoie un <b>tableau</b> à passer à <b>for_each</b>. Chaque <code>item</code> = ligne complète <code>orders</code>.</div>
+        <div><b>find_last_history</b> — Charge la <b>dernière ligne</b> de <code>order_status_history</code> pour une commande. Options : <code>order_id</code> (défaut <code>{`{{order.id}}`}</code>), <code>optional</code> (true = ne pas échouer si vide). Sortie : <code>{`{{steps.<id>.actor_label}}`}</code>, <code>.notes</code>, <code>.new_status</code>, <code>.old_status</code>, <code>.provider_note</code>, <code>.changed_at</code>, <code>.found</code>. Sert à comparer un message provider avec le dernier déjà enregistré pour éviter les doublons.</div>
         <div><b>map_value</b> — Convertit une valeur via un dictionnaire (ex: <code>DELETED → Annulé</code>). Stocke le résultat dans <code>vars.&lt;output_var&gt;</code>. Si la clé n'existe pas, utilise <code>default</code>.</div>
         <div><b>filter</b> — Évalue des conditions (eq, neq, gt, contains, exists, regex…). Si <b>faux</b>: <code>stop</code> (arrêt propre), <code>skip_rest</code> (sauter la suite), <code>fail</code> (erreur). Dans un <b>for_each</b>, <code>stop</code> saute uniquement l'itération courante.</div>
         <div><b>for_each</b> — Itère sur un tableau. Variables exposées : <code>{`{{item}}`}</code> et <code>{`{{index}}`}</code> (renommables). <code>on_iteration_error</code>: continue / stop.</div>
@@ -973,6 +976,9 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
           {step.type === "find_active_orders" && (
             <FindActiveOrdersEditor step={step} onChange={onChange} />
           )}
+          {step.type === "find_last_history" && (
+            <FindLastHistoryEditor step={step} onChange={onChange} />
+          )}
           {step.type === "map_value" && (
             <div className="space-y-3">
               <div className="grid grid-cols-3 gap-3">
@@ -1216,7 +1222,7 @@ const SubStepsEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) =>
               />
             ))}
             <div className="flex gap-2 flex-wrap">
-              {["http", "find_order", "find_active_orders", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
+              {["http", "find_order", "find_active_orders", "find_last_history", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
                 <Button key={t} variant="outline" size="sm" onClick={() => addSub(t)}><Plus className="h-3 w-3 mr-1" />{STEP_TYPES.find((s) => s.value === t)?.label || t}</Button>
               ))}
             </div>
@@ -1533,6 +1539,45 @@ const FindActiveOrdersEditor = ({ step, onChange }: { step: Json; onChange: (p: 
   );
 };
 
+const FindLastHistoryEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
+  const cfg = step.config || {};
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [text, setText] = useState(() => JSON.stringify(cfg, null, 2));
+  const set = (patch: Json) => onChange({ config: { ...cfg, ...patch } });
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Configuration find_last_history</Label>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(cfg, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+      </div>
+      {mode === "fields" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Label>order_id (expression)</Label>
+            <Input value={cfg.order_id ?? "{{order.id}}"} onChange={(e) => set({ order_id: e.target.value })} placeholder="{{order.id}} ou {{item.id}}" />
+            <p className="text-xs text-muted-foreground mt-1">ID numérique de la commande dont on veut la dernière ligne d'historique.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={cfg.optional !== false} onCheckedChange={(v) => set({ optional: v })} />
+            <Label className="!m-0">Optionnel (ne pas échouer si vide)</Label>
+          </div>
+        </div>
+      ) : (
+        <Textarea className="font-mono text-xs" rows={6} value={text} onChange={(e) => {
+          setText(e.target.value);
+          try { onChange({ config: JSON.parse(e.target.value) }); } catch {}
+        }} />
+      )}
+      <p className="text-xs text-muted-foreground">
+        Renvoie la ligne <code>order_status_history</code> la plus récente. Champs disponibles via <code>{`{{steps.<id>.actor_label}}`}</code>, <code>.notes</code>, <code>.new_status</code>, <code>.old_status</code>, <code>.provider_note</code>, <code>.changed_at</code>, <code>.found</code>.
+      </p>
+    </div>
+  );
+};
+
 const SubStepRow = ({ sub, index, total, onPatch, onMove, onRemove }: { sub: Json; index: number; total: number; onPatch: (p: Json) => void; onMove: (d: number) => void; onRemove: () => void }) => {
   const [mode, setMode] = useState<"fields" | "json">("fields");
   const [jsonText, setJsonText] = useState(() => JSON.stringify(sub.config || {}, null, 2));
@@ -1549,6 +1594,7 @@ const SubStepRow = ({ sub, index, total, onPatch, onMove, onRemove }: { sub: Jso
         </div>
       );
       case "find_active_orders": return <FindActiveOrdersEditor step={sub} onChange={onChange} />;
+      case "find_last_history": return <FindLastHistoryEditor step={sub} onChange={onChange} />;
       case "map_value": return (
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-3">
