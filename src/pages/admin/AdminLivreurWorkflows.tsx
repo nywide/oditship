@@ -51,6 +51,7 @@ const STEP_TYPES = [
   { value: "for_each", label: "For Each (loop array)", icon: RefreshCw, desc: "Itérer sur un tableau (ex: liste de packages)" },
   { value: "loop", label: "Loop (N fois)", icon: RefreshCw, desc: "Répéter des étapes N fois" },
   { value: "find_order", label: "Find order (DB)", icon: Layers, desc: "Charger une commande depuis la DB par un champ" },
+  { value: "find_active_orders", label: "Find active orders (DB)", icon: Layers, desc: "Lister les commandes locales (pour polling) — à utiliser avec for_each" },
   { value: "map_value", label: "Map value (status mapping)", icon: GitBranch, desc: "Mapper une valeur (ex: DELETED → Annulé)" },
   { value: "extract", label: "Extract fields", icon: Layers, desc: "Extraire des valeurs de la réponse" },
   { value: "set_variable", label: "Set variables", icon: SettingsIcon, desc: "Définir des variables intermédiaires" },
@@ -72,11 +73,12 @@ function defaultStep(type: string): Json {
   if (type === "extract") base.config = { fields: { tracking: "steps.<step_id>.trackingID" } };
   if (type === "validate") base.config = { rules: {} };
   if (type === "update_order") base.config = { updates: {} };
-  if (type === "log_status") base.config = { new_status: "Pickup", note: "" };
+  if (type === "log_status") base.config = { new_status: "Pickup", note: "", actor_label: "", provider_note: "" };
   if (type === "filter") base.config = { mode: "all", conditions: [{ left: "{{order.status}}", operator: "eq", right: "Confirmé" }], on_false: "stop" };
   if (type === "for_each") base.config = { items: "{{steps.<list_step_id>}}", item_var: "item", index_var: "index", on_iteration_error: "continue", steps: [] };
   if (type === "loop") base.config = { times: 3, index_var: "i", on_iteration_error: "continue", steps: [] };
   if (type === "find_order") base.config = { field: "external_tracking_number", value: "{{item.trackingID}}", optional: true };
+  if (type === "find_active_orders") base.config = { exclude_statuses: ["Crée", "Confirmé", "Pickup"], include_statuses: [], tracking_field: "external_tracking_number", require_tracking: true, livreur_scope: "workflow", limit: 200 };
   if (type === "map_value") base.config = { value: "{{item.status}}", output_var: "local_status", default: "{{item.status}}", mapping: { DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé", TRANSIT: "En transit", CANCELED: "Annulé", REPORTED: "Reporté", RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé" } };
   return base;
 }
@@ -470,7 +472,6 @@ const AdminLivreurWorkflows = () => {
             </div>
             <div className="flex-1" />
             <Button variant="outline" size="sm" onClick={() => setTutorialOpen(true)}><BookOpen className="h-4 w-4 mr-1" /> Tutoriel</Button>
-            <Button variant="outline" size="sm" onClick={() => insertOlivraisonPollingPreset()}><Sparkles className="h-4 w-4 mr-1" /> Preset Olivraison</Button>
             <Button variant="outline" size="sm" onClick={() => { setCurlTargetStepId(null); setCurlOpen(true); }}><Copy className="h-4 w-4 mr-1" /> Import cURL</Button>
             <Button variant="outline" size="sm" onClick={exportWorkflow}><Download className="h-4 w-4 mr-1" /> Export</Button>
             <label className="inline-flex">
@@ -670,61 +671,148 @@ const AdminLivreurWorkflows = () => {
 };
 
 const TutorialContent = () => (
-  <div className="space-y-4 text-sm leading-relaxed">
+  <div className="space-y-5 text-sm leading-relaxed">
     <section>
       <h3 className="font-semibold text-base mb-1">1. Concept général</h3>
-      <p>Un <b>workflow</b> est une suite d'étapes (HTTP, Set variable, Filter, Update order…) déclenchée par un <b>trigger</b> (création de commande, demande de pickup, webhook entrant, polling récurrent, etc.).</p>
+      <p>Un <b>workflow</b> = un trigger (déclencheur) + une suite d'étapes (steps) exécutées dans l'ordre. Chaque étape lit le contexte (<code>order</code>, <code>steps</code>, <code>vars</code>, <code>webhook</code>, <code>item</code>) et y ajoute son résultat sous <code>steps.&lt;step_id&gt;</code>.</p>
+      <p>Le moteur parcourt les triggers actifs du workflow ; lorsque l'événement correspond, il exécute les étapes une à une. Une étape peut <b>arrêter</b> (filter), <b>itérer</b> (for_each), <b>boucler</b> (loop), <b>appeler une API</b> (http), <b>écrire en DB</b> (update_order, log_status), etc.</p>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">2. Authentification API tierce</h3>
-      <ol className="list-decimal pl-5 space-y-1">
-        <li>Stocker les credentials dans les <b>Secrets</b> (ex: <code>OLIVRAISON_API_KEY</code>).</li>
-        <li>Étape HTTP <code>POST /auth/login</code> avec body <code>{`{ "apiKey": "{{$secret.OLIVRAISON_API_KEY}}", "secretKey": "{{$secret.OLIVRAISON_SECRET_KEY}}" }`}</code>.</li>
-        <li>Étape <b>Set variable</b> pour stocker <code>token = {`{{steps.&lt;login_id&gt;.token}}`}</code>.</li>
-        <li>Réutiliser le token dans les headers : <code>Authorization: Bearer {`{{vars.token}}`}</code>.</li>
+      <h3 className="font-semibold text-base mb-1">2. Triggers (déclencheurs)</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li><b>on_order_created / on_pickup_request / order_status_changed / order_updated</b> — événements internes (créés depuis l'app).</li>
+        <li><b>schedule</b> — date fixe (1 fois). <b>recurring</b> — toutes les X minutes/heures/jours.</li>
+        <li><b>webhook</b> — URL <code>/livreur-workflow-runner/webhook/&lt;livreur_id&gt;</code> + Bearer = <code>profiles.api_token</code>. Payload exposé via <code>{`{{webhook.field}}`}</code>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3 className="font-semibold text-base mb-1">3. Variables et expressions</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li><code>{`{{order.field}}`}</code> — la commande chargée (par <b>find_order</b> ou trigger d'événement).</li>
+        <li><code>{`{{steps.<id>.path.to.value}}`}</code> — sortie d'une étape (parsée en JSON si possible).</li>
+        <li><code>{`{{vars.NAME}}`}</code> — variable interne (set_variable / map_value output_var).</li>
+        <li><code>{`{{webhook.field}}`}</code> — corps du webhook entrant.</li>
+        <li><code>{`{{item.field}}`}</code>, <code>{`{{index}}`}</code> — élément courant dans <b>for_each</b> (ou nom personnalisé).</li>
+        <li><code>{`{{$secret.NAME}}`}</code>, <code>{`{{$now}}`}</code>, <code>{`{{$uuid}}`}</code>, <code>{`{{$timestamp}}`}</code>, <code>{`{{$random}}`}</code>.</li>
+      </ul>
+      <p className="text-xs text-muted-foreground">Si l'expression est seule (<code>{`{{vars.token}}`}</code>), le type d'origine est préservé (objet, nombre, tableau). Sinon, interpolation texte.</p>
+    </section>
+
+    <section>
+      <h3 className="font-semibold text-base mb-1">4. Catalogue des étapes</h3>
+      <div className="space-y-2">
+        <div><b>http</b> — Appel REST. Méthode, URL, headers, body (JSON ou raw). Supporte retry + <code>continue_on_error</code>. Réponse parsée en JSON si possible.</div>
+        <div><b>set_variable</b> — Stocke des paires clé/valeur dans <code>vars</code>. Idéal pour mémoriser un token ou un ID.</div>
+        <div><b>find_order</b> — Charge UNE commande locale par champ (par défaut <code>external_tracking_number</code>). Met le résultat dans <code>ctx.order</code>.</div>
+        <div><b>find_active_orders</b> — Liste les commandes locales selon des filtres (<code>exclude_statuses</code>, <code>include_statuses</code>, <code>require_tracking</code>, <code>livreur_scope</code>). Renvoie un <b>tableau</b> à passer à <b>for_each</b>. Chaque <code>item</code> = ligne complète <code>orders</code>.</div>
+        <div><b>map_value</b> — Convertit une valeur via un dictionnaire (ex: <code>DELETED → Annulé</code>). Stocke le résultat dans <code>vars.&lt;output_var&gt;</code>. Si la clé n'existe pas, utilise <code>default</code>.</div>
+        <div><b>filter</b> — Évalue des conditions (eq, neq, gt, contains, exists, regex…). Si <b>faux</b>: <code>stop</code> (arrêt propre), <code>skip_rest</code> (sauter la suite), <code>fail</code> (erreur). Dans un <b>for_each</b>, <code>stop</code> saute uniquement l'itération courante.</div>
+        <div><b>for_each</b> — Itère sur un tableau. Variables exposées : <code>{`{{item}}`}</code> et <code>{`{{index}}`}</code> (renommables). <code>on_iteration_error</code>: continue / stop.</div>
+        <div><b>loop</b> — Répète N fois. Variable d'index : <code>{`{{i}}`}</code>.</div>
+        <div><b>update_order</b> — UPDATE sur <code>orders</code> par <code>ctx.order.id</code>. Définissez les champs à modifier (status, status_note, driver_name, driver_phone, postponed_date, scheduled_date…).</div>
+        <div><b>log_status</b> — INSERT dans <code>order_status_history</code>. Champs : <code>new_status</code>, <code>old_status</code>, <code>note</code>, <code>actor_label</code>, <code>provider_note</code>, <code>reported_date</code>, <code>scheduled_date</code>.</div>
+        <div><b>extract / validate / delay</b> — Extraire des sous-champs, valider (required/regex/min_length), pause (ms).</div>
+      </div>
+    </section>
+
+    <section>
+      <h3 className="font-semibold text-base mb-1">5. Tutoriel complet : créer un workflow JSON pour un nouveau livreur</h3>
+      <ol className="list-decimal pl-5 space-y-2">
+        <li><b>Préparer les credentials</b> — Ajouter dans Secrets : <code>NEWPROVIDER_API_KEY</code>, <code>NEWPROVIDER_SECRET</code>. Ne jamais coder en dur.</li>
+        <li><b>Étudier la doc API</b> du provider :
+          <ul className="list-disc pl-5">
+            <li>endpoint d'auth (POST /login) + format du token retourné</li>
+            <li>endpoint création colis (POST /packages) + champs requis</li>
+            <li>endpoint statut individuel (GET /package/{`{tracking}`}) + format réponse</li>
+            <li>mapping des codes statut distants → statuts ODiT</li>
+          </ul>
+        </li>
+        <li><b>Définir les triggers</b> : <code>on_pickup_request</code> (création) + <code>recurring 5 min</code> (polling) + <code>webhook</code> (push).</li>
+        <li><b>Construire les étapes</b> — soit via l'UI, soit en JSON. Squelette type :
+          <pre className="bg-muted p-2 rounded text-xs overflow-auto mt-1">{`[
+  { "id":"auth","type":"http","config":{
+      "method":"POST","url":"https://api.X.com/login",
+      "body":{ "key":"{{$secret.NEWPROVIDER_API_KEY}}" }
+  }},
+  { "id":"set_token","type":"set_variable","config":{
+      "values":{ "token":"{{steps.auth.token}}" }
+  }},
+  { "id":"find_orders","type":"find_active_orders","config":{
+      "exclude_statuses":["Crée","Confirmé","Pickup"],
+      "tracking_field":"external_tracking_number",
+      "require_tracking":true,"livreur_scope":"workflow","limit":200
+  }},
+  { "id":"loop","type":"for_each","config":{
+      "items":"{{steps.find_orders}}","item_var":"item","index_var":"i",
+      "on_iteration_error":"continue",
+      "steps":[
+        { "id":"detail","type":"http","on_error":"continue","config":{
+            "method":"GET",
+            "url":"https://api.X.com/package/{{item.external_tracking_number}}",
+            "headers":{ "Authorization":"Bearer {{vars.token}}" }
+        }},
+        { "id":"map","type":"map_value","config":{
+            "value":"{{steps.detail.status}}",
+            "output_var":"local_status",
+            "mapping":{ "DELIVERED":"Livré","CANCELED":"Annulé" }
+        }},
+        { "id":"load","type":"find_order","config":{
+            "field":"id","value":"{{item.id}}","optional":true
+        }},
+        { "id":"guard","type":"filter","config":{
+            "mode":"all","on_false":"stop",
+            "conditions":[
+              { "left":"{{order.id}}","operator":"exists" },
+              { "left":"{{vars.local_status}}","right":"{{order.status}}","operator":"neq" }
+            ]
+        }},
+        { "id":"upd","type":"update_order","config":{
+            "updates":{
+              "status":"{{vars.local_status}}",
+              "driver_name":"{{steps.detail.driverName}}",
+              "driver_phone":"{{steps.detail.driverPhone}}"
+            }
+        }},
+        { "id":"log","type":"log_status","config":{
+            "new_status":"{{vars.local_status}}",
+            "old_status":"{{order.status}}",
+            "actor_label":"{{steps.detail.history.last.msg}}",
+            "note":"Polling: {{steps.detail.note}}"
+        }}
+      ]
+  }}
+]`}</pre>
+        </li>
+        <li><b>Tester</b> : bouton <i>Tester</i> → choisir un order_id → vérifier les <code>step_results</code> dans Executions.</li>
+        <li><b>Activer</b> le workflow et surveiller les <code>livreur_workflow_runs</code> pendant 1h.</li>
+        <li><b>Export / Import</b> : bouton Export pour partager le JSON ; Import pour cloner sur un autre livreur (penser à réajuster les secrets et l'URL du provider).</li>
       </ol>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">3. Création d'un colis (trigger : Demande de Pickup)</h3>
-      <pre className="bg-muted p-2 rounded text-xs overflow-auto">{`Trigger: on_pickup_request
-Steps:
-  1. HTTP Login → vars.token
-  2. HTTP POST /packages avec body mappé depuis {{order.*}}
-  3. Update order: external_tracking_number = {{steps.<create_id>.trackingID}}, status = "Pickup"
-  4. Log status: "Envoyé au livreur"`}</pre>
-    </section>
-    <section>
-      <h3 className="font-semibold text-base mb-1">4. Polling de statuts (recurring)</h3>
-      <p>Trigger <b>Récurrent</b> toutes les 5 min → liste packages → pour chaque, <b>find_order</b> par <code>external_tracking_number</code> → mapper status distant → <b>filter</b> "skip si même statut" → <b>update_order</b> + <b>log_status</b>.</p>
-      <p className="text-xs text-muted-foreground mt-1">Le bouton <b>Preset Olivraison</b> en haut crée tout cela automatiquement.</p>
-    </section>
-    <section>
-      <h3 className="font-semibold text-base mb-1">5. Webhook entrant (push depuis le livreur)</h3>
-      <p>Ajouter trigger <b>Webhook entrant</b> → l'URL et le token apparaissent dans la carte. Le payload reçu est exposé via <code>{`{{webhook.field}}`}</code>.</p>
-    </section>
-    <section>
-      <h3 className="font-semibold text-base mb-1">6. Logique métier — règles à respecter</h3>
+      <h3 className="font-semibold text-base mb-1">6. Bonnes pratiques anti-doublons</h3>
       <ul className="list-disc pl-5 space-y-1">
-        <li>Toujours <b>find_order</b> avant update si le déclencheur ne fournit pas l'order_id.</li>
-        <li>Filter "skip si même statut" : <code>{`{{order.status}} != {{vars.local_status}}`}</code>.</li>
-        <li>Filter "order existe" : <code>{`{{order.id}} exists`}</code>.</li>
-        <li>Pour les statuts terminaux (Livré/Annulé/Refusé) : ne pas re-déclencher d'envoi API.</li>
-        <li>Validation des champs obligatoires via étape <b>Validate</b> avant tout appel HTTP.</li>
+        <li>Toujours <b>find_order</b> avant <b>update_order</b> si pas d'order dans le ctx.</li>
+        <li>Ajoutez un <b>filter</b> "skip si statut inchangé" (<code>{`{{vars.local_status}} != {{order.status}}`}</code>).</li>
+        <li>Pour <b>log_status</b>, renseignez <code>actor_label</code> (sinon le trigger DB attribue NULL).</li>
+        <li>Le runner pose un <b>verrou atomique</b> sur les recurring : un seul tick exécute le workflow même si le cron envoie plusieurs ticks simultanés.</li>
       </ul>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">7. Variables disponibles</h3>
-      <ul className="list-disc pl-5">
-        <li><code>{`{{order.id}}`}</code>, <code>{`{{order.customer_phone}}`}</code>, <code>{`{{order.status}}`}</code>…</li>
-        <li><code>{`{{steps.<step_id>.path}}`}</code> — sortie d'une étape précédente</li>
-        <li><code>{`{{vars.NAME}}`}</code> — variables internes / set_variable</li>
-        <li><code>{`{{webhook.*}}`}</code> — payload reçu (trigger webhook)</li>
-        <li><code>{`{{$secret.NAME}}`}</code>, <code>{`{{$now}}`}</code>, <code>{`{{$uuid}}`}</code></li>
-      </ul>
+      <h3 className="font-semibold text-base mb-1">7. Webhook entrant (push depuis le livreur)</h3>
+      <p>URL : <code>{`{SUPABASE_URL}/functions/v1/livreur-workflow-runner/webhook/{livreur_id}`}</code> — header <code>Authorization: Bearer {`{api_token}`}</code>. Le payload est exposé via <code>{`{{webhook.*}}`}</code>.</p>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">8. Exporter / importer le workflow</h3>
-      <p>Bouton <b>Export</b> → fichier JSON réutilisable pour un autre livreur via <b>Import</b>.</p>
+      <h3 className="font-semibold text-base mb-1">8. Debug</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li><b>Executions</b> : voir <code>step_results</code> (status, output, exchange HTTP, durée).</li>
+        <li>Filtres "filtered" (filter qui a stoppé) vs "failed" (erreur réelle).</li>
+        <li>Logs Edge Function pour les erreurs réseau.</li>
+      </ul>
     </section>
   </div>
 );
@@ -881,6 +969,9 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
               <div className="col-span-3 flex items-center gap-2"><Switch checked={step.config?.optional !== false} onCheckedChange={(v) => onChange({ config: { ...step.config, optional: v } })} /><Label className="!m-0">Optionnel (ne pas échouer si introuvable)</Label></div>
               <p className="col-span-3 text-xs text-muted-foreground">Charge la commande dans <code>ctx.order</code>. Utilisable ensuite avec <code>{"{{order.status}}"}</code> ou par <b>update_order</b>.</p>
             </div>
+          )}
+          {step.type === "find_active_orders" && (
+            <FindActiveOrdersEditor step={step} onChange={onChange} />
           )}
           {step.type === "map_value" && (
             <div className="space-y-3">
@@ -1114,26 +1205,18 @@ const SubStepsEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) =>
         ) : (
           <div className="space-y-2">
             {subSteps.map((s, i) => (
-              <div key={s.id || i} className="border rounded bg-background">
-                <div className="flex items-center gap-2 p-2 bg-muted/40 border-b">
-                  <Badge variant="outline">{i + 1}</Badge>
-                  <Input value={s.name || ""} onChange={(e) => patchSub(i, { name: e.target.value })} className="h-7 flex-1 max-w-xs text-sm" />
-                  <Select value={s.type} onValueChange={(v) => patchSub(i, { ...defaultStep(v), id: s.id, name: s.name })}>
-                    <SelectTrigger className="h-7 w-44 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{STEP_TYPES.filter((t) => t.value !== "for_each" && t.value !== "loop").map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Switch checked={s.enabled !== false} onCheckedChange={(v) => patchSub(i, { enabled: v })} />
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveSub(i, -1)} disabled={i === 0}>↑</Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveSub(i, 1)} disabled={i === subSteps.length - 1}>↓</Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeSub(i)}><Trash2 className="h-3 w-3" /></Button>
-                </div>
-                <div className="p-2">
-                  <Textarea className="font-mono text-xs min-h-[80px]" value={JSON.stringify(s.config || {}, null, 2)} onChange={(e) => { try { patchSub(i, { config: JSON.parse(e.target.value) }); } catch { /* ignore */ } }} />
-                </div>
-              </div>
+              <SubStepRow
+                key={s.id || i}
+                sub={s}
+                index={i}
+                total={subSteps.length}
+                onPatch={(p) => patchSub(i, p)}
+                onMove={(d) => moveSub(i, d)}
+                onRemove={() => removeSub(i)}
+              />
             ))}
             <div className="flex gap-2 flex-wrap">
-              {["http", "find_order", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
+              {["http", "find_order", "find_active_orders", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
                 <Button key={t} variant="outline" size="sm" onClick={() => addSub(t)}><Plus className="h-3 w-3 mr-1" />{STEP_TYPES.find((s) => s.value === t)?.label || t}</Button>
               ))}
             </div>
@@ -1341,24 +1424,29 @@ const KeyValueOrJsonEditor = ({ label, value, onChange }: { label: string; value
 const LogStatusEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
   const [mode, setMode] = useState<"fields" | "json">("fields");
   const [text, setText] = useState(() => JSON.stringify(step.config || {}, null, 2));
+  const cfg = step.config || {};
+  const set = (patch: Json) => onChange({ config: { ...cfg, ...patch } });
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label>Configuration</Label>
         <div className="flex gap-1">
           <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
-          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(step.config || {}, null, 2)); setMode("json"); }}>JSON</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(cfg, null, 2)); setMode("json"); }}>JSON</Button>
         </div>
       </div>
       {mode === "fields" ? (
         <div className="grid grid-cols-2 gap-3">
-          <div><Label>Nouveau statut</Label>
-            <Input value={step.config?.new_status || ""} onChange={(e) => onChange({ config: { ...step.config, new_status: e.target.value } })} placeholder="Pickup ou {{vars.status}}" />
-          </div>
-          <div><Label>Note</Label><Input value={step.config?.note || ""} onChange={(e) => onChange({ config: { ...step.config, note: e.target.value } })} /></div>
+          <div><Label>Nouveau statut</Label><Input value={cfg.new_status || ""} onChange={(e) => set({ new_status: e.target.value })} placeholder="Pickup ou {{vars.local_status}}" /></div>
+          <div><Label>Ancien statut (optionnel)</Label><Input value={cfg.old_status || ""} onChange={(e) => set({ old_status: e.target.value })} placeholder="{{order.status}}" /></div>
+          <div className="col-span-2"><Label>Note (notes)</Label><Input value={cfg.note ?? cfg.history_message ?? ""} onChange={(e) => set({ note: e.target.value })} placeholder="Statut mis à jour vers {{vars.local_status}}" /></div>
+          <div><Label>Acteur (actor_label)</Label><Input value={cfg.actor_label ?? cfg.history_actor ?? ""} onChange={(e) => set({ actor_label: e.target.value })} placeholder="{{steps.detail.history.last.msg}}" /></div>
+          <div><Label>Note provider (provider_note)</Label><Input value={cfg.provider_note || ""} onChange={(e) => set({ provider_note: e.target.value })} placeholder="{{steps.detail.note}}" /></div>
+          <div><Label>Date reportée</Label><Input value={cfg.reported_date || ""} onChange={(e) => set({ reported_date: e.target.value })} placeholder="{{steps.detail.report.reportedDate}}" /></div>
+          <div><Label>Date programmée</Label><Input value={cfg.scheduled_date || ""} onChange={(e) => set({ scheduled_date: e.target.value })} placeholder="{{steps.detail.report.scheduledDate}}" /></div>
         </div>
       ) : (
-        <Textarea className="font-mono text-xs" rows={6} value={text} onChange={(e) => {
+        <Textarea className="font-mono text-xs" rows={8} value={text} onChange={(e) => {
           setText(e.target.value);
           try { onChange({ config: JSON.parse(e.target.value) }); } catch {}
         }} />
@@ -1367,6 +1455,115 @@ const LogStatusEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) =
   );
 };
 
+const FindActiveOrdersEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
+  const cfg = step.config || {};
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [text, setText] = useState(() => JSON.stringify(cfg, null, 2));
+  const set = (patch: Json) => onChange({ config: { ...cfg, ...patch } });
+  const setList = (k: string, v: string) => set({ [k]: v.split(",").map((s) => s.trim()).filter(Boolean) });
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Configuration find_active_orders</Label>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(cfg, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+      </div>
+      {mode === "fields" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2"><Label>Statuts à exclure (séparés par virgule)</Label>
+            <Input value={(cfg.exclude_statuses || []).join(", ")} onChange={(e) => setList("exclude_statuses", e.target.value)} placeholder="Crée, Confirmé, Pickup" />
+          </div>
+          <div className="col-span-2"><Label>Statuts à inclure (vide = tous sauf exclus)</Label>
+            <Input value={(cfg.include_statuses || []).join(", ")} onChange={(e) => setList("include_statuses", e.target.value)} placeholder="(vide)" />
+          </div>
+          <div><Label>Champ tracking</Label><Input value={cfg.tracking_field || "external_tracking_number"} onChange={(e) => set({ tracking_field: e.target.value })} /></div>
+          <div className="flex items-center gap-2 pt-6"><Switch checked={cfg.require_tracking !== false} onCheckedChange={(v) => set({ require_tracking: v })} /><Label className="!m-0">Exiger un tracking non vide</Label></div>
+          <div><Label>Périmètre livreur</Label>
+            <Select value={cfg.livreur_scope || "workflow"} onValueChange={(v) => set({ livreur_scope: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="workflow">Livreur du workflow uniquement</SelectItem>
+                <SelectItem value="all">Toutes (tous livreurs)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Limite max</Label><Input type="number" value={cfg.limit ?? 200} onChange={(e) => set({ limit: Number(e.target.value) })} /></div>
+        </div>
+      ) : (
+        <Textarea className="font-mono text-xs" rows={10} value={text} onChange={(e) => {
+          setText(e.target.value);
+          try { onChange({ config: JSON.parse(e.target.value) }); } catch {}
+        }} />
+      )}
+      <p className="text-xs text-muted-foreground">Renvoie un tableau de commandes. Utilisez <code>{`{{steps.<id>}}`}</code> dans <b>For Each</b>. Chaque <code>item</code> = ligne <code>orders</code> (ex: <code>{`{{item.id}}`}</code>, <code>{`{{item.external_tracking_number}}`}</code>).</p>
+    </div>
+  );
+};
+
+const SubStepRow = ({ sub, index, total, onPatch, onMove, onRemove }: { sub: Json; index: number; total: number; onPatch: (p: Json) => void; onMove: (d: number) => void; onRemove: () => void }) => {
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [jsonText, setJsonText] = useState(() => JSON.stringify(sub.config || {}, null, 2));
+  const onChange = (p: Json) => onPatch(p);
+  const renderFields = () => {
+    switch (sub.type) {
+      case "http": return <HttpStepEditor step={sub} onChange={onChange} onImportCurl={() => {}} />;
+      case "filter": return <FilterStepEditor step={sub} onChange={onChange} />;
+      case "find_order": return (
+        <div className="grid grid-cols-3 gap-3">
+          <div><Label>Champ</Label><Input value={sub.config?.field || "external_tracking_number"} onChange={(e) => onChange({ config: { ...sub.config, field: e.target.value } })} /></div>
+          <div className="col-span-2"><Label>Valeur</Label><Input value={sub.config?.value || ""} onChange={(e) => onChange({ config: { ...sub.config, value: e.target.value } })} placeholder="{{item.trackingID}}" /></div>
+          <div className="col-span-3 flex items-center gap-2"><Switch checked={sub.config?.optional !== false} onCheckedChange={(v) => onChange({ config: { ...sub.config, optional: v } })} /><Label className="!m-0">Optionnel</Label></div>
+        </div>
+      );
+      case "find_active_orders": return <FindActiveOrdersEditor step={sub} onChange={onChange} />;
+      case "map_value": return (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div><Label>Valeur</Label><Input value={sub.config?.value || ""} onChange={(e) => onChange({ config: { ...sub.config, value: e.target.value } })} placeholder="{{item.status}}" /></div>
+            <div><Label>Variable de sortie</Label><Input value={sub.config?.output_var || ""} onChange={(e) => onChange({ config: { ...sub.config, output_var: e.target.value } })} placeholder="local_status" /></div>
+            <div><Label>Défaut</Label><Input value={sub.config?.default || ""} onChange={(e) => onChange({ config: { ...sub.config, default: e.target.value } })} /></div>
+          </div>
+          <Label>Mapping</Label>
+          <KeyValueEditor value={sub.config?.mapping || {}} onChange={(v) => onChange({ config: { ...sub.config, mapping: v } })} />
+        </div>
+      );
+      case "set_variable": return <KeyValueEditor value={sub.config?.values || {}} onChange={(v) => onChange({ config: { ...sub.config, values: v } })} />;
+      case "update_order": return <KeyValueOrJsonEditor label="Champs à mettre à jour" value={sub.config?.updates || {}} onChange={(v) => onChange({ config: { ...sub.config, updates: v } })} />;
+      case "log_status": return <LogStatusEditor step={sub} onChange={onChange} />;
+      case "validate": return <ValidateRulesEditor step={sub} onChange={onChange} />;
+      case "extract": return <KeyValueEditor value={sub.config?.fields || {}} onChange={(v) => onChange({ config: { ...sub.config, fields: v } })} />;
+      case "delay": return <div><Label>ms</Label><Input type="number" value={sub.config?.ms || 1000} onChange={(e) => onChange({ config: { ...sub.config, ms: Number(e.target.value) } })} /></div>;
+      default: return <div className="text-xs text-muted-foreground">Type non supporté en mode champs — utilisez JSON.</div>;
+    }
+  };
+  return (
+    <div className="border rounded bg-background">
+      <div className="flex items-center gap-2 p-2 bg-muted/40 border-b flex-wrap">
+        <Badge variant="outline">{index + 1}</Badge>
+        <Input value={sub.name || ""} onChange={(e) => onPatch({ name: e.target.value })} className="h-7 flex-1 min-w-[120px] max-w-xs text-sm" />
+        <Select value={sub.type} onValueChange={(v) => onPatch({ ...defaultStep(v), id: sub.id, name: sub.name })}>
+          <SelectTrigger className="h-7 w-44 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{STEP_TYPES.filter((t) => t.value !== "for_each" && t.value !== "loop").map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+        </Select>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => { setJsonText(JSON.stringify(sub.config || {}, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+        <Switch checked={sub.enabled !== false} onCheckedChange={(v) => onPatch({ enabled: v })} />
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onMove(-1)} disabled={index === 0}>↑</Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onMove(1)} disabled={index === total - 1}>↓</Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRemove}><Trash2 className="h-3 w-3" /></Button>
+      </div>
+      <div className="p-2">
+        {mode === "fields" ? renderFields() : (
+          <Textarea className="font-mono text-xs min-h-[100px]" value={jsonText} onChange={(e) => { setJsonText(e.target.value); try { onPatch({ config: JSON.parse(e.target.value) }); } catch {} }} />
+        )}
+      </div>
+    </div>
+  );
+};
 
 const WebhookTriggerInfo = () => {
   const { livreurId } = useParams<{ livreurId: string }>();

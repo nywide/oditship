@@ -12,7 +12,17 @@ const json = (b: Json, s = 200) =>
 
 function getPath(obj: any, path?: string | null) {
   if (!path) return undefined;
-  return String(path).split(".").reduce((a: any, k) => a?.[k], obj);
+  return String(path).split(".").reduce((a: any, k) => {
+    if (a === undefined || a === null) return undefined;
+    if (Array.isArray(a)) {
+      if (k === "last") return a[a.length - 1];
+      if (k === "first") return a[0];
+      if (k === "length") return a.length;
+      const n = Number(k);
+      if (Number.isInteger(n)) return a[n];
+    }
+    return a?.[k];
+  }, obj);
 }
 
 function setPath(obj: Json, path: string, value: unknown) {
@@ -178,12 +188,22 @@ async function runStep(step: Json, ctx: Json, admin: any): Promise<{ output: any
         } else if (step.type === "log_status") {
           const oid = ctx.order?.id;
           if (oid) {
-            await admin.from("order_status_history").insert({
+            const cfg = step.config || {};
+            const row: Json = {
               order_id: oid,
-              old_status: interpolate(step.config?.old_status, ctx) ?? ctx.order?.status,
-              new_status: interpolate(step.config?.new_status, ctx),
-              notes: interpolate(step.config?.note, ctx),
-            });
+              old_status: interpolate(cfg.old_status, ctx) ?? ctx.order?.status,
+              new_status: interpolate(cfg.new_status, ctx),
+              notes: interpolate(cfg.note ?? cfg.history_message, ctx),
+            };
+            const actor = interpolate(cfg.actor_label ?? cfg.history_actor, ctx);
+            if (actor) row.actor_label = String(actor);
+            const provNote = interpolate(cfg.provider_note, ctx);
+            if (provNote) row.provider_note = String(provNote);
+            const repDate = interpolate(cfg.reported_date, ctx);
+            if (repDate) row.reported_date = repDate;
+            const schDate = interpolate(cfg.scheduled_date, ctx);
+            if (schDate) row.scheduled_date = schDate;
+            await admin.from("order_status_history").insert(row);
           }
           output = { logged: true };
         } else if (step.type === "find_order") {
@@ -556,6 +576,27 @@ Deno.serve(async (req) => {
             else if (now.getTime() - new Date(sched.last_run_at).getTime() >= ms) shouldRun = true;
           }
           if (shouldRun) {
+            // Atomic claim to prevent double execution from overlapping ticks
+            const claimedAt = new Date().toISOString();
+            let claimed = false;
+            if (sched) {
+              const prevLastRun = sched.last_run_at;
+              let q: any = admin
+                .from("livreur_workflow_schedules")
+                .update({ last_run_at: claimedAt, last_status: "running", updated_at: claimedAt })
+                .eq("workflow_id", wf.id)
+                .eq("trigger_key", key);
+              q = prevLastRun ? q.eq("last_run_at", prevLastRun) : q.is("last_run_at", null);
+              const upd: any = await q.select();
+              claimed = !upd.error && Array.isArray(upd.data) && upd.data.length > 0;
+            } else {
+              const ins: any = await admin
+                .from("livreur_workflow_schedules")
+                .insert({ workflow_id: wf.id, trigger_key: key, last_run_at: claimedAt, last_status: "running", updated_at: claimedAt })
+                .select();
+              claimed = !ins.error && Array.isArray(ins.data) && ins.data.length > 0;
+            }
+            if (!claimed) continue; // another tick already started this run
             const ctx: Json = { trigger };
             try {
               const r = await runWorkflow(wf, ctx, admin, { triggerType: trigger.type, triggerPayload: trigger });
@@ -563,7 +604,7 @@ Deno.serve(async (req) => {
               await admin.from("livreur_workflow_schedules").upsert({
                 workflow_id: wf.id,
                 trigger_key: key,
-                last_run_at: new Date().toISOString(),
+                last_run_at: claimedAt,
                 last_status: r.status,
                 last_message: r.error_message,
                 updated_at: new Date().toISOString(),
@@ -572,7 +613,7 @@ Deno.serve(async (req) => {
               await admin.from("livreur_workflow_schedules").upsert({
                 workflow_id: wf.id,
                 trigger_key: key,
-                last_run_at: new Date().toISOString(),
+                last_run_at: claimedAt,
                 last_status: "failed",
                 last_message: e?.message,
                 updated_at: new Date().toISOString(),
