@@ -48,6 +48,10 @@ const TRIGGER_TYPES = [
 const STEP_TYPES = [
   { value: "http", label: "HTTP Request", icon: Globe, desc: "Appeler un endpoint REST/JSON" },
   { value: "filter", label: "Filter / IF", icon: GitBranch, desc: "Condition: continuer ou arrêter selon des règles" },
+  { value: "for_each", label: "For Each (loop array)", icon: RefreshCw, desc: "Itérer sur un tableau (ex: liste de packages)" },
+  { value: "loop", label: "Loop (N fois)", icon: RefreshCw, desc: "Répéter des étapes N fois" },
+  { value: "find_order", label: "Find order (DB)", icon: Layers, desc: "Charger une commande depuis la DB par un champ" },
+  { value: "map_value", label: "Map value (status mapping)", icon: GitBranch, desc: "Mapper une valeur (ex: DELETED → Annulé)" },
   { value: "extract", label: "Extract fields", icon: Layers, desc: "Extraire des valeurs de la réponse" },
   { value: "set_variable", label: "Set variables", icon: SettingsIcon, desc: "Définir des variables intermédiaires" },
   { value: "validate", label: "Validate", icon: GitBranch, desc: "Valider les données avant de continuer" },
@@ -70,6 +74,10 @@ function defaultStep(type: string): Json {
   if (type === "update_order") base.config = { updates: {} };
   if (type === "log_status") base.config = { new_status: "Pickup", note: "" };
   if (type === "filter") base.config = { mode: "all", conditions: [{ left: "{{order.status}}", operator: "eq", right: "Confirmé" }], on_false: "stop" };
+  if (type === "for_each") base.config = { items: "{{steps.<list_step_id>}}", item_var: "item", index_var: "index", on_iteration_error: "continue", steps: [] };
+  if (type === "loop") base.config = { times: 3, index_var: "i", on_iteration_error: "continue", steps: [] };
+  if (type === "find_order") base.config = { field: "external_tracking_number", value: "{{item.trackingID}}", optional: true };
+  if (type === "map_value") base.config = { value: "{{item.status}}", output_var: "local_status", default: "{{item.status}}", mapping: { DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé", TRANSIT: "En transit", CANCELED: "Annulé", REPORTED: "Reporté", RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé" } };
   return base;
 }
 
@@ -354,53 +362,56 @@ const AdminLivreurWorkflows = () => {
   const insertOlivraisonPollingPreset = () => {
     if (!active) return;
     const loginId = newId();
+    const setTokenId = newId();
     const listId = newId();
-    const filterId = newId();
-    const findId = newId();
-    const mapId = newId();
-    const filterStatusId = newId();
-    const updId = newId();
-    const logId = newId();
+    const guardListId = newId();
+    const forEachId = newId();
+
+    const STATUS_MAP = {
+      DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé",
+      TRANSIT: "En transit", CANCELED: "Annulé", REPORTED: "Reporté",
+      RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé",
+      pending: "Crée", confirmed: "Confirmé", picked: "Pickup",
+    } as Json;
+
+    // Sub-steps executed for each package returned by the list
+    const subSteps: Json[] = [
+      { id: newId(), name: "Charger commande locale", type: "find_order", enabled: true, on_error: "continue", retry: { max_attempts: 1, backoff_ms: 0 },
+        config: { field: "external_tracking_number", value: "{{item.trackingID}}", optional: true } },
+      { id: newId(), name: "Skip si commande introuvable", type: "filter", enabled: true, on_error: "stop", retry: {},
+        config: { mode: "all", on_false: "stop", conditions: [{ left: "{{order.id}}", operator: "exists", right: "" }] } },
+      { id: newId(), name: "Mapper statut Olivraison → local", type: "map_value", enabled: true, on_error: "stop", retry: {},
+        config: { value: "{{item.status}}", output_var: "local_status", default: "{{item.status}}", mapping: STATUS_MAP } },
+      { id: newId(), name: "Skip si statut inchangé", type: "filter", enabled: true, on_error: "stop", retry: {},
+        config: { mode: "all", on_false: "stop", conditions: [{ left: "{{order.status}}", operator: "neq", right: "{{vars.local_status}}" }] } },
+      { id: newId(), name: "Mettre à jour la commande", type: "update_order", enabled: true, on_error: "continue", retry: { max_attempts: 2, backoff_ms: 500 },
+        config: { updates: {
+          status: "{{vars.local_status}}",
+          status_note: "{{item.note}}",
+          driver_name: "{{item.transport.currentDriverName}}",
+          driver_phone: "{{item.transport.currentDriverPhone}}",
+          external_tracking_number: "{{item.trackingID}}",
+        } } },
+      { id: newId(), name: "Historique statut", type: "log_status", enabled: true, on_error: "continue", retry: {},
+        config: { new_status: "{{vars.local_status}}", note: "Polling Olivraison: {{item.status}} — {{item.note}}" } },
+    ];
+
     const presetSteps: Json[] = [
       { id: loginId, name: "Login Olivraison", type: "http", enabled: true, on_error: "stop", retry: { max_attempts: 2, backoff_ms: 1000 },
-        config: { method: "POST", url: "https://partners.olivraison.com/auth/login", headers: { "Content-Type": "application/json" },
+        config: { method: "POST", url: "https://partners.olivraison.com/auth/login",
+          headers: { "Content-Type": "application/json" },
           body: { apiKey: "{{$secret.OLIVRAISON_API_KEY}}", secretKey: "{{$secret.OLIVRAISON_SECRET_KEY}}" }, body_type: "json" } },
-      { id: "set_token_" + newId(), name: "Stocker token", type: "set_variable", enabled: true, on_error: "stop", retry: {},
+      { id: setTokenId, name: "Stocker token", type: "set_variable", enabled: true, on_error: "stop", retry: {},
         config: { values: { token: `{{steps.${loginId}.token}}` } } },
-      { id: listId, name: "Lister packages récents", type: "http", enabled: true, on_error: "stop", retry: { max_attempts: 2, backoff_ms: 2000 },
-        config: { method: "GET", url: "https://partners.olivraison.com/packages?limit=50", headers: { Authorization: "Bearer {{vars.token}}" }, body: {}, body_type: "json" } },
-      { id: filterId, name: "Si packages présents", type: "filter", enabled: true, on_error: "stop", retry: {},
+      { id: listId, name: "Lister packages (GET /package)", type: "http", enabled: true, on_error: "stop", retry: { max_attempts: 2, backoff_ms: 2000 },
+        config: { method: "GET", url: "https://partners.olivraison.com/package",
+          headers: { Authorization: "Bearer {{vars.token}}", Accept: "application/json" }, body: {}, body_type: "json" } },
+      { id: guardListId, name: "Stop si liste vide", type: "filter", enabled: true, on_error: "stop", retry: {},
         config: { mode: "all", on_false: "stop", conditions: [{ left: `{{steps.${listId}.0.trackingID}}`, operator: "exists", right: "" }] } },
-      { id: findId, name: "Charger commande locale", type: "find_order", enabled: true, on_error: "continue", retry: {},
-        config: { field: "external_tracking_number", value: `{{steps.${listId}.0.trackingID}}`, optional: true } },
-      { id: mapId, name: "Mapper status Olivraison → local", type: "set_variable", enabled: true, on_error: "stop", retry: {},
-        config: { values: {
-          remote_status: `{{steps.${listId}.0.status}}`,
-          local_status: `{{steps.${listId}.0.status}}`,
-          note: `{{steps.${listId}.0.note}}`,
-          tracking: `{{steps.${listId}.0.trackingID}}`,
-          driver_name: `{{steps.${listId}.0.transport.currentDriverName}}`,
-          driver_phone: `{{steps.${listId}.0.transport.currentDriverPhone}}`,
-          reported_date: `{{steps.${listId}.0.reportedDate}}`,
-          scheduled_date: `{{steps.${listId}.0.scheduledDate}}`,
-        } },
-        // Status mapping rule (for documentation / future use)
-        status_mapping: {
-          DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé", TRANSIT: "Transit",
-          CANCELED: "Annulé", REPORTED: "Reporté", RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé",
-        },
-      },
-      { id: filterStatusId, name: "Skip si même statut", type: "filter", enabled: true, on_error: "stop", retry: {},
-        config: { mode: "all", on_false: "stop",
-          conditions: [
-            { left: "{{order.id}}", operator: "exists", right: "" },
-            { left: "{{order.status}}", operator: "neq", right: "{{vars.local_status}}" },
-          ] } },
-      { id: updId, name: "Mettre à jour la commande", type: "update_order", enabled: true, on_error: "stop", retry: {},
-        config: { updates: { status: "{{vars.local_status}}", status_note: "{{vars.note}}", driver_name: "{{vars.driver_name}}", driver_phone: "{{vars.driver_phone}}", external_tracking_number: "{{vars.tracking}}" } } },
-      { id: logId, name: "Historique statut", type: "log_status", enabled: true, on_error: "continue", retry: {},
-        config: { new_status: "{{vars.local_status}}", note: "Polling Olivraison: {{vars.remote_status}} — {{vars.note}}" } },
+      { id: forEachId, name: "Pour chaque package", type: "for_each", enabled: true, on_error: "continue", retry: {},
+        config: { items: `{{steps.${listId}}}`, item_var: "item", index_var: "index", max_iterations: 200, on_iteration_error: "continue", steps: subSteps } },
     ];
+
     const newTriggers = [...(active.triggers || [])];
     if (!newTriggers.some((t) => t.type === "recurring")) {
       newTriggers.push({ ...defaultTrigger("recurring"), name: "Polling Olivraison (5 min)", interval_value: 5, interval_unit: "minutes" });
@@ -858,6 +869,28 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
           {step.type === "filter" && (
             <FilterStepEditor step={step} onChange={onChange} />
           )}
+          {step.type === "find_order" && (
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Champ</Label><Input value={step.config?.field || "external_tracking_number"} onChange={(e) => onChange({ config: { ...step.config, field: e.target.value } })} /></div>
+              <div className="col-span-2"><Label>Valeur (expression)</Label><Input value={step.config?.value || ""} onChange={(e) => onChange({ config: { ...step.config, value: e.target.value } })} placeholder="{{item.trackingID}}" /></div>
+              <div className="col-span-3 flex items-center gap-2"><Switch checked={step.config?.optional !== false} onCheckedChange={(v) => onChange({ config: { ...step.config, optional: v } })} /><Label className="!m-0">Optionnel (ne pas échouer si introuvable)</Label></div>
+              <p className="col-span-3 text-xs text-muted-foreground">Charge la commande dans <code>ctx.order</code>. Utilisable ensuite avec <code>{"{{order.status}}"}</code> ou par <b>update_order</b>.</p>
+            </div>
+          )}
+          {step.type === "map_value" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div><Label>Valeur d'entrée</Label><Input value={step.config?.value || ""} onChange={(e) => onChange({ config: { ...step.config, value: e.target.value } })} placeholder="{{item.status}}" /></div>
+                <div><Label>Variable de sortie</Label><Input value={step.config?.output_var || ""} onChange={(e) => onChange({ config: { ...step.config, output_var: e.target.value } })} placeholder="local_status" /></div>
+                <div><Label>Défaut (si absent)</Label><Input value={step.config?.default || ""} onChange={(e) => onChange({ config: { ...step.config, default: e.target.value } })} placeholder="{{item.status}}" /></div>
+              </div>
+              <Label>Mapping (clé distante → valeur locale)</Label>
+              <KeyValueEditor value={step.config?.mapping || {}} onChange={(v) => onChange({ config: { ...step.config, mapping: v } })} />
+            </div>
+          )}
+          {(step.type === "for_each" || step.type === "loop") && (
+            <SubStepsEditor step={step} onChange={onChange} />
+          )}
           {/* Advanced */}
           <details className="border-t pt-3">
             <summary className="text-sm cursor-pointer text-muted-foreground">Avancé (retry, erreurs, condition)</summary>
@@ -1018,6 +1051,95 @@ const FilterStepEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) 
     </div>
   );
 };
+
+const SubStepsEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
+  const config = step.config || {};
+  const subSteps: Json[] = config.steps || [];
+  const isForEach = step.type === "for_each";
+  const [jsonMode, setJsonMode] = useState(false);
+  const [jsonText, setJsonText] = useState(JSON.stringify(subSteps, null, 2));
+  const updateSubs = (next: Json[]) => onChange({ config: { ...config, steps: next } });
+  const addSub = (type: string) => updateSubs([...subSteps, defaultStep(type)]);
+  const removeSub = (i: number) => updateSubs(subSteps.filter((_, idx) => idx !== i));
+  const moveSub = (i: number, dir: number) => {
+    const next = [...subSteps];
+    const j = i + dir; if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    updateSubs(next);
+  };
+  const patchSub = (i: number, patch: Json) => updateSubs(subSteps.map((s, idx) => idx === i ? { ...s, ...patch, config: patch.config !== undefined ? patch.config : s.config } : s));
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        {isForEach ? (
+          <>
+            <div className="col-span-3"><Label>Tableau à itérer (expression)</Label><Input className="font-mono text-xs" value={config.items || ""} onChange={(e) => onChange({ config: { ...config, items: e.target.value } })} placeholder="{{steps.<list_id>}}" /></div>
+            <div><Label>Variable item</Label><Input value={config.item_var || "item"} onChange={(e) => onChange({ config: { ...config, item_var: e.target.value } })} /></div>
+            <div><Label>Variable index</Label><Input value={config.index_var || "index"} onChange={(e) => onChange({ config: { ...config, index_var: e.target.value } })} /></div>
+            <div><Label>Max itérations</Label><Input type="number" value={config.max_iterations || 500} onChange={(e) => onChange({ config: { ...config, max_iterations: Number(e.target.value) } })} /></div>
+          </>
+        ) : (
+          <>
+            <div><Label>Nombre de répétitions</Label><Input value={config.times ?? 3} onChange={(e) => onChange({ config: { ...config, times: e.target.value } })} placeholder="3 ou {{vars.n}}" /></div>
+            <div><Label>Variable index</Label><Input value={config.index_var || "i"} onChange={(e) => onChange({ config: { ...config, index_var: e.target.value } })} /></div>
+          </>
+        )}
+        <div><Label>Sur erreur d'itération</Label>
+          <Select value={config.on_iteration_error || "continue"} onValueChange={(v) => onChange({ config: { ...config, on_iteration_error: v } })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="continue">Continuer les autres itérations</SelectItem>
+              <SelectItem value="stop">Arrêter le workflow</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="border-t pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <Label>Étapes à exécuter par itération ({subSteps.length})</Label>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => { if (!jsonMode) setJsonText(JSON.stringify(subSteps, null, 2)); setJsonMode(!jsonMode); }}>{jsonMode ? "Mode visuel" : "Mode JSON"}</Button>
+          </div>
+        </div>
+        {jsonMode ? (
+          <div className="space-y-2">
+            <Textarea className="font-mono text-xs min-h-[200px]" value={jsonText} onChange={(e) => setJsonText(e.target.value)} />
+            <Button size="sm" onClick={() => { try { const p = JSON.parse(jsonText); if (!Array.isArray(p)) throw new Error("Tableau attendu"); updateSubs(p); toast.success("Sous-étapes mises à jour"); } catch (e: any) { toast.error("JSON invalide: " + e.message); } }}>Appliquer JSON</Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {subSteps.map((s, i) => (
+              <div key={s.id || i} className="border rounded bg-background">
+                <div className="flex items-center gap-2 p-2 bg-muted/40 border-b">
+                  <Badge variant="outline">{i + 1}</Badge>
+                  <Input value={s.name || ""} onChange={(e) => patchSub(i, { name: e.target.value })} className="h-7 flex-1 max-w-xs text-sm" />
+                  <Select value={s.type} onValueChange={(v) => patchSub(i, { ...defaultStep(v), id: s.id, name: s.name })}>
+                    <SelectTrigger className="h-7 w-44 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{STEP_TYPES.filter((t) => t.value !== "for_each" && t.value !== "loop").map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Switch checked={s.enabled !== false} onCheckedChange={(v) => patchSub(i, { enabled: v })} />
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveSub(i, -1)} disabled={i === 0}>↑</Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveSub(i, 1)} disabled={i === subSteps.length - 1}>↓</Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeSub(i)}><Trash2 className="h-3 w-3" /></Button>
+                </div>
+                <div className="p-2">
+                  <Textarea className="font-mono text-xs min-h-[80px]" value={JSON.stringify(s.config || {}, null, 2)} onChange={(e) => { try { patchSub(i, { config: JSON.parse(e.target.value) }); } catch { /* ignore */ } }} />
+                </div>
+              </div>
+            ))}
+            <div className="flex gap-2 flex-wrap">
+              {["http", "find_order", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
+                <Button key={t} variant="outline" size="sm" onClick={() => addSub(t)}><Plus className="h-3 w-3 mr-1" />{STEP_TYPES.find((s) => s.value === t)?.label || t}</Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">À l'intérieur, utilisez <code>{`{{${config.item_var || "item"}.field}}`}</code> et <code>{`{{${config.index_var || "index"}}}`}</code>. Un <b>filter</b> qui échoue saute l'itération courante (les autres continuent).</p>
+    </div>
+  );
+};
+
 const HttpStepEditor = ({ step, onChange, onImportCurl }: { step: Json; onChange: (p: Json) => void; onImportCurl: () => void }) => {
   const config = step.config || {};
   const [bodyText, setBodyText] = useState(() => typeof config.body === "string" ? config.body : JSON.stringify(config.body || {}, null, 2));
