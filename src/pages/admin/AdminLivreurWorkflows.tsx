@@ -1048,7 +1048,94 @@ const FilterStepEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) 
     </div>
   );
 };
-const HttpStepEditor = ({ step, onChange, onImportCurl }: { step: Json; onChange: (p: Json) => void; onImportCurl: () => void }) => {
+
+const SubStepsEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
+  const config = step.config || {};
+  const subSteps: Json[] = config.steps || [];
+  const isForEach = step.type === "for_each";
+  const [jsonMode, setJsonMode] = useState(false);
+  const [jsonText, setJsonText] = useState(JSON.stringify(subSteps, null, 2));
+  const updateSubs = (next: Json[]) => onChange({ config: { ...config, steps: next } });
+  const addSub = (type: string) => updateSubs([...subSteps, defaultStep(type)]);
+  const removeSub = (i: number) => updateSubs(subSteps.filter((_, idx) => idx !== i));
+  const moveSub = (i: number, dir: number) => {
+    const next = [...subSteps];
+    const j = i + dir; if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    updateSubs(next);
+  };
+  const patchSub = (i: number, patch: Json) => updateSubs(subSteps.map((s, idx) => idx === i ? { ...s, ...patch, config: patch.config !== undefined ? patch.config : s.config } : s));
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        {isForEach ? (
+          <>
+            <div className="col-span-3"><Label>Tableau à itérer (expression)</Label><Input className="font-mono text-xs" value={config.items || ""} onChange={(e) => onChange({ config: { ...config, items: e.target.value } })} placeholder="{{steps.<list_id>}}" /></div>
+            <div><Label>Variable item</Label><Input value={config.item_var || "item"} onChange={(e) => onChange({ config: { ...config, item_var: e.target.value } })} /></div>
+            <div><Label>Variable index</Label><Input value={config.index_var || "index"} onChange={(e) => onChange({ config: { ...config, index_var: e.target.value } })} /></div>
+            <div><Label>Max itérations</Label><Input type="number" value={config.max_iterations || 500} onChange={(e) => onChange({ config: { ...config, max_iterations: Number(e.target.value) } })} /></div>
+          </>
+        ) : (
+          <>
+            <div><Label>Nombre de répétitions</Label><Input value={config.times ?? 3} onChange={(e) => onChange({ config: { ...config, times: e.target.value } })} placeholder="3 ou {{vars.n}}" /></div>
+            <div><Label>Variable index</Label><Input value={config.index_var || "i"} onChange={(e) => onChange({ config: { ...config, index_var: e.target.value } })} /></div>
+          </>
+        )}
+        <div><Label>Sur erreur d'itération</Label>
+          <Select value={config.on_iteration_error || "continue"} onValueChange={(v) => onChange({ config: { ...config, on_iteration_error: v } })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="continue">Continuer les autres itérations</SelectItem>
+              <SelectItem value="stop">Arrêter le workflow</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="border-t pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <Label>Étapes à exécuter par itération ({subSteps.length})</Label>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => { if (!jsonMode) setJsonText(JSON.stringify(subSteps, null, 2)); setJsonMode(!jsonMode); }}>{jsonMode ? "Mode visuel" : "Mode JSON"}</Button>
+          </div>
+        </div>
+        {jsonMode ? (
+          <div className="space-y-2">
+            <Textarea className="font-mono text-xs min-h-[200px]" value={jsonText} onChange={(e) => setJsonText(e.target.value)} />
+            <Button size="sm" onClick={() => { try { const p = JSON.parse(jsonText); if (!Array.isArray(p)) throw new Error("Tableau attendu"); updateSubs(p); toast.success("Sous-étapes mises à jour"); } catch (e: any) { toast.error("JSON invalide: " + e.message); } }}>Appliquer JSON</Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {subSteps.map((s, i) => (
+              <div key={s.id || i} className="border rounded bg-background">
+                <div className="flex items-center gap-2 p-2 bg-muted/40 border-b">
+                  <Badge variant="outline">{i + 1}</Badge>
+                  <Input value={s.name || ""} onChange={(e) => patchSub(i, { name: e.target.value })} className="h-7 flex-1 max-w-xs text-sm" />
+                  <Select value={s.type} onValueChange={(v) => patchSub(i, { ...defaultStep(v), id: s.id, name: s.name })}>
+                    <SelectTrigger className="h-7 w-44 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{STEP_TYPES.filter((t) => t.value !== "for_each" && t.value !== "loop").map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Switch checked={s.enabled !== false} onCheckedChange={(v) => patchSub(i, { enabled: v })} />
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveSub(i, -1)} disabled={i === 0}>↑</Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => moveSub(i, 1)} disabled={i === subSteps.length - 1}>↓</Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeSub(i)}><Trash2 className="h-3 w-3" /></Button>
+                </div>
+                <div className="p-2">
+                  <Textarea className="font-mono text-xs min-h-[80px]" value={JSON.stringify(s.config || {}, null, 2)} onChange={(e) => { try { patchSub(i, { config: JSON.parse(e.target.value) }); } catch { /* ignore */ } }} />
+                </div>
+              </div>
+            ))}
+            <div className="flex gap-2 flex-wrap">
+              {["http", "find_order", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
+                <Button key={t} variant="outline" size="sm" onClick={() => addSub(t)}><Plus className="h-3 w-3 mr-1" />{STEP_TYPES.find((s) => s.value === t)?.label || t}</Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">À l'intérieur, utilisez <code>{`{{${config.item_var || "item"}.field}}`}</code> et <code>{`{{${config.index_var || "index"}}}`}</code>. Un <b>filter</b> qui échoue saute l'itération courante (les autres continuent).</p>
+    </div>
+  );
+};
   const config = step.config || {};
   const [bodyText, setBodyText] = useState(() => typeof config.body === "string" ? config.body : JSON.stringify(config.body || {}, null, 2));
   const [bodyMode, setBodyMode] = useState<"fields" | "json">(() => (config.body && typeof config.body === "object" && !Array.isArray(config.body)) ? "fields" : "json");
