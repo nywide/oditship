@@ -178,12 +178,22 @@ async function runStep(step: Json, ctx: Json, admin: any): Promise<{ output: any
         } else if (step.type === "log_status") {
           const oid = ctx.order?.id;
           if (oid) {
-            await admin.from("order_status_history").insert({
+            const cfg = step.config || {};
+            const row: Json = {
               order_id: oid,
-              old_status: interpolate(step.config?.old_status, ctx) ?? ctx.order?.status,
-              new_status: interpolate(step.config?.new_status, ctx),
-              notes: interpolate(step.config?.note, ctx),
-            });
+              old_status: interpolate(cfg.old_status, ctx) ?? ctx.order?.status,
+              new_status: interpolate(cfg.new_status, ctx),
+              notes: interpolate(cfg.note ?? cfg.history_message, ctx),
+            };
+            const actor = interpolate(cfg.actor_label ?? cfg.history_actor, ctx);
+            if (actor) row.actor_label = String(actor);
+            const provNote = interpolate(cfg.provider_note, ctx);
+            if (provNote) row.provider_note = String(provNote);
+            const repDate = interpolate(cfg.reported_date, ctx);
+            if (repDate) row.reported_date = repDate;
+            const schDate = interpolate(cfg.scheduled_date, ctx);
+            if (schDate) row.scheduled_date = schDate;
+            await admin.from("order_status_history").insert(row);
           }
           output = { logged: true };
         } else if (step.type === "find_order") {
