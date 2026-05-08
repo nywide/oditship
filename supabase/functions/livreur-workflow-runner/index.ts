@@ -372,6 +372,7 @@ async function runStep(step: Json, ctx: Json, admin: any): Promise<{ output: any
     if (lastErr) throw lastErr;
     log.status = "success";
     log.output = output;
+    if (payload !== undefined) log.payload = payload;
     if (exchanges.length) log.exchanges = exchanges;
     // Save output to context under step.id
     if (step.id) ctx.steps = { ...(ctx.steps || {}), [step.id]: output };
