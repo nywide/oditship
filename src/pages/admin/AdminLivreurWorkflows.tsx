@@ -1415,6 +1415,68 @@ const FindActiveOrdersEditor = ({ step, onChange }: { step: Json; onChange: (p: 
   );
 };
 
+const SubStepRow = ({ sub, index, total, onPatch, onMove, onRemove }: { sub: Json; index: number; total: number; onPatch: (p: Json) => void; onMove: (d: number) => void; onRemove: () => void }) => {
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [jsonText, setJsonText] = useState(() => JSON.stringify(sub.config || {}, null, 2));
+  const onChange = (p: Json) => onPatch(p);
+  const renderFields = () => {
+    switch (sub.type) {
+      case "http": return <HttpStepEditor step={sub} onChange={onChange} onImportCurl={() => {}} />;
+      case "filter": return <FilterStepEditor step={sub} onChange={onChange} />;
+      case "find_order": return (
+        <div className="grid grid-cols-3 gap-3">
+          <div><Label>Champ</Label><Input value={sub.config?.field || "external_tracking_number"} onChange={(e) => onChange({ config: { ...sub.config, field: e.target.value } })} /></div>
+          <div className="col-span-2"><Label>Valeur</Label><Input value={sub.config?.value || ""} onChange={(e) => onChange({ config: { ...sub.config, value: e.target.value } })} placeholder="{{item.trackingID}}" /></div>
+          <div className="col-span-3 flex items-center gap-2"><Switch checked={sub.config?.optional !== false} onCheckedChange={(v) => onChange({ config: { ...sub.config, optional: v } })} /><Label className="!m-0">Optionnel</Label></div>
+        </div>
+      );
+      case "find_active_orders": return <FindActiveOrdersEditor step={sub} onChange={onChange} />;
+      case "map_value": return (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div><Label>Valeur</Label><Input value={sub.config?.value || ""} onChange={(e) => onChange({ config: { ...sub.config, value: e.target.value } })} placeholder="{{item.status}}" /></div>
+            <div><Label>Variable de sortie</Label><Input value={sub.config?.output_var || ""} onChange={(e) => onChange({ config: { ...sub.config, output_var: e.target.value } })} placeholder="local_status" /></div>
+            <div><Label>Défaut</Label><Input value={sub.config?.default || ""} onChange={(e) => onChange({ config: { ...sub.config, default: e.target.value } })} /></div>
+          </div>
+          <Label>Mapping</Label>
+          <KeyValueEditor value={sub.config?.mapping || {}} onChange={(v) => onChange({ config: { ...sub.config, mapping: v } })} />
+        </div>
+      );
+      case "set_variable": return <KeyValueEditor value={sub.config?.values || {}} onChange={(v) => onChange({ config: { ...sub.config, values: v } })} />;
+      case "update_order": return <KeyValueOrJsonEditor label="Champs à mettre à jour" value={sub.config?.updates || {}} onChange={(v) => onChange({ config: { ...sub.config, updates: v } })} />;
+      case "log_status": return <LogStatusEditor step={sub} onChange={onChange} />;
+      case "validate": return <ValidateRulesEditor step={sub} onChange={onChange} />;
+      case "extract": return <KeyValueEditor value={sub.config?.fields || {}} onChange={(v) => onChange({ config: { ...sub.config, fields: v } })} />;
+      case "delay": return <div><Label>ms</Label><Input type="number" value={sub.config?.ms || 1000} onChange={(e) => onChange({ config: { ...sub.config, ms: Number(e.target.value) } })} /></div>;
+      default: return <div className="text-xs text-muted-foreground">Type non supporté en mode champs — utilisez JSON.</div>;
+    }
+  };
+  return (
+    <div className="border rounded bg-background">
+      <div className="flex items-center gap-2 p-2 bg-muted/40 border-b flex-wrap">
+        <Badge variant="outline">{index + 1}</Badge>
+        <Input value={sub.name || ""} onChange={(e) => onPatch({ name: e.target.value })} className="h-7 flex-1 min-w-[120px] max-w-xs text-sm" />
+        <Select value={sub.type} onValueChange={(v) => onPatch({ ...defaultStep(v), id: sub.id, name: sub.name })}>
+          <SelectTrigger className="h-7 w-44 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{STEP_TYPES.filter((t) => t.value !== "for_each" && t.value !== "loop").map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+        </Select>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} className="h-7 px-2 text-xs" onClick={() => { setJsonText(JSON.stringify(sub.config || {}, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+        <Switch checked={sub.enabled !== false} onCheckedChange={(v) => onPatch({ enabled: v })} />
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onMove(-1)} disabled={index === 0}>↑</Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onMove(1)} disabled={index === total - 1}>↓</Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRemove}><Trash2 className="h-3 w-3" /></Button>
+      </div>
+      <div className="p-2">
+        {mode === "fields" ? renderFields() : (
+          <Textarea className="font-mono text-xs min-h-[100px]" value={jsonText} onChange={(e) => { setJsonText(e.target.value); try { onPatch({ config: JSON.parse(e.target.value) }); } catch {} }} />
+        )}
+      </div>
+    </div>
+  );
+};
 
 const WebhookTriggerInfo = () => {
   const { livreurId } = useParams<{ livreurId: string }>();
