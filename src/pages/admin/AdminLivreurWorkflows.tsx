@@ -52,6 +52,7 @@ const STEP_TYPES = [
   { value: "loop", label: "Loop (N fois)", icon: RefreshCw, desc: "Répéter des étapes N fois" },
   { value: "find_order", label: "Find order (DB)", icon: Layers, desc: "Charger une commande depuis la DB par un champ" },
   { value: "find_active_orders", label: "Find active orders (DB)", icon: Layers, desc: "Lister les commandes locales (pour polling) — à utiliser avec for_each" },
+  { value: "find_last_history", label: "Find last history (chronologie)", icon: Layers, desc: "Charger la dernière ligne d'historique d'une commande pour comparer (anti-doublon)" },
   { value: "map_value", label: "Map value (status mapping)", icon: GitBranch, desc: "Mapper une valeur (ex: DELETED → Annulé)" },
   { value: "extract", label: "Extract fields", icon: Layers, desc: "Extraire des valeurs de la réponse" },
   { value: "set_variable", label: "Set variables", icon: SettingsIcon, desc: "Définir des variables intermédiaires" },
