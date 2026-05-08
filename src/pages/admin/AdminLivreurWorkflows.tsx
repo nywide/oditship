@@ -1221,7 +1221,7 @@ const SubStepsEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) =>
               />
             ))}
             <div className="flex gap-2 flex-wrap">
-              {["http", "find_order", "find_active_orders", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
+              {["http", "find_order", "find_active_orders", "find_last_history", "map_value", "filter", "set_variable", "update_order", "log_status", "delay", "extract", "validate"].map((t) => (
                 <Button key={t} variant="outline" size="sm" onClick={() => addSub(t)}><Plus className="h-3 w-3 mr-1" />{STEP_TYPES.find((s) => s.value === t)?.label || t}</Button>
               ))}
             </div>
