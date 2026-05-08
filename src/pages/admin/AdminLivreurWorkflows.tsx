@@ -1345,28 +1345,80 @@ const KeyValueOrJsonEditor = ({ label, value, onChange }: { label: string; value
 const LogStatusEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
   const [mode, setMode] = useState<"fields" | "json">("fields");
   const [text, setText] = useState(() => JSON.stringify(step.config || {}, null, 2));
+  const cfg = step.config || {};
+  const set = (patch: Json) => onChange({ config: { ...cfg, ...patch } });
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label>Configuration</Label>
         <div className="flex gap-1">
           <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
-          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(step.config || {}, null, 2)); setMode("json"); }}>JSON</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(cfg, null, 2)); setMode("json"); }}>JSON</Button>
         </div>
       </div>
       {mode === "fields" ? (
         <div className="grid grid-cols-2 gap-3">
-          <div><Label>Nouveau statut</Label>
-            <Input value={step.config?.new_status || ""} onChange={(e) => onChange({ config: { ...step.config, new_status: e.target.value } })} placeholder="Pickup ou {{vars.status}}" />
-          </div>
-          <div><Label>Note</Label><Input value={step.config?.note || ""} onChange={(e) => onChange({ config: { ...step.config, note: e.target.value } })} /></div>
+          <div><Label>Nouveau statut</Label><Input value={cfg.new_status || ""} onChange={(e) => set({ new_status: e.target.value })} placeholder="Pickup ou {{vars.local_status}}" /></div>
+          <div><Label>Ancien statut (optionnel)</Label><Input value={cfg.old_status || ""} onChange={(e) => set({ old_status: e.target.value })} placeholder="{{order.status}}" /></div>
+          <div className="col-span-2"><Label>Note (notes)</Label><Input value={cfg.note ?? cfg.history_message ?? ""} onChange={(e) => set({ note: e.target.value })} placeholder="Statut mis à jour vers {{vars.local_status}}" /></div>
+          <div><Label>Acteur (actor_label)</Label><Input value={cfg.actor_label ?? cfg.history_actor ?? ""} onChange={(e) => set({ actor_label: e.target.value })} placeholder="{{steps.detail.history.last.msg}}" /></div>
+          <div><Label>Note provider (provider_note)</Label><Input value={cfg.provider_note || ""} onChange={(e) => set({ provider_note: e.target.value })} placeholder="{{steps.detail.note}}" /></div>
+          <div><Label>Date reportée</Label><Input value={cfg.reported_date || ""} onChange={(e) => set({ reported_date: e.target.value })} placeholder="{{steps.detail.report.reportedDate}}" /></div>
+          <div><Label>Date programmée</Label><Input value={cfg.scheduled_date || ""} onChange={(e) => set({ scheduled_date: e.target.value })} placeholder="{{steps.detail.report.scheduledDate}}" /></div>
         </div>
       ) : (
-        <Textarea className="font-mono text-xs" rows={6} value={text} onChange={(e) => {
+        <Textarea className="font-mono text-xs" rows={8} value={text} onChange={(e) => {
           setText(e.target.value);
           try { onChange({ config: JSON.parse(e.target.value) }); } catch {}
         }} />
       )}
+    </div>
+  );
+};
+
+const FindActiveOrdersEditor = ({ step, onChange }: { step: Json; onChange: (p: Json) => void }) => {
+  const cfg = step.config || {};
+  const [mode, setMode] = useState<"fields" | "json">("fields");
+  const [text, setText] = useState(() => JSON.stringify(cfg, null, 2));
+  const set = (patch: Json) => onChange({ config: { ...cfg, ...patch } });
+  const setList = (k: string, v: string) => set({ [k]: v.split(",").map((s) => s.trim()).filter(Boolean) });
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Configuration find_active_orders</Label>
+        <div className="flex gap-1">
+          <Button type="button" size="sm" variant={mode === "fields" ? "default" : "outline"} onClick={() => setMode("fields")}>Champs</Button>
+          <Button type="button" size="sm" variant={mode === "json" ? "default" : "outline"} onClick={() => { setText(JSON.stringify(cfg, null, 2)); setMode("json"); }}>JSON</Button>
+        </div>
+      </div>
+      {mode === "fields" ? (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2"><Label>Statuts à exclure (séparés par virgule)</Label>
+            <Input value={(cfg.exclude_statuses || []).join(", ")} onChange={(e) => setList("exclude_statuses", e.target.value)} placeholder="Crée, Confirmé, Pickup" />
+          </div>
+          <div className="col-span-2"><Label>Statuts à inclure (vide = tous sauf exclus)</Label>
+            <Input value={(cfg.include_statuses || []).join(", ")} onChange={(e) => setList("include_statuses", e.target.value)} placeholder="(vide)" />
+          </div>
+          <div><Label>Champ tracking</Label><Input value={cfg.tracking_field || "external_tracking_number"} onChange={(e) => set({ tracking_field: e.target.value })} /></div>
+          <div className="flex items-center gap-2 pt-6"><Switch checked={cfg.require_tracking !== false} onCheckedChange={(v) => set({ require_tracking: v })} /><Label className="!m-0">Exiger un tracking non vide</Label></div>
+          <div><Label>Périmètre livreur</Label>
+            <Select value={cfg.livreur_scope || "workflow"} onValueChange={(v) => set({ livreur_scope: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="workflow">Livreur du workflow uniquement</SelectItem>
+                <SelectItem value="all">Toutes (tous livreurs)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Limite max</Label><Input type="number" value={cfg.limit ?? 200} onChange={(e) => set({ limit: Number(e.target.value) })} /></div>
+        </div>
+      ) : (
+        <Textarea className="font-mono text-xs" rows={10} value={text} onChange={(e) => {
+          setText(e.target.value);
+          try { onChange({ config: JSON.parse(e.target.value) }); } catch {}
+        }} />
+      )}
+      <p className="text-xs text-muted-foreground">Renvoie un tableau de commandes. Utilisez <code>{`{{steps.<id>}}`}</code> dans <b>For Each</b>. Chaque <code>item</code> = ligne <code>orders</code> (ex: <code>{`{{item.id}}`}</code>, <code>{`{{item.external_tracking_number}}`}</code>).</p>
     </div>
   );
 };
