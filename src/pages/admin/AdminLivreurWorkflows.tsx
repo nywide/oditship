@@ -51,6 +51,7 @@ const STEP_TYPES = [
   { value: "for_each", label: "For Each (loop array)", icon: RefreshCw, desc: "Itérer sur un tableau (ex: liste de packages)" },
   { value: "loop", label: "Loop (N fois)", icon: RefreshCw, desc: "Répéter des étapes N fois" },
   { value: "find_order", label: "Find order (DB)", icon: Layers, desc: "Charger une commande depuis la DB par un champ" },
+  { value: "find_active_orders", label: "Find active orders (DB)", icon: Layers, desc: "Lister les commandes locales (pour polling) — à utiliser avec for_each" },
   { value: "map_value", label: "Map value (status mapping)", icon: GitBranch, desc: "Mapper une valeur (ex: DELETED → Annulé)" },
   { value: "extract", label: "Extract fields", icon: Layers, desc: "Extraire des valeurs de la réponse" },
   { value: "set_variable", label: "Set variables", icon: SettingsIcon, desc: "Définir des variables intermédiaires" },
@@ -72,11 +73,12 @@ function defaultStep(type: string): Json {
   if (type === "extract") base.config = { fields: { tracking: "steps.<step_id>.trackingID" } };
   if (type === "validate") base.config = { rules: {} };
   if (type === "update_order") base.config = { updates: {} };
-  if (type === "log_status") base.config = { new_status: "Pickup", note: "" };
+  if (type === "log_status") base.config = { new_status: "Pickup", note: "", actor_label: "", provider_note: "" };
   if (type === "filter") base.config = { mode: "all", conditions: [{ left: "{{order.status}}", operator: "eq", right: "Confirmé" }], on_false: "stop" };
   if (type === "for_each") base.config = { items: "{{steps.<list_step_id>}}", item_var: "item", index_var: "index", on_iteration_error: "continue", steps: [] };
   if (type === "loop") base.config = { times: 3, index_var: "i", on_iteration_error: "continue", steps: [] };
   if (type === "find_order") base.config = { field: "external_tracking_number", value: "{{item.trackingID}}", optional: true };
+  if (type === "find_active_orders") base.config = { exclude_statuses: ["Crée", "Confirmé", "Pickup"], include_statuses: [], tracking_field: "external_tracking_number", require_tracking: true, livreur_scope: "workflow", limit: 200 };
   if (type === "map_value") base.config = { value: "{{item.status}}", output_var: "local_status", default: "{{item.status}}", mapping: { DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé", TRANSIT: "En transit", CANCELED: "Annulé", REPORTED: "Reporté", RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé" } };
   return base;
 }
