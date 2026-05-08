@@ -48,6 +48,10 @@ const TRIGGER_TYPES = [
 const STEP_TYPES = [
   { value: "http", label: "HTTP Request", icon: Globe, desc: "Appeler un endpoint REST/JSON" },
   { value: "filter", label: "Filter / IF", icon: GitBranch, desc: "Condition: continuer ou arrêter selon des règles" },
+  { value: "for_each", label: "For Each (loop array)", icon: RefreshCw, desc: "Itérer sur un tableau (ex: liste de packages)" },
+  { value: "loop", label: "Loop (N fois)", icon: RefreshCw, desc: "Répéter des étapes N fois" },
+  { value: "find_order", label: "Find order (DB)", icon: Layers, desc: "Charger une commande depuis la DB par un champ" },
+  { value: "map_value", label: "Map value (status mapping)", icon: GitBranch, desc: "Mapper une valeur (ex: DELETED → Annulé)" },
   { value: "extract", label: "Extract fields", icon: Layers, desc: "Extraire des valeurs de la réponse" },
   { value: "set_variable", label: "Set variables", icon: SettingsIcon, desc: "Définir des variables intermédiaires" },
   { value: "validate", label: "Validate", icon: GitBranch, desc: "Valider les données avant de continuer" },
@@ -70,6 +74,10 @@ function defaultStep(type: string): Json {
   if (type === "update_order") base.config = { updates: {} };
   if (type === "log_status") base.config = { new_status: "Pickup", note: "" };
   if (type === "filter") base.config = { mode: "all", conditions: [{ left: "{{order.status}}", operator: "eq", right: "Confirmé" }], on_false: "stop" };
+  if (type === "for_each") base.config = { items: "{{steps.<list_step_id>}}", item_var: "item", index_var: "index", on_iteration_error: "continue", steps: [] };
+  if (type === "loop") base.config = { times: 3, index_var: "i", on_iteration_error: "continue", steps: [] };
+  if (type === "find_order") base.config = { field: "external_tracking_number", value: "{{item.trackingID}}", optional: true };
+  if (type === "map_value") base.config = { value: "{{item.status}}", output_var: "local_status", default: "{{item.status}}", mapping: { DELETED: "Annulé", ENROUTE: "En route", REFUSED: "Refusé", TRANSIT: "En transit", CANCELED: "Annulé", REPORTED: "Reporté", RETURNED: "Retourné", DELIVERED: "Livré", scheduled: "Programmé" } };
   return base;
 }
 
