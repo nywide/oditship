@@ -1342,50 +1342,9 @@ const RunCard = ({ run }: { run: Json }) => {
           )}
           <div className="space-y-2">
             <div className="font-medium">Étapes ({stepResults.length})</div>
-            {stepResults.map((s: Json, i: number) => {
-              const ex = (s.exchanges && s.exchanges[0]) || s.exchange;
-              return (
-                <details key={i} className="border rounded bg-background">
-                  <summary className="cursor-pointer p-2 flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${s.status === "success" ? "bg-green-500" : s.status === "failed" ? "bg-destructive" : "bg-muted-foreground"}`} />
-                    <span className="font-medium">{i + 1}. {s.name || s.id}</span>
-                    <Badge variant="outline" className="text-[10px]">{s.type}</Badge>
-                    <span className="ml-auto text-muted-foreground">{s.status}</span>
-                  </summary>
-                  <div className="p-2 space-y-2 border-t">
-                    {ex && (
-                      <>
-                        <div><span className="font-semibold">URL endpoint:</span> <code className="break-all">{ex.request?.method} {ex.request?.url}</code></div>
-                        <div><span className="font-semibold">Status réception:</span> <code>{ex.response?.status}</code> · {ex.duration_ms}ms</div>
-                        <details>
-                          <summary className="cursor-pointer">Headers (request / response)</summary>
-                          <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-40">{JSON.stringify({ request: ex.request?.headers, response: ex.response?.headers }, null, 2)}</pre>
-                        </details>
-                        <details>
-                          <summary className="cursor-pointer">Body envoyé (payload request)</summary>
-                          <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-40">{JSON.stringify(ex.request?.body, null, 2)}</pre>
-                        </details>
-                        <details open={s.status === "failed"}>
-                          <summary className="cursor-pointer">Body reçu (réponse)</summary>
-                          <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-60">{JSON.stringify(ex.response?.body, null, 2)}</pre>
-                        </details>
-                      </>
-                    )}
-                    {s.output && !ex && (
-                      <details><summary className="cursor-pointer">Output</summary>
-                        <pre className="bg-muted p-2 rounded mt-1 overflow-auto max-h-40">{JSON.stringify(s.output, null, 2)}</pre>
-                      </details>
-                    )}
-                    {s.error && (
-                      <div className="bg-destructive/10 text-destructive p-2 rounded">
-                        <div className="font-semibold">Erreur étape</div>
-                        <pre className="whitespace-pre-wrap break-all">{s.error}</pre>
-                      </div>
-                    )}
-                  </div>
-                </details>
-              );
-            })}
+            {stepResults.map((s: Json, i: number) => (
+              <StepLogCard key={i} step={s} index={i} />
+            ))}
           </div>
           <details>
             <summary className="cursor-pointer text-muted-foreground">JSON brut</summary>
