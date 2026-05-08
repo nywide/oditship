@@ -866,6 +866,28 @@ const StepCard = ({ step, index, total, onChange, onRemove, onMove, onImportCurl
           {step.type === "filter" && (
             <FilterStepEditor step={step} onChange={onChange} />
           )}
+          {step.type === "find_order" && (
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Champ</Label><Input value={step.config?.field || "external_tracking_number"} onChange={(e) => onChange({ config: { ...step.config, field: e.target.value } })} /></div>
+              <div className="col-span-2"><Label>Valeur (expression)</Label><Input value={step.config?.value || ""} onChange={(e) => onChange({ config: { ...step.config, value: e.target.value } })} placeholder="{{item.trackingID}}" /></div>
+              <div className="col-span-3 flex items-center gap-2"><Switch checked={step.config?.optional !== false} onCheckedChange={(v) => onChange({ config: { ...step.config, optional: v } })} /><Label className="!m-0">Optionnel (ne pas échouer si introuvable)</Label></div>
+              <p className="col-span-3 text-xs text-muted-foreground">Charge la commande dans <code>ctx.order</code>. Utilisable ensuite avec <code>{"{{order.status}}"}</code> ou par <b>update_order</b>.</p>
+            </div>
+          )}
+          {step.type === "map_value" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div><Label>Valeur d'entrée</Label><Input value={step.config?.value || ""} onChange={(e) => onChange({ config: { ...step.config, value: e.target.value } })} placeholder="{{item.status}}" /></div>
+                <div><Label>Variable de sortie</Label><Input value={step.config?.output_var || ""} onChange={(e) => onChange({ config: { ...step.config, output_var: e.target.value } })} placeholder="local_status" /></div>
+                <div><Label>Défaut (si absent)</Label><Input value={step.config?.default || ""} onChange={(e) => onChange({ config: { ...step.config, default: e.target.value } })} placeholder="{{item.status}}" /></div>
+              </div>
+              <Label>Mapping (clé distante → valeur locale)</Label>
+              <KeyValueEditor value={step.config?.mapping || {}} onChange={(v) => onChange({ config: { ...step.config, mapping: v } })} />
+            </div>
+          )}
+          {(step.type === "for_each" || step.type === "loop") && (
+            <SubStepsEditor step={step} onChange={onChange} />
+          )}
           {/* Advanced */}
           <details className="border-t pt-3">
             <summary className="text-sm cursor-pointer text-muted-foreground">Avancé (retry, erreurs, condition)</summary>
