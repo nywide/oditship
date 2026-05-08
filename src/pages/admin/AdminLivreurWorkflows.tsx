@@ -671,61 +671,148 @@ const AdminLivreurWorkflows = () => {
 };
 
 const TutorialContent = () => (
-  <div className="space-y-4 text-sm leading-relaxed">
+  <div className="space-y-5 text-sm leading-relaxed">
     <section>
       <h3 className="font-semibold text-base mb-1">1. Concept général</h3>
-      <p>Un <b>workflow</b> est une suite d'étapes (HTTP, Set variable, Filter, Update order…) déclenchée par un <b>trigger</b> (création de commande, demande de pickup, webhook entrant, polling récurrent, etc.).</p>
+      <p>Un <b>workflow</b> = un trigger (déclencheur) + une suite d'étapes (steps) exécutées dans l'ordre. Chaque étape lit le contexte (<code>order</code>, <code>steps</code>, <code>vars</code>, <code>webhook</code>, <code>item</code>) et y ajoute son résultat sous <code>steps.&lt;step_id&gt;</code>.</p>
+      <p>Le moteur parcourt les triggers actifs du workflow ; lorsque l'événement correspond, il exécute les étapes une à une. Une étape peut <b>arrêter</b> (filter), <b>itérer</b> (for_each), <b>boucler</b> (loop), <b>appeler une API</b> (http), <b>écrire en DB</b> (update_order, log_status), etc.</p>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">2. Authentification API tierce</h3>
-      <ol className="list-decimal pl-5 space-y-1">
-        <li>Stocker les credentials dans les <b>Secrets</b> (ex: <code>OLIVRAISON_API_KEY</code>).</li>
-        <li>Étape HTTP <code>POST /auth/login</code> avec body <code>{`{ "apiKey": "{{$secret.OLIVRAISON_API_KEY}}", "secretKey": "{{$secret.OLIVRAISON_SECRET_KEY}}" }`}</code>.</li>
-        <li>Étape <b>Set variable</b> pour stocker <code>token = {`{{steps.&lt;login_id&gt;.token}}`}</code>.</li>
-        <li>Réutiliser le token dans les headers : <code>Authorization: Bearer {`{{vars.token}}`}</code>.</li>
+      <h3 className="font-semibold text-base mb-1">2. Triggers (déclencheurs)</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li><b>on_order_created / on_pickup_request / order_status_changed / order_updated</b> — événements internes (créés depuis l'app).</li>
+        <li><b>schedule</b> — date fixe (1 fois). <b>recurring</b> — toutes les X minutes/heures/jours.</li>
+        <li><b>webhook</b> — URL <code>/livreur-workflow-runner/webhook/&lt;livreur_id&gt;</code> + Bearer = <code>profiles.api_token</code>. Payload exposé via <code>{`{{webhook.field}}`}</code>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3 className="font-semibold text-base mb-1">3. Variables et expressions</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li><code>{`{{order.field}}`}</code> — la commande chargée (par <b>find_order</b> ou trigger d'événement).</li>
+        <li><code>{`{{steps.<id>.path.to.value}}`}</code> — sortie d'une étape (parsée en JSON si possible).</li>
+        <li><code>{`{{vars.NAME}}`}</code> — variable interne (set_variable / map_value output_var).</li>
+        <li><code>{`{{webhook.field}}`}</code> — corps du webhook entrant.</li>
+        <li><code>{`{{item.field}}`}</code>, <code>{`{{index}}`}</code> — élément courant dans <b>for_each</b> (ou nom personnalisé).</li>
+        <li><code>{`{{$secret.NAME}}`}</code>, <code>{`{{$now}}`}</code>, <code>{`{{$uuid}}`}</code>, <code>{`{{$timestamp}}`}</code>, <code>{`{{$random}}`}</code>.</li>
+      </ul>
+      <p className="text-xs text-muted-foreground">Si l'expression est seule (<code>{`{{vars.token}}`}</code>), le type d'origine est préservé (objet, nombre, tableau). Sinon, interpolation texte.</p>
+    </section>
+
+    <section>
+      <h3 className="font-semibold text-base mb-1">4. Catalogue des étapes</h3>
+      <div className="space-y-2">
+        <div><b>http</b> — Appel REST. Méthode, URL, headers, body (JSON ou raw). Supporte retry + <code>continue_on_error</code>. Réponse parsée en JSON si possible.</div>
+        <div><b>set_variable</b> — Stocke des paires clé/valeur dans <code>vars</code>. Idéal pour mémoriser un token ou un ID.</div>
+        <div><b>find_order</b> — Charge UNE commande locale par champ (par défaut <code>external_tracking_number</code>). Met le résultat dans <code>ctx.order</code>.</div>
+        <div><b>find_active_orders</b> — Liste les commandes locales selon des filtres (<code>exclude_statuses</code>, <code>include_statuses</code>, <code>require_tracking</code>, <code>livreur_scope</code>). Renvoie un <b>tableau</b> à passer à <b>for_each</b>. Chaque <code>item</code> = ligne complète <code>orders</code>.</div>
+        <div><b>map_value</b> — Convertit une valeur via un dictionnaire (ex: <code>DELETED → Annulé</code>). Stocke le résultat dans <code>vars.&lt;output_var&gt;</code>. Si la clé n'existe pas, utilise <code>default</code>.</div>
+        <div><b>filter</b> — Évalue des conditions (eq, neq, gt, contains, exists, regex…). Si <b>faux</b>: <code>stop</code> (arrêt propre), <code>skip_rest</code> (sauter la suite), <code>fail</code> (erreur). Dans un <b>for_each</b>, <code>stop</code> saute uniquement l'itération courante.</div>
+        <div><b>for_each</b> — Itère sur un tableau. Variables exposées : <code>{`{{item}}`}</code> et <code>{`{{index}}`}</code> (renommables). <code>on_iteration_error</code>: continue / stop.</div>
+        <div><b>loop</b> — Répète N fois. Variable d'index : <code>{`{{i}}`}</code>.</div>
+        <div><b>update_order</b> — UPDATE sur <code>orders</code> par <code>ctx.order.id</code>. Définissez les champs à modifier (status, status_note, driver_name, driver_phone, postponed_date, scheduled_date…).</div>
+        <div><b>log_status</b> — INSERT dans <code>order_status_history</code>. Champs : <code>new_status</code>, <code>old_status</code>, <code>note</code>, <code>actor_label</code>, <code>provider_note</code>, <code>reported_date</code>, <code>scheduled_date</code>.</div>
+        <div><b>extract / validate / delay</b> — Extraire des sous-champs, valider (required/regex/min_length), pause (ms).</div>
+      </div>
+    </section>
+
+    <section>
+      <h3 className="font-semibold text-base mb-1">5. Tutoriel complet : créer un workflow JSON pour un nouveau livreur</h3>
+      <ol className="list-decimal pl-5 space-y-2">
+        <li><b>Préparer les credentials</b> — Ajouter dans Secrets : <code>NEWPROVIDER_API_KEY</code>, <code>NEWPROVIDER_SECRET</code>. Ne jamais coder en dur.</li>
+        <li><b>Étudier la doc API</b> du provider :
+          <ul className="list-disc pl-5">
+            <li>endpoint d'auth (POST /login) + format du token retourné</li>
+            <li>endpoint création colis (POST /packages) + champs requis</li>
+            <li>endpoint statut individuel (GET /package/{`{tracking}`}) + format réponse</li>
+            <li>mapping des codes statut distants → statuts ODiT</li>
+          </ul>
+        </li>
+        <li><b>Définir les triggers</b> : <code>on_pickup_request</code> (création) + <code>recurring 5 min</code> (polling) + <code>webhook</code> (push).</li>
+        <li><b>Construire les étapes</b> — soit via l'UI, soit en JSON. Squelette type :
+          <pre className="bg-muted p-2 rounded text-xs overflow-auto mt-1">{`[
+  { "id":"auth","type":"http","config":{
+      "method":"POST","url":"https://api.X.com/login",
+      "body":{ "key":"{{$secret.NEWPROVIDER_API_KEY}}" }
+  }},
+  { "id":"set_token","type":"set_variable","config":{
+      "values":{ "token":"{{steps.auth.token}}" }
+  }},
+  { "id":"find_orders","type":"find_active_orders","config":{
+      "exclude_statuses":["Crée","Confirmé","Pickup"],
+      "tracking_field":"external_tracking_number",
+      "require_tracking":true,"livreur_scope":"workflow","limit":200
+  }},
+  { "id":"loop","type":"for_each","config":{
+      "items":"{{steps.find_orders}}","item_var":"item","index_var":"i",
+      "on_iteration_error":"continue",
+      "steps":[
+        { "id":"detail","type":"http","on_error":"continue","config":{
+            "method":"GET",
+            "url":"https://api.X.com/package/{{item.external_tracking_number}}",
+            "headers":{ "Authorization":"Bearer {{vars.token}}" }
+        }},
+        { "id":"map","type":"map_value","config":{
+            "value":"{{steps.detail.status}}",
+            "output_var":"local_status",
+            "mapping":{ "DELIVERED":"Livré","CANCELED":"Annulé" }
+        }},
+        { "id":"load","type":"find_order","config":{
+            "field":"id","value":"{{item.id}}","optional":true
+        }},
+        { "id":"guard","type":"filter","config":{
+            "mode":"all","on_false":"stop",
+            "conditions":[
+              { "left":"{{order.id}}","operator":"exists" },
+              { "left":"{{vars.local_status}}","right":"{{order.status}}","operator":"neq" }
+            ]
+        }},
+        { "id":"upd","type":"update_order","config":{
+            "updates":{
+              "status":"{{vars.local_status}}",
+              "driver_name":"{{steps.detail.driverName}}",
+              "driver_phone":"{{steps.detail.driverPhone}}"
+            }
+        }},
+        { "id":"log","type":"log_status","config":{
+            "new_status":"{{vars.local_status}}",
+            "old_status":"{{order.status}}",
+            "actor_label":"{{steps.detail.history.last.msg}}",
+            "note":"Polling: {{steps.detail.note}}"
+        }}
+      ]
+  }}
+]`}</pre>
+        </li>
+        <li><b>Tester</b> : bouton <i>Tester</i> → choisir un order_id → vérifier les <code>step_results</code> dans Executions.</li>
+        <li><b>Activer</b> le workflow et surveiller les <code>livreur_workflow_runs</code> pendant 1h.</li>
+        <li><b>Export / Import</b> : bouton Export pour partager le JSON ; Import pour cloner sur un autre livreur (penser à réajuster les secrets et l'URL du provider).</li>
       </ol>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">3. Création d'un colis (trigger : Demande de Pickup)</h3>
-      <pre className="bg-muted p-2 rounded text-xs overflow-auto">{`Trigger: on_pickup_request
-Steps:
-  1. HTTP Login → vars.token
-  2. HTTP POST /packages avec body mappé depuis {{order.*}}
-  3. Update order: external_tracking_number = {{steps.<create_id>.trackingID}}, status = "Pickup"
-  4. Log status: "Envoyé au livreur"`}</pre>
-    </section>
-    <section>
-      <h3 className="font-semibold text-base mb-1">4. Polling de statuts (recurring)</h3>
-      <p>Trigger <b>Récurrent</b> toutes les 5 min → liste packages → pour chaque, <b>find_order</b> par <code>external_tracking_number</code> → mapper status distant → <b>filter</b> "skip si même statut" → <b>update_order</b> + <b>log_status</b>.</p>
-      <p className="text-xs text-muted-foreground mt-1">Le bouton <b>Preset Olivraison</b> en haut crée tout cela automatiquement.</p>
-    </section>
-    <section>
-      <h3 className="font-semibold text-base mb-1">5. Webhook entrant (push depuis le livreur)</h3>
-      <p>Ajouter trigger <b>Webhook entrant</b> → l'URL et le token apparaissent dans la carte. Le payload reçu est exposé via <code>{`{{webhook.field}}`}</code>.</p>
-    </section>
-    <section>
-      <h3 className="font-semibold text-base mb-1">6. Logique métier — règles à respecter</h3>
+      <h3 className="font-semibold text-base mb-1">6. Bonnes pratiques anti-doublons</h3>
       <ul className="list-disc pl-5 space-y-1">
-        <li>Toujours <b>find_order</b> avant update si le déclencheur ne fournit pas l'order_id.</li>
-        <li>Filter "skip si même statut" : <code>{`{{order.status}} != {{vars.local_status}}`}</code>.</li>
-        <li>Filter "order existe" : <code>{`{{order.id}} exists`}</code>.</li>
-        <li>Pour les statuts terminaux (Livré/Annulé/Refusé) : ne pas re-déclencher d'envoi API.</li>
-        <li>Validation des champs obligatoires via étape <b>Validate</b> avant tout appel HTTP.</li>
+        <li>Toujours <b>find_order</b> avant <b>update_order</b> si pas d'order dans le ctx.</li>
+        <li>Ajoutez un <b>filter</b> "skip si statut inchangé" (<code>{`{{vars.local_status}} != {{order.status}}`}</code>).</li>
+        <li>Pour <b>log_status</b>, renseignez <code>actor_label</code> (sinon le trigger DB attribue NULL).</li>
+        <li>Le runner pose un <b>verrou atomique</b> sur les recurring : un seul tick exécute le workflow même si le cron envoie plusieurs ticks simultanés.</li>
       </ul>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">7. Variables disponibles</h3>
-      <ul className="list-disc pl-5">
-        <li><code>{`{{order.id}}`}</code>, <code>{`{{order.customer_phone}}`}</code>, <code>{`{{order.status}}`}</code>…</li>
-        <li><code>{`{{steps.<step_id>.path}}`}</code> — sortie d'une étape précédente</li>
-        <li><code>{`{{vars.NAME}}`}</code> — variables internes / set_variable</li>
-        <li><code>{`{{webhook.*}}`}</code> — payload reçu (trigger webhook)</li>
-        <li><code>{`{{$secret.NAME}}`}</code>, <code>{`{{$now}}`}</code>, <code>{`{{$uuid}}`}</code></li>
-      </ul>
+      <h3 className="font-semibold text-base mb-1">7. Webhook entrant (push depuis le livreur)</h3>
+      <p>URL : <code>{`{SUPABASE_URL}/functions/v1/livreur-workflow-runner/webhook/{livreur_id}`}</code> — header <code>Authorization: Bearer {`{api_token}`}</code>. Le payload est exposé via <code>{`{{webhook.*}}`}</code>.</p>
     </section>
+
     <section>
-      <h3 className="font-semibold text-base mb-1">8. Exporter / importer le workflow</h3>
-      <p>Bouton <b>Export</b> → fichier JSON réutilisable pour un autre livreur via <b>Import</b>.</p>
+      <h3 className="font-semibold text-base mb-1">8. Debug</h3>
+      <ul className="list-disc pl-5 space-y-1">
+        <li><b>Executions</b> : voir <code>step_results</code> (status, output, exchange HTTP, durée).</li>
+        <li>Filtres "filtered" (filter qui a stoppé) vs "failed" (erreur réelle).</li>
+        <li>Logs Edge Function pour les erreurs réseau.</li>
+      </ul>
     </section>
   </div>
 );
