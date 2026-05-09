@@ -111,26 +111,6 @@ const AdminColis = () => {
     </div>;
   };
 
-  if (pagePreset.enabled && pagePreset.appliesTo.admin) {
-    return (
-      <ColisCanvasPage
-        preset={pagePreset}
-        title="Toutes les commandes"
-        orders={filtered as any}
-        loading={loading}
-        vendeurMap={vendeurMap}
-        actions={{
-          selectable: false,
-          isDetailsOpen: (id) => expandedOrderId === id,
-          onToggleDetails: (id) => setExpandedOrderId(expandedOrderId === id ? null : id),
-          onPrintSticker: (o) => printSticker(o as any),
-        }}
-        detailsRenderer={(o) => (
-          <OrderDetailsPanel order={o as any} onOrderSynced={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? { ...order, ...updated } : order))} previewSettings={previewSettings} />
-        )}
-      />
-    );
-  }
 
   return (
     <div className="space-y-4">
