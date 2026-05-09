@@ -44,7 +44,7 @@ export const TopNav = ({ title, nav }: Props) => {
       <header className="sticky top-0 z-40 bg-primary text-primary-foreground border-b border-white/10 shadow-elegant">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 lg:px-6">
           <div className="flex items-center gap-3 shrink-0">
-            <Logo />
+            <Logo variant="light" />
             <span className="hidden md:inline-block h-6 w-px bg-white/20" />
             <span className="hidden md:inline-block text-xs uppercase tracking-wider text-primary-foreground/60">{title}</span>
           </div>

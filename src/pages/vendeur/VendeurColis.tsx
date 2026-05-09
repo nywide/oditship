@@ -293,7 +293,7 @@ const VendeurColis = () => {
 
   return (
     <div className="space-y-4 pb-24 pt-32 xl:pt-20">
-      <div className="fixed inset-x-0 top-14 z-30 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-64 lg:px-6">
+      <div className="sticky top-16 z-30 -mx-4 lg:-mx-6 border-b border-border bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:px-6">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center">
             <h2 className="shrink-0 text-2xl font-bold">Mes commandes</h2>
