@@ -324,7 +324,7 @@ const VendeurColis = () => {
                   <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} aria-label={`Sélectionner ${o.id}`} />
                 </TableCell>
                 <TableCell>
-                  {renderMainCell(o)}
+                  <ColisMainRowCell order={o} />
                 </TableCell>
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
