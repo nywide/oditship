@@ -6,13 +6,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
+import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Printer, Search } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 import { cn } from "@/lib/utils";
-import { COLIS_PREVIEW_SETTING_KEY, colisSectionStyle, defaultColisPreviewSettings, getColisPreviewValue, normalizeColisPreviewSettings, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
-import { getAppSetting } from "@/lib/appSettingsCache";
 
 const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,vendeur_id";
 
