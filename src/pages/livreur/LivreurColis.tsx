@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
+import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Printer } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
@@ -37,7 +38,6 @@ const LivreurColis = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tracking</TableHead>
               <TableHead>Client</TableHead>
               <TableHead>Ville</TableHead>
               <TableHead>Téléphone</TableHead>
@@ -48,14 +48,13 @@ const LivreurColis = () => {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
             ) : orders.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun colis assigné</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun colis assigné</TableCell></TableRow>
             ) : orders.map((o) => (
               <Fragment key={o.id}>
               <TableRow>
-                <TableCell className="font-mono text-xs">{o.external_tracking_number || o.tracking_number || `ODiT-${o.id}`}</TableCell>
-                <TableCell><div className="font-medium">{o.customer_name}</div><div className="text-xs text-muted-foreground">{o.product_name}</div></TableCell>
+                <TableCell><ColisMainRowCell order={o} /></TableCell>
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
                 <TableCell className="font-semibold">{Number(o.order_value).toFixed(2)} MAD</TableCell>
@@ -73,7 +72,7 @@ const LivreurColis = () => {
               </TableRow>
               {expandedOrderId === o.id && (
                 <TableRow>
-                  <TableCell colSpan={7} className="bg-muted/20 p-0">
+                  <TableCell colSpan={6} className="bg-muted/20 p-0">
                     <OrderDetailsPanel order={o} />
                   </TableCell>
                 </TableRow>

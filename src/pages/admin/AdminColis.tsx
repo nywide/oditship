@@ -6,13 +6,12 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
+import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Printer, Search } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 import { cn } from "@/lib/utils";
-import { COLIS_PREVIEW_SETTING_KEY, colisSectionStyle, defaultColisPreviewSettings, getColisPreviewValue, normalizeColisPreviewSettings, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
-import { getAppSetting } from "@/lib/appSettingsCache";
 
 const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,vendeur_id";
 
@@ -48,17 +47,14 @@ const AdminColis = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
-  const [previewSettings, setPreviewSettings] = useState<ColisPreviewSettings>(defaultColisPreviewSettings);
 
   useEffect(() => {
     Promise.all([
       supabase.from("orders").select(ORDERS_COLUMNS).order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, username, full_name").eq("role", "vendeur").order("username"),
-      getAppSetting(COLIS_PREVIEW_SETTING_KEY),
-    ]).then(([o, v, settings]) => {
+    ]).then(([o, v]) => {
       setOrders((o.data ?? []) as Order[]);
       setVendeurs((v.data ?? []) as Vendeur[]);
-      setPreviewSettings(normalizeColisPreviewSettings(settings));
       setLoading(false);
     });
     const channel = supabase.channel("admin-orders-live").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
@@ -99,17 +95,6 @@ const AdminColis = () => {
     }
     return true;
   }), [orders, statusFilter, vendeurFilter, search, dateFrom, dateTo]);
-  const mainPreview = previewSettings.main;
-  const rowData = (o: Order) => ({ ...o, vendeur: vendeurMap[o.vendeur_id] || "", tracking: o.external_tracking_number || o.tracking_number || `ODiT-${o.id}` });
-  const renderMainCell = (o: Order) => {
-    const data = rowData(o);
-    if (mainPreview.useCustomHtml) return <div style={colisSectionStyle(mainPreview, data)} dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(mainPreview.css, data)}</style>${renderColisTemplate(mainPreview.html, data)}`) }} />;
-    return <div className={cn("space-y-1 border", mainPreview.layout === "inline" && "flex flex-wrap items-center", mainPreview.layout === "grid" && "grid grid-cols-2")} style={colisSectionStyle(mainPreview, data)}>
-      <div className="flex flex-wrap items-center gap-2">{sortedVisibleFields(mainPreview, "primary").map((field) => <span key={field.key} className="font-medium">{getColisPreviewValue(data, field.key)}</span>)}</div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">{sortedVisibleFields(mainPreview, "secondary").map((field) => <span key={field.key}>{getColisPreviewValue(data, field.key)}</span>)}</div>
-      <div className="flex flex-wrap items-center gap-1.5">{sortedVisibleFields(mainPreview, "meta").map((field) => { const value = getColisPreviewValue(data, field.key); return value ? <span key={field.key} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{value}</span> : null; })}</div>
-    </div>;
-  };
 
 
   return (
@@ -171,7 +156,7 @@ const AdminColis = () => {
             ) : filtered.map((o) => (
               <Fragment key={o.id}>
               <TableRow>
-                <TableCell>{renderMainCell(o)}</TableCell>
+                <TableCell><ColisMainRowCell order={o} /></TableCell>
                 <TableCell className="text-sm">{vendeurMap[o.vendeur_id] || "—"}</TableCell>
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
@@ -191,7 +176,7 @@ const AdminColis = () => {
               {expandedOrderId === o.id && (
                 <TableRow>
                   <TableCell colSpan={7} className="bg-muted/20 p-0">
-                    <OrderDetailsPanel order={o} onOrderSynced={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? { ...order, ...updated } : order))} previewSettings={previewSettings} />
+                    <OrderDetailsPanel order={o} onOrderSynced={(updated) => setOrders((current) => current.map((order) => order.id === updated.id ? { ...order, ...updated } : order))} />
                   </TableCell>
                 </TableRow>
               )}

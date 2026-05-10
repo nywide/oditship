@@ -11,12 +11,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { OrderFormDialog, OrderFormValues } from "@/components/dashboard/OrderFormDialog";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
+import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { printSticker, printStickers } from "@/lib/printSticker";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Pencil, Trash2, Printer, Plus, Search, CheckCircle2, PackageCheck, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { COLIS_PREVIEW_SETTING_KEY, colisSectionStyle, defaultColisPreviewSettings, getColisPreviewValue, normalizeColisPreviewSettings, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
-import { getAppSetting } from "@/lib/appSettingsCache";
 
 const ORDERS_COLUMNS = "id,vendeur_id,agent_id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at";
 import {
@@ -64,7 +63,6 @@ const VendeurColis = () => {
   const [agents, setAgents] = useState<{ id: string; full_name: string | null; username: string }[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
-  const [previewSettings, setPreviewSettings] = useState<ColisPreviewSettings>(defaultColisPreviewSettings);
 
   const [confirming, setConfirming] = useState(false);
   const [pickingUp, setPickingUp] = useState(false);
@@ -93,7 +91,6 @@ const VendeurColis = () => {
     if (user) {
       supabase.from("profiles").select("id, full_name, username").eq("agent_of", user.id)
         .then(({ data }) => setAgents(data ?? []));
-      getAppSetting(COLIS_PREVIEW_SETTING_KEY).then((v) => setPreviewSettings(normalizeColisPreviewSettings(v)));
     }
     const channel = supabase.channel("vendeur-orders-live").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
       setOrders((current) => {
@@ -105,17 +102,6 @@ const VendeurColis = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user, isAgent, colisScope]);
 
-  const rowData = (o: Order) => ({ ...o, tracking: o.external_tracking_number || o.tracking_number || `ODiT-${o.id}` });
-  const renderMainCell = (o: Order) => {
-    const section = previewSettings.main;
-    const data = rowData(o);
-    if (section.useCustomHtml) return <div style={colisSectionStyle(section, data)} dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(section.css, data)}</style>${renderColisTemplate(section.html, data)}`) }} />;
-    return <div className={cn("space-y-1 border", section.layout === "inline" && "flex flex-wrap items-center", section.layout === "grid" && "grid grid-cols-2")} style={colisSectionStyle(section, data)}>
-      <div className="flex flex-wrap items-center gap-2">{sortedVisibleFields(section, "primary").map((field) => <span key={field.key} className="font-medium">{getColisPreviewValue(data, field.key)}</span>)}</div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">{sortedVisibleFields(section, "secondary").map((field) => <span key={field.key}>{getColisPreviewValue(data, field.key)}</span>)}</div>
-      <div className="flex flex-wrap items-center gap-1.5">{sortedVisibleFields(section, "meta").map((field) => { const value = getColisPreviewValue(data, field.key); return value ? <span key={field.key} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{value}</span> : null; })}</div>
-    </div>;
-  };
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
@@ -338,7 +324,7 @@ const VendeurColis = () => {
                   <Checkbox checked={selected.has(o.id)} onCheckedChange={() => toggleOne(o.id)} aria-label={`Sélectionner ${o.id}`} />
                 </TableCell>
                 <TableCell>
-                  {renderMainCell(o)}
+                  <ColisMainRowCell order={o} />
                 </TableCell>
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
@@ -372,7 +358,7 @@ const VendeurColis = () => {
               {expandedOrderId === o.id && (
                 <TableRow key={`${o.id}-details`}>
                   <TableCell colSpan={7} className="bg-muted/20 p-0">
-                    <OrderDetailsPanel order={o} onOrderSynced={syncOrderInList} previewSettings={previewSettings} />
+                    <OrderDetailsPanel order={o} onOrderSynced={syncOrderInList} />
                   </TableCell>
                 </TableRow>
               )}
