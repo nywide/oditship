@@ -51,7 +51,7 @@ const LivreurColis = () => {
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
             ) : orders.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun colis assigné</TableCell></TableRow>
-            ) : orders.map((o) => (
+            ) : [...orders].sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()).map((o) => (
               <Fragment key={o.id}>
               <TableRow>
                 <TableCell><ColisMainRowCell order={o} /></TableCell>
