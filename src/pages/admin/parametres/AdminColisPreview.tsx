@@ -103,6 +103,7 @@ const AdminColisPreview = () => {
   const surface = settings[active];
   const sampleData = useMemo(() => {
     if (active === "mainRow") return buildMainRowData(canvasSampleOrder);
+    if (active === "timeline") return buildTimelineData(canvasSampleTimeline);
     return buildDetailsData(canvasSampleOrder, {
       qr_image_src: qrSrc,
       livreur_name: "Smailerrachidia25 — Samil",
