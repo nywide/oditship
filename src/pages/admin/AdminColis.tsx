@@ -47,17 +47,14 @@ const AdminColis = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
-  const [previewSettings, setPreviewSettings] = useState<ColisPreviewSettings>(defaultColisPreviewSettings);
 
   useEffect(() => {
     Promise.all([
       supabase.from("orders").select(ORDERS_COLUMNS).order("created_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, username, full_name").eq("role", "vendeur").order("username"),
-      getAppSetting(COLIS_PREVIEW_SETTING_KEY),
-    ]).then(([o, v, settings]) => {
+    ]).then(([o, v]) => {
       setOrders((o.data ?? []) as Order[]);
       setVendeurs((v.data ?? []) as Vendeur[]);
-      setPreviewSettings(normalizeColisPreviewSettings(settings));
       setLoading(false);
     });
     const channel = supabase.channel("admin-orders-live").on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
