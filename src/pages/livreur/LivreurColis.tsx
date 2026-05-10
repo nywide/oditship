@@ -54,8 +54,7 @@ const LivreurColis = () => {
             ) : orders.map((o) => (
               <Fragment key={o.id}>
               <TableRow>
-                <TableCell className="font-mono text-xs">{o.external_tracking_number || o.tracking_number || `ODiT-${o.id}`}</TableCell>
-                <TableCell><div className="font-medium">{o.customer_name}</div><div className="text-xs text-muted-foreground">{o.product_name}</div></TableCell>
+                <TableCell><ColisMainRowCell order={o} /></TableCell>
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
                 <TableCell className="font-semibold">{Number(o.order_value).toFixed(2)} MAD</TableCell>
