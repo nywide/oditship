@@ -102,17 +102,6 @@ const VendeurColis = () => {
     return () => { supabase.removeChannel(channel); };
   }, [user, isAgent, colisScope]);
 
-  const rowData = (o: Order) => ({ ...o, tracking: o.external_tracking_number || o.tracking_number || `ODiT-${o.id}` });
-  const renderMainCell = (o: Order) => {
-    const section = previewSettings.main;
-    const data = rowData(o);
-    if (section.useCustomHtml) return <div style={colisSectionStyle(section, data)} dangerouslySetInnerHTML={{ __html: sanitizeColisHtml(`<style>${renderColisTemplate(section.css, data)}</style>${renderColisTemplate(section.html, data)}`) }} />;
-    return <div className={cn("space-y-1 border", section.layout === "inline" && "flex flex-wrap items-center", section.layout === "grid" && "grid grid-cols-2")} style={colisSectionStyle(section, data)}>
-      <div className="flex flex-wrap items-center gap-2">{sortedVisibleFields(section, "primary").map((field) => <span key={field.key} className="font-medium">{getColisPreviewValue(data, field.key)}</span>)}</div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">{sortedVisibleFields(section, "secondary").map((field) => <span key={field.key}>{getColisPreviewValue(data, field.key)}</span>)}</div>
-      <div className="flex flex-wrap items-center gap-1.5">{sortedVisibleFields(section, "meta").map((field) => { const value = getColisPreviewValue(data, field.key); return value ? <span key={field.key} className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">{value}</span> : null; })}</div>
-    </div>;
-  };
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
