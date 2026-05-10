@@ -48,9 +48,9 @@ const LivreurColis = () => {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Chargement...</TableCell></TableRow>
             ) : orders.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun colis assigné</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucun colis assigné</TableCell></TableRow>
             ) : orders.map((o) => (
               <Fragment key={o.id}>
               <TableRow>
@@ -72,7 +72,7 @@ const LivreurColis = () => {
               </TableRow>
               {expandedOrderId === o.id && (
                 <TableRow>
-                  <TableCell colSpan={7} className="bg-muted/20 p-0">
+                  <TableCell colSpan={6} className="bg-muted/20 p-0">
                     <OrderDetailsPanel order={o} />
                   </TableCell>
                 </TableRow>
