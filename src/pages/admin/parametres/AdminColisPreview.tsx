@@ -39,11 +39,13 @@ const db = supabase as any;
 const surfaces: { key: ColisCanvasSurface; label: string; description: string }[] = [
   { key: "mainRow", label: "Ligne (liste)", description: "Cellule client dans la liste des commandes." },
   { key: "details", label: "Open details (gauche)", description: "Carte gauche du panneau de détails ouverts." },
+  { key: "timeline", label: "Chronologie (droite)", description: "Carte droite : chronologie d'activité. Utilisez {{#each items}}…{{/each}} pour boucler sur les évènements." },
 ];
 
 const variableHints: Record<ColisCanvasSurface, string[]> = {
-  mainRow: ["customer_name", "customer_phone", "customer_city", "product_name", "tracking", "status", "order_value_formatted", "customer_initials"],
-  details: ["customer_name", "customer_phone", "customer_address", "customer_city", "product_name", "tracking", "status", "order_value_formatted", "created_at_formatted", "comment", "status_note", "qr_image_src", "livreur_name", "livreur_name_or_label", "livreur_phone", "livreur_href", "livreur_class", "support_name", "support_phone", "support_href", "support_class"],
+  mainRow: ["customer_name", "customer_phone", "customer_city", "product_name", "tracking", "status", "order_value_formatted", "customer_initials", "updated_at_formatted", "created_at_formatted"],
+  details: ["customer_name", "customer_phone", "customer_address", "customer_city", "product_name", "tracking", "status", "order_value_formatted", "created_at_formatted", "updated_at_formatted", "comment", "status_note", "qr_image_src", "livreur_name", "livreur_name_or_label", "livreur_phone", "livreur_href", "livreur_class", "support_name", "support_phone", "support_href", "support_class"],
+  timeline: ["items_count", "(dans #each items) status", "status_label", "message", "note", "actor", "date", "color", "icon"],
 };
 
 /** Live preview that scopes CSS to a unique class (mirrors runtime behavior). */
