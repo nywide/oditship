@@ -1,13 +1,12 @@
 /**
  * Canvas templates for orders display.
- * Two editable HTML/CSS surfaces:
+ * Three editable HTML/CSS surfaces:
  *   - mainRow: the order row "client" cell rendered in lists.
  *   - details: the LEFT card of the open-details panel.
- *
- * The activity timeline stays as a React component (right card).
+ *   - timeline: the RIGHT card (activity timeline) of the open-details panel.
  */
 
-export type ColisCanvasSurface = "mainRow" | "details";
+export type ColisCanvasSurface = "mainRow" | "details" | "timeline";
 
 export interface ColisCanvasTemplate {
   html: string;
@@ -35,6 +34,9 @@ export const defaultMainRowTemplate: ColisCanvasTemplate = {
       <span class="chip">📍 {{customer_city}}</span>
       <span class="chip mono">{{tracking}}</span>
     </div>
+    <div class="line3">
+      <span class="muted">🕒 MAJ : {{updated_at_formatted}}</span>
+    </div>
   </div>
 </div>`.trim(),
   css: `
@@ -48,6 +50,8 @@ export const defaultMainRowTemplate: ColisCanvasTemplate = {
 .line2{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-size:11px;font-weight:500}
 .chip.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:hsl(var(--accent))/.10;color:hsl(var(--accent));font-weight:600}
+.line3{font-size:10.5px;color:hsl(var(--muted-foreground))}
+.muted{opacity:.85}
 `.trim(),
 };
 
@@ -157,9 +161,55 @@ export const defaultDetailsTemplate: ColisCanvasTemplate = {
 `.trim(),
 };
 
+export const defaultTimelineTemplate: ColisCanvasTemplate = {
+  html: `
+<div class="tl-card">
+  <header class="tl-head">
+    <h3>Chronologie d'activité</h3>
+    <span class="tl-count">{{items_count}} évènements</span>
+  </header>
+  <div class="tl-rail">
+    {{#each items}}
+    <article class="tl-item">
+      <div class="tl-bullet" style="background:{{color}}">
+        <span>{{icon}}</span>
+      </div>
+      <div class="tl-body">
+        <div class="tl-row">
+          <span class="tl-status" style="background:{{color}}1a;color:{{color}};border-color:{{color}}33">{{status_label}}</span>
+          <span class="tl-date">{{date}}</span>
+        </div>
+        <p class="tl-msg">{{message}}</p>
+        {{#if note}}<p class="tl-note">{{note}}</p>{{/if}}
+        <p class="tl-actor">👤 {{actor}}</p>
+      </div>
+    </article>
+    {{/each}}
+  </div>
+</div>`.trim(),
+  css: `
+.tl-card{display:flex;flex-direction:column;gap:14px;padding:20px;border-radius:16px;background:hsl(var(--card));border:1px solid hsl(var(--border))}
+.tl-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tl-head h3{margin:0;font-size:16px;font-weight:800;color:hsl(var(--foreground))}
+.tl-count{font-size:11px;font-weight:600;color:hsl(var(--muted-foreground));padding:3px 10px;border-radius:999px;background:hsl(var(--muted))}
+.tl-rail{position:relative;display:flex;flex-direction:column;gap:14px;padding-left:22px}
+.tl-rail::before{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,hsl(var(--border)),transparent)}
+.tl-item{position:relative}
+.tl-bullet{position:absolute;left:-22px;top:0;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;box-shadow:0 0 0 3px hsl(var(--card))}
+.tl-body{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid hsl(var(--border));border-radius:12px;background:linear-gradient(180deg,hsl(var(--muted))/.25,transparent)}
+.tl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tl-status{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:999px;border:1px solid}
+.tl-date{font-size:11px;color:hsl(var(--muted-foreground));font-variant-numeric:tabular-nums}
+.tl-msg{margin:0;font-size:13px;font-weight:600;color:hsl(var(--foreground))}
+.tl-note{margin:0;padding:6px 10px;border-radius:8px;background:hsl(var(--muted));font-size:12px;color:hsl(var(--muted-foreground))}
+.tl-actor{margin:2px 0 0;font-size:11px;color:hsl(var(--muted-foreground))}
+`.trim(),
+};
+
 export const defaultColisCanvasSettings: ColisCanvasSettings = {
   mainRow: defaultMainRowTemplate,
   details: defaultDetailsTemplate,
+  timeline: defaultTimelineTemplate,
 };
 
 export const normalizeColisCanvasSettings = (value: unknown): ColisCanvasSettings => {
@@ -172,6 +222,10 @@ export const normalizeColisCanvasSettings = (value: unknown): ColisCanvasSetting
     details: {
       html: typeof v.details?.html === "string" ? v.details!.html : defaultDetailsTemplate.html,
       css: typeof v.details?.css === "string" ? v.details!.css : defaultDetailsTemplate.css,
+    },
+    timeline: {
+      html: typeof v.timeline?.html === "string" ? v.timeline!.html : defaultTimelineTemplate.html,
+      css: typeof v.timeline?.css === "string" ? v.timeline!.css : defaultTimelineTemplate.css,
     },
   };
 };
@@ -196,6 +250,19 @@ export const initials = (name?: string | null) =>
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("") || "?";
 
+/** Replace `{{#each KEY}}...{{/each}}` blocks by iterating data[KEY] (array of objects). */
+const applyEach = (template: string, data: Record<string, unknown>) =>
+  template.replace(
+    /{{#each\s+([a-zA-Z0-9_]+)\s*}}([\s\S]*?){{\/each\s*}}/g,
+    (_m, key: string, body: string) => {
+      const arr = data[key];
+      if (!Array.isArray(arr)) return "";
+      return arr
+        .map((item) => renderCanvasTemplate(body, (item ?? {}) as Record<string, unknown>))
+        .join("");
+    }
+  );
+
 /** Replace `{{#if key}}...{{/if}}` blocks based on truthiness of `data[key]`. */
 const applyConditionals = (template: string, data: Record<string, unknown>) =>
   template.replace(
@@ -208,8 +275,9 @@ const applyConditionals = (template: string, data: Record<string, unknown>) =>
   );
 
 /** Replace `{{key}}` placeholders. Unknown keys → empty string. */
-export const renderCanvasTemplate = (template: string, data: Record<string, unknown>) => {
-  const conditioned = applyConditionals(template, data);
+export const renderCanvasTemplate = (template: string, data: Record<string, unknown>): string => {
+  const eached = applyEach(template, data);
+  const conditioned = applyConditionals(eached, data);
   return conditioned.replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_match, key: string) => {
     const value = data[key];
     if (value === undefined || value === null) return "";
@@ -230,15 +298,20 @@ export interface MainRowSource {
   tracking_number?: string | null;
   external_tracking_number?: string | null;
   id: number | string;
+  updated_at?: string | null;
+  created_at?: string | null;
 }
 
 export const buildMainRowData = (o: MainRowSource): Record<string, unknown> => {
   const tracking = o.external_tracking_number || o.tracking_number || `ODiT-${o.id}`;
+  const updated = o.updated_at || o.created_at || null;
   return {
     ...o,
     tracking,
     customer_initials: initials(o.customer_name),
     order_value_formatted: `${Number(o.order_value).toFixed(2)} MAD`,
+    updated_at_formatted: formatDateFr(updated),
+    created_at_formatted: formatDateFr(o.created_at),
   };
 };
 
@@ -270,6 +343,7 @@ export const buildDetailsData = (o: DetailsSource, ctx: DetailsContext): Record<
     customer_initials: initials(o.customer_name),
     order_value_formatted: `${Number(o.order_value).toFixed(2)} MAD`,
     created_at_formatted: formatDateFr(o.created_at),
+    updated_at_formatted: formatDateFr(o.updated_at || o.created_at),
     qr_image_src: ctx.qr_image_src,
     livreur_name: livreurName,
     livreur_phone: livreurPhone,
@@ -282,6 +356,27 @@ export const buildDetailsData = (o: DetailsSource, ctx: DetailsContext): Record<
     support_href: supportPhone ? `tel:${supportPhone}` : "#",
   };
 };
+
+/* ---------- Timeline ---------- */
+
+export interface TimelineItemSource {
+  status: string;
+  status_label: string;
+  message: string;
+  note?: string | null;
+  actor: string;
+  changed_at: string;
+  color: string;
+  icon: string;
+}
+
+export const buildTimelineData = (items: TimelineItemSource[]): Record<string, unknown> => ({
+  items: items.map((it) => ({
+    ...it,
+    date: formatDateFr(it.changed_at),
+  })),
+  items_count: items.length,
+});
 
 /* ---------- Sample data for admin live preview ---------- */
 
@@ -298,5 +393,37 @@ export const canvasSampleOrder: DetailsSource = {
   external_tracking_number: "KM706ACCB52680",
   comment: "Fragile, livrer après 18h",
   status_note: null,
-  created_at: new Date().toISOString(),
+  created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+  updated_at: new Date(Date.now() - 3600000).toISOString(),
 };
+
+export const canvasSampleTimeline: TimelineItemSource[] = [
+  {
+    status: "Livré",
+    status_label: "Livré",
+    message: "Colis livré au client",
+    note: "Signature reçue",
+    actor: "Samil — Livreur",
+    changed_at: new Date(Date.now() - 3600000).toISOString(),
+    color: "#10b981",
+    icon: "✓",
+  },
+  {
+    status: "transit",
+    status_label: "En transit",
+    message: "Pris en charge par le livreur",
+    actor: "Hub Casablanca",
+    changed_at: new Date(Date.now() - 86400000).toISOString(),
+    color: "#3b82f6",
+    icon: "🚚",
+  },
+  {
+    status: "Crée",
+    status_label: "Créée",
+    message: "Commande créée",
+    actor: "Système",
+    changed_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    color: "#6366f1",
+    icon: "+",
+  },
+];
