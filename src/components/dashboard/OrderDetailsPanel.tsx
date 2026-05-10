@@ -215,28 +215,57 @@ export const OrderDetailsPanel = ({
           </div>
         </div>
 
-        <div className={cn("space-y-3 rounded-lg border border-border", previewSettings.actions.buttonPlacement === "hidden" && "hidden")} style={colisSectionStyle(previewSettings.actions, previewData)}>
-          <h4 className="text-base font-bold">Actions:</h4>
-          <div className={cn("flex items-center justify-between gap-3 rounded-lg border border-border p-3", previewSettings.actions.buttonPlacement === "left" && "flex-row-reverse", previewSettings.actions.buttonPlacement === "bottom" && "flex-col items-start")}>
-            <div className="flex items-center gap-3">
-              <Download className="h-5 w-5 text-muted-foreground" />
-              <div>{renderConfiguredSection(previewSettings.invoice, previewData)}</div>
+        <div className={cn("space-y-3 rounded-lg border border-border p-4", previewSettings.actions.buttonPlacement === "hidden" && "hidden")} style={colisSectionStyle(previewSettings.actions, previewData)}>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Actions</h4>
+
+          {/* Invoice row */}
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Download className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">Facture client</p>
+                <p className="text-xs text-muted-foreground truncate">Disponible après la fin du trajet</p>
+              </div>
             </div>
-            <Button size="sm" variant="outline" disabled>Télécharger</Button>
+            <Button size="sm" variant="outline" disabled className="shrink-0">Télécharger</Button>
           </div>
-          <div className={cn("flex items-center justify-between gap-3 rounded-lg border border-border p-3", previewSettings.actions.buttonPlacement === "left" && "flex-row-reverse", previewSettings.actions.buttonPlacement === "bottom" && "flex-col items-start")}>
-            <div className="flex items-center gap-3">
-              <Bike className="h-5 w-5 text-foreground" />
-              <div>{renderConfiguredSection(previewSettings.courier, { ...previewData, courier_name: data?.livreur?.name || livreurText })}</div>
+
+          {/* Courier row */}
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+                <Bike className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{hasLivreur ? data?.livreur?.name : livreurText}</p>
+                <p className="text-xs text-muted-foreground">Livreur assigné</p>
+              </div>
             </div>
-            <span className="font-mono text-sm">{hasLivreur ? data?.livreur?.phone || "—" : "—"}</span>
+            {hasLivreur && data?.livreur?.phone && (
+              <a href={`tel:${data.livreur.phone}`} className="shrink-0 font-mono text-sm font-semibold text-primary hover:underline">
+                {data.livreur.phone}
+              </a>
+            )}
           </div>
-          <div className={cn("flex items-center justify-between gap-3 rounded-lg border border-border p-3", previewSettings.actions.buttonPlacement === "left" && "flex-row-reverse", previewSettings.actions.buttonPlacement === "bottom" && "flex-col items-start")}>
-            <div className="flex items-center gap-3">
-              <Headphones className="h-5 w-5 text-foreground" />
-              <div>{renderConfiguredSection(previewSettings.support, previewData)}</div>
+
+          {/* Support row */}
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
+                <Headphones className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold truncate">{data?.support?.name || "Support ODiT"}</p>
+                <p className="text-xs text-muted-foreground">Assistance</p>
+              </div>
             </div>
-            <span className="font-mono text-sm">{data?.support?.phone || "—"}</span>
+            {data?.support?.phone && (
+              <a href={`tel:${data.support.phone}`} className="shrink-0 font-mono text-sm font-semibold text-primary hover:underline">
+                {data.support.phone}
+              </a>
+            )}
           </div>
         </div>
       </Card>
