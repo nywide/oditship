@@ -13,7 +13,7 @@ import { ChevronDown, Printer, Search } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 import { cn } from "@/lib/utils";
 
-const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,vendeur_id";
+const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,updated_at,vendeur_id";
 
 interface Order {
   id: number;
