@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
-import { StatusBadge } from "@/components/StatusBadge";
-import { statusLabel } from "@/lib/orderStatus";
 import { cn } from "@/lib/utils";
-import { Truck, UserRound } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import {
   buildDetailsData,
+  buildTimelineData,
   renderCanvasTemplate,
   sanitizeCanvasHtml,
   type ColisCanvasTemplate,
+  type TimelineItemSource,
 } from "@/lib/colisCanvas";
 import { useCanvasSurface } from "@/lib/useColisCanvas";
+import { statusColor, statusLabel } from "@/lib/orderStatus";
 
 interface OrderSummary {
   id: number;
@@ -31,6 +30,7 @@ interface OrderSummary {
   postponed_date?: string | null;
   scheduled_date?: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
 
 interface HistoryItem {
@@ -55,11 +55,6 @@ interface DetailsData {
   history: HistoryItem[];
   package_error?: string | null;
 }
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-};
 
 const cleanActor = (value?: string | null) => (value?.includes("@") ? value.split("@")[0] : value);
 const actorName = (item: HistoryItem) => {
@@ -91,6 +86,17 @@ const historyKey = (item: HistoryItem) =>
     item.actor?.username ?? item.actor?.full_name ?? "",
   ].join("|");
 
+const iconForStatus = (s: string) => {
+  const k = s.toLowerCase();
+  if (k.includes("livr")) return "✓";
+  if (k.includes("transit") || k.includes("route") || k.includes("ramass")) return "🚚";
+  if (k.includes("pickup")) return "📦";
+  if (k.includes("refus") || k.includes("annul")) return "✕";
+  if (k.includes("report") || k.includes("program")) return "⏰";
+  if (k.includes("confirm")) return "✓";
+  return "•";
+};
+
 /**
  * Render a canvas template (HTML + CSS) inside an isolated wrapper so its CSS
  * does not leak globally. We scope by prefixing every selector with the wrapper class.
@@ -108,9 +114,6 @@ const ScopedCanvas = ({
     () => sanitizeCanvasHtml(renderCanvasTemplate(template.html, data)),
     [template.html, data]
   );
-  // Naive scoping: wrap every CSS selector with `.${scopeClass} `. Splits on
-  // top-level commas/braces. Good enough for templates we author or that
-  // admins write (no @media nesting, etc.).
   const css = useMemo(() => {
     const rendered = renderCanvasTemplate(template.css, data);
     return rendered.replace(/(^|\})\s*([^{}@]+)\{/g, (_match, prefix, selectors) => {
@@ -149,6 +152,7 @@ export const OrderDetailsPanel = ({
   const [loading, setLoading] = useState(true);
   const [qrSrc, setQrSrc] = useState("");
   const detailsTemplate = useCanvasSurface("details");
+  const timelineTemplate = useCanvasSurface("timeline");
 
   const displayOrder = data?.order ?? order;
   const tracking =
@@ -184,7 +188,7 @@ export const OrderDetailsPanel = ({
       .catch(() => setQrSrc(""));
   }, [tracking]);
 
-  const history = useMemo(() => {
+  const timelineItems: TimelineItemSource[] = useMemo(() => {
     const seen = new Set<string>();
     const visibleHistory = (data?.history ?? []).filter((item) => {
       if (isInternalConfirmed(item) || isApiCreatedConfirmed(item)) return false;
@@ -193,17 +197,36 @@ export const OrderDetailsPanel = ({
       seen.add(key);
       return true;
     });
-    if (visibleHistory.length) return visibleHistory;
-    return [
-      {
-        source: "odit",
-        status: displayOrder.status,
-        message: "Statut actuel",
-        changed_at: displayOrder.created_at,
-        actor: null,
-      },
-    ] as HistoryItem[];
-  }, [data?.history, displayOrder.status, displayOrder.created_at]);
+    const source = visibleHistory.length
+      ? visibleHistory
+      : ([
+          {
+            source: "odit",
+            status: displayOrder.status,
+            message: "Statut actuel",
+            changed_at: displayOrder.created_at,
+            actor: null,
+          },
+        ] as HistoryItem[]);
+    return source.map((item) => {
+      const actor = actorName(item) === "Système" ? vendeurName(data?.vendeur) : actorName(item);
+      const message = item.message
+        ? item.message
+        : item.old_status == null || item.status === "Crée" || item.status === "Créé"
+        ? "Commande créée"
+        : `Statut mis à jour vers ${statusLabel(item.status)}`;
+      return {
+        status: item.status,
+        status_label: statusLabel(item.status),
+        message,
+        note: item.note ?? "",
+        actor,
+        changed_at: item.changed_at,
+        color: statusColor(item.status).hex,
+        icon: iconForStatus(item.status),
+      };
+    });
+  }, [data?.history, data?.vendeur, displayOrder.status, displayOrder.created_at]);
 
   const detailsData = useMemo(
     () =>
@@ -217,9 +240,10 @@ export const OrderDetailsPanel = ({
     [displayOrder, qrSrc, data?.livreur, data?.support]
   );
 
+  const timelineData = useMemo(() => buildTimelineData(timelineItems), [timelineItems]);
+
   return (
     <div className={cn("grid gap-4 p-4 lg:grid-cols-[1fr_1fr]", className)}>
-      {/* Left card: rendered from the canvas template */}
       <div>
         <ScopedCanvas
           template={detailsTemplate}
@@ -227,62 +251,24 @@ export const OrderDetailsPanel = ({
           scopeClass={`canvas-details-${order.id}`}
         />
       </div>
-
-      {/* Right card: activity timeline (kept React-rendered) */}
-      <Card className="p-5 shadow-card">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <h3 className="text-lg font-bold">Chronologie d'activité</h3>
-        </div>
+      <div>
+        {loading && timelineItems.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground">
+            Chargement de la chronologie…
+          </div>
+        ) : (
+          <ScopedCanvas
+            template={timelineTemplate}
+            data={timelineData}
+            scopeClass={`canvas-timeline-${order.id}`}
+          />
+        )}
         {data?.package_error && (
-          <p className="mb-3 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+          <p className="mt-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
             Tracking externe indisponible
           </p>
         )}
-        <div className="relative space-y-0 pl-7">
-          <div className="absolute left-[15px] top-2 h-[calc(100%-1rem)] w-px bg-border" />
-          {loading && history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Chargement...</p>
-          ) : (
-            history.map((item, index) => {
-              const actor =
-                actorName(item) === "Système" ? vendeurName(data?.vendeur) : actorName(item);
-              const message = item.message
-                ? item.message
-                : item.old_status == null || item.status === "Crée" || item.status === "Créé"
-                ? "Commande créée"
-                : `Statut mis à jour vers ${statusLabel(item.status)}`;
-              return (
-                <div key={`${item.changed_at}-${index}`} className="relative pb-5 last:pb-0">
-                  <div className="absolute -left-7 top-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-card">
-                    <Truck className="h-4 w-4" />
-                  </div>
-                  <div className="ml-4 space-y-1">
-                    <StatusBadge status={item.status} />
-                    <p className="text-sm font-medium">{message}</p>
-                    {item.note && (
-                      <p className="rounded-md bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
-                        {item.note}
-                      </p>
-                    )}
-                    {(item.reported_date || item.scheduled_date) && (
-                      <p className="text-xs text-muted-foreground">
-                        {[item.reported_date, item.scheduled_date]
-                          .filter(Boolean)
-                          .map((d) => formatDate(d))
-                          .join(" · ")}
-                      </p>
-                    )}
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <UserRound className="h-3 w-3" />
-                      {actor} · {formatDate(item.changed_at)}
-                    </p>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </Card>
+      </div>
     </div>
   );
 };
