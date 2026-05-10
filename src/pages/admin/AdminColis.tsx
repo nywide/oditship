@@ -32,6 +32,7 @@ interface Order {
   postponed_date?: string | null;
   scheduled_date?: string | null;
   created_at: string;
+  updated_at?: string | null;
   vendeur_id: string;
 }
 
