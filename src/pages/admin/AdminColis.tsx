@@ -51,7 +51,7 @@ const AdminColis = () => {
 
   useEffect(() => {
     Promise.all([
-      supabase.from("orders").select(ORDERS_COLUMNS).order("created_at", { ascending: false }).limit(1000),
+      supabase.from("orders").select(ORDERS_COLUMNS).order("updated_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, username, full_name").eq("role", "vendeur").order("username"),
     ]).then(([o, v]) => {
       setOrders((o.data ?? []) as Order[]);
