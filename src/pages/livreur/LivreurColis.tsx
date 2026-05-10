@@ -38,7 +38,6 @@ const LivreurColis = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tracking</TableHead>
               <TableHead>Client</TableHead>
               <TableHead>Ville</TableHead>
               <TableHead>Téléphone</TableHead>
