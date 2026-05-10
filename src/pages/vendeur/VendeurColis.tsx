@@ -275,35 +275,32 @@ const VendeurColis = () => {
         </div>
       </div>
 
-      {(profile?.bank_account_name || profile?.bank_account_number) && !isAgent && (
-        <Card className="p-3 bg-secondary/40 text-sm flex flex-wrap gap-x-6 gap-y-1">
-          <div><span className="text-muted-foreground">Compte bancaire :</span> <strong>{profile?.bank_account_name || "—"}</strong></div>
-          <div><span className="text-muted-foreground">N° :</span> <strong className="font-mono">{profile?.bank_account_number || "—"}</strong></div>
-        </Card>
-      )}
-
-      <Card className="p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div className="lg:col-span-2 relative">
+      <Card className="p-3 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+          <div className="md:col-span-4 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input className="pl-9" placeholder="Rechercher (nom, téléphone, ville, tracking)" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger><SelectValue placeholder="Statut" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous statuts</SelectItem>
-              {ORDER_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={agentFilter} onValueChange={setAgentFilter}>
-            <SelectTrigger><SelectValue placeholder="Agent" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous agents</SelectItem>
-              <SelectItem value="__none__" disabled>—</SelectItem>
-              {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name || a.username}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2">
+          <div className="md:col-span-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger><SelectValue placeholder="Statut" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous statuts</SelectItem>
+                {ORDER_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="md:col-span-2">
+            <Select value={agentFilter} onValueChange={setAgentFilter}>
+              <SelectTrigger><SelectValue placeholder="Agent" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous agents</SelectItem>
+                <SelectItem value="__none__" disabled>—</SelectItem>
+                {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name || a.username}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="md:col-span-4 flex gap-2">
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
