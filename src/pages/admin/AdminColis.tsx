@@ -13,7 +13,7 @@ import { ChevronDown, Printer, Search } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 import { cn } from "@/lib/utils";
 
-const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,vendeur_id";
+const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,updated_at,vendeur_id";
 
 interface Order {
   id: number;
@@ -32,6 +32,7 @@ interface Order {
   postponed_date?: string | null;
   scheduled_date?: string | null;
   created_at: string;
+  updated_at?: string | null;
   vendeur_id: string;
 }
 
@@ -50,7 +51,7 @@ const AdminColis = () => {
 
   useEffect(() => {
     Promise.all([
-      supabase.from("orders").select(ORDERS_COLUMNS).order("created_at", { ascending: false }).limit(1000),
+      supabase.from("orders").select(ORDERS_COLUMNS).order("updated_at", { ascending: false }).limit(1000),
       supabase.from("profiles").select("id, username, full_name").eq("role", "vendeur").order("username"),
     ]).then(([o, v]) => {
       setOrders((o.data ?? []) as Order[]);
@@ -94,6 +95,10 @@ const AdminColis = () => {
       ) return false;
     }
     return true;
+  }).sort((a, b) => {
+    const ta = new Date(a.updated_at || a.created_at).getTime();
+    const tb = new Date(b.updated_at || b.created_at).getTime();
+    return tb - ta;
   }), [orders, statusFilter, vendeurFilter, search, dateFrom, dateTo]);
 
 
