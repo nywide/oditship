@@ -11,12 +11,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { OrderFormDialog, OrderFormValues } from "@/components/dashboard/OrderFormDialog";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
+import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { printSticker, printStickers } from "@/lib/printSticker";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Pencil, Trash2, Printer, Plus, Search, CheckCircle2, PackageCheck, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { COLIS_PREVIEW_SETTING_KEY, colisSectionStyle, defaultColisPreviewSettings, getColisPreviewValue, normalizeColisPreviewSettings, renderColisTemplate, sanitizeColisHtml, sortedVisibleFields, type ColisPreviewSettings } from "@/lib/colisPreview";
-import { getAppSetting } from "@/lib/appSettingsCache";
 
 const ORDERS_COLUMNS = "id,vendeur_id,agent_id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at";
 import {
