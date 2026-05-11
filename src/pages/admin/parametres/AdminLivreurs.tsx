@@ -8,8 +8,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, Eye, EyeOff, RefreshCw, Zap } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, RefreshCw, Zap, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import PackManager from "@/components/dashboard/PackManager";
 
 interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
 interface Hub { id: number; name: string; }
