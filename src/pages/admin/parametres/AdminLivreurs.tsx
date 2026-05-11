@@ -31,18 +31,27 @@ const AdminLivreurs = () => {
   const [hubLivreurs, setHubLivreurs] = useState<HubLivreur[]>([]);
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [tarifsTarget, setTarifsTarget] = useState<Livreur | null>(null);
+  const [hubCities, setHubCities] = useState<Array<{ hub_id: number; city_name: string }>>([]);
 
   const load = async () => {
-    const [p, h, hl] = await Promise.all([
+    const [p, h, hl, hc] = await Promise.all([
       db.from("profiles").select("id, username, full_name, api_enabled, api_token").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
+      supabase.from("hub_cities").select("hub_id, city_name"),
     ]);
     setLivreurs((p.data ?? []) as Livreur[]);
     setHubs((h.data ?? []) as Hub[]);
     setHubLivreurs((hl.data ?? []) as HubLivreur[]);
+    setHubCities((hc.data ?? []) as Array<{ hub_id: number; city_name: string }>);
   };
   useEffect(() => { load(); }, []);
+
+  const citiesOfLivreur = (livreurId: string) => {
+    const myHubIds = new Set(hubLivreurs.filter((x) => x.livreur_id === livreurId).map((x) => x.hub_id));
+    return Array.from(new Set(hubCities.filter((x) => myHubIds.has(x.hub_id)).map((x) => x.city_name)));
+  };
 
   const hubsOf = (livreurId: string) => hubLivreurs.filter((x) => x.livreur_id === livreurId).map((x) => x.hub_id);
   const hubAssignedTo = (hubId: number) => hubLivreurs.find((x) => x.hub_id === hubId)?.livreur_id;
