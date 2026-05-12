@@ -45,12 +45,17 @@ export const exportInvoiceCsv = (inv: ExportInvoice, items: ExportItem[]) => {
     i.tracking_number, i.product_name, i.customer_city, i.status_snapshot,
     i.fee_type, Number(i.order_value).toFixed(2), Number(i.fee_amount).toFixed(2),
   ]);
+  const totalCod = items.filter((i) => i.fee_type === "livraison").reduce((a, i) => a + Number(i.order_value || 0), 0);
+  const totalFees = items.reduce((a, i) => a + Number(i.fee_amount || 0), 0);
   const meta = [
     [`Facture #${inv.id}`],
     [`${inv.recipientType === "vendeur" ? "Vendeur" : "Livreur"}`, inv.recipientName],
-    ["Période", `${inv.period_start} → ${inv.period_end}`],
     ["Statut", inv.status],
-    ["Net", Number(inv.net_amount).toFixed(2)],
+    ["Commandes", String(items.length)],
+    ["COD", totalCod.toFixed(2)],
+    ["Tarif", totalFees.toFixed(2)],
+    ["Autre tarif", Number(inv.extra_amount || 0).toFixed(2) + (inv.extra_description ? ` (${inv.extra_description})` : "")],
+    ["Reste", Number(inv.net_amount).toFixed(2)],
     [],
   ];
   const all = [...meta, headers, ...rows];
