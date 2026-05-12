@@ -4,7 +4,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Receipt } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Receipt, FileText, FileSpreadsheet } from "lucide-react";
+import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
+import { useAuth } from "@/contexts/AuthContext";
 
 const db = supabase as any;
 
