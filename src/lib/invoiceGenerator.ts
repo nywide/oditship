@@ -91,7 +91,7 @@ export const generateInvoices = async (opts: GenerateOptions) => {
       const feeType = isDelivered ? "livraison" : isRefused ? "refus" : "annulation";
       return {
         order_id: o.id,
-        tracking_number: o.tracking_number,
+        tracking_number: o.tracking_number || o.external_tracking_number || `ODiT-${o.id}`,
         product_name: o.product_name,
         customer_city: o.customer_city,
         status_snapshot: o.status,
