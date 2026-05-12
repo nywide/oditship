@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Link2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Link2, ShieldCheck, Lock } from "lucide-react";
 import { toast } from "sonner";
 import type { PricingPack, PricingPackLink } from "@/lib/pricingResolver";
 
@@ -24,12 +24,14 @@ interface Props {
   /** Hide delivery-delay field (custom packs only override price, not the global delay). */
   hideDelay?: boolean;
   title?: string;
+  /** "owner" = livreur view (drafts only editable, can submit). "admin" = admin view (can validate/reject). Default "admin". */
+  mode?: "owner" | "admin";
 }
 
 interface City { id: number; name: string; }
 interface PickupCity { id: number; name: string; }
 
-const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimension = true, hideDelay = false, title }: Props) => {
+const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimension = true, hideDelay = false, title, mode = "admin" }: Props) => {
   const [packs, setPacks] = useState<PricingPack[]>([]);
   const [links, setLinks] = useState<PricingPackLink[]>([]);
   const [cities, setCities] = useState<City[]>([]);
@@ -66,7 +68,8 @@ const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimen
 
   const savePack = async () => {
     if (!editPack?.name) return toast.error("Nom requis");
-    const payload = {
+    const isLivreurOwner = scope === "livreur" && mode === "owner";
+    const payload: any = {
       name: editPack.name,
       delivery_fee: Number(editPack.delivery_fee || 0),
       refusal_fee: Number(editPack.refusal_fee || 0),
@@ -75,6 +78,8 @@ const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimen
       scope,
       owner_id: scope === "global" ? null : ownerId,
     };
+    // Livreur-owner-created packs always start (and stay) as draft.
+    if (isLivreurOwner) payload.status = "draft";
     if (editPack.id) {
       const { error } = await db.from("pricing_packs").update(payload).eq("id", editPack.id);
       if (error) return toast.error(error.message);
@@ -82,9 +87,16 @@ const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimen
     } else {
       const { error } = await db.from("pricing_packs").insert(payload);
       if (error) return toast.error(error.message);
-      toast.success("Pack créé");
+      toast.success(isLivreurOwner ? "Pack créé en brouillon — en attente de validation" : "Pack créé");
     }
     setEditPack(null);
+    reload();
+  };
+
+  const validatePack = async (id: number) => {
+    const { error } = await db.from("pricing_packs").update({ status: "active" }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Pack validé");
     reload();
   };
 
@@ -111,19 +123,43 @@ const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimen
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {packs.map((p) => {
             const myLinks = links.filter((l) => l.pack_id === p.id);
+            const status = (p as any).status ?? "active";
+            const isDraft = status === "draft";
+            const isOwnerView = scope === "livreur" && mode === "owner";
+            // Owner livreur view: editable only when draft. Active = read-only.
+            const lockedForOwner = isOwnerView && !isDraft;
             return (
-              <Card key={p.id} className="p-3 space-y-2">
+              <Card key={p.id} className={`p-3 space-y-2 ${isDraft ? "border-amber-400/60 bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="font-medium">{p.name}</div>
+                    <div className="font-medium flex items-center gap-2">
+                      {p.name}
+                      {scope === "livreur" && (
+                        isDraft ? (
+                          <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-700 dark:text-amber-300">Brouillon</Badge>
+                        ) : (
+                          <Badge className="text-[10px] bg-emerald-600 text-white border-transparent">Validé</Badge>
+                        )
+                      )}
+                      {lockedForOwner && <Lock className="h-3 w-3 text-muted-foreground" />}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       Livraison {p.delivery_fee} · Refus {p.refusal_fee} · Annul. {p.annulation_fee}{!hideDelay && ` · Délai ${p.delivery_delay_hours}h`}
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditPack(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setLinkPack(p)}><Link2 className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deletePack(p.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                    {scope === "livreur" && mode === "admin" && isDraft && (
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-700 hover:text-emerald-800" onClick={() => validatePack(p.id)}>
+                        <ShieldCheck className="h-3.5 w-3.5 mr-1" />Valider
+                      </Button>
+                    )}
+                    {!lockedForOwner && (
+                      <>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditPack(p)}><Pencil className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setLinkPack(p)}><Link2 className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deletePack(p.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1">
