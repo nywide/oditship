@@ -142,15 +142,6 @@ const AdminLivreurs = () => {
                     <label className="flex items-center gap-2 text-sm"><Switch checked={l.api_enabled} onCheckedChange={(v) => toggleApi(l, v)} /><span>API</span></label>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Input readOnly className="font-mono text-xs h-8 w-64" value={show.has(l.id) ? (l.api_token || "—") : masked(l.api_token)} />
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { const n = new Set(show); n.has(l.id) ? n.delete(l.id) : n.add(l.id); setShow(n); }}>
-                        {show.has(l.id) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => regenToken(l)}><RefreshCw className="h-4 w-4 mr-1" /> Generate</Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>
                     <div className="flex gap-1">
                       <Button variant="default" size="sm" onClick={() => window.open(`/admin/livreurs/${l.id}/workflows`, "_blank")}>
                         <Zap className="h-4 w-4 mr-1" /> Workflows
