@@ -6,14 +6,22 @@ import { preloadStatusBadgeOverrides } from "./lib/statusBadgeOverrides";
 preloadStatusBadgeOverrides().catch(() => { /* */ });
 
 // --- Impersonation isolation bootstrap ---
-// When this tab is in "impersonation mode" (flag set by /impersonate), redirect
-// any read/write of the Supabase auth storage key from localStorage to sessionStorage.
-// sessionStorage is per-tab, so the original admin tab (which uses localStorage)
-// keeps its own session untouched.
+// A tab is in "impersonation mode" if its sessionStorage carries the
+// "sb-impersonating" flag (set permanently for that tab by /impersonate)
+// OR if its window.name marks it as such (survives reloads & navigations).
+// In that mode, all reads/writes of the Supabase auth-token storage key
+// are redirected from localStorage to sessionStorage so the original admin
+// tab (which uses localStorage) remains completely isolated.
 (() => {
   try {
     if (typeof window === "undefined") return;
-    if (sessionStorage.getItem("sb-impersonating") !== "1") return;
+    const isImpersonating =
+      sessionStorage.getItem("sb-impersonating") === "1" ||
+      window.name === "odit-impersonation";
+    if (!isImpersonating) return;
+    // Persist marker in window.name so subsequent navigations remain isolated.
+    window.name = "odit-impersonation";
+    sessionStorage.setItem("sb-impersonating", "1");
 
     const isAuthKey = (key: string) =>
       key.startsWith("sb-") && key.includes("-auth-token");

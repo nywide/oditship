@@ -8,10 +8,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, Eye, EyeOff, RefreshCw, Zap, Wallet, LogIn, UserX, UserCheck, Trash2 } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, RefreshCw, Zap, Wallet, LogIn, UserX, UserCheck, Trash2, Pencil } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PackManager from "@/components/dashboard/PackManager";
 
 interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; is_active?: boolean; }
@@ -34,6 +35,9 @@ const AdminLivreurs = () => {
   const [show, setShow] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [tarifsTarget, setTarifsTarget] = useState<Livreur | null>(null);
+  const [editTarget, setEditTarget] = useState<Livreur | null>(null);
+  const [editForm, setEditForm] = useState<{ full_name: string; phone: string; email: string; password: string }>({ full_name: "", phone: "", email: "", password: "" });
+  const [editBusy, setEditBusy] = useState(false);
   const [hubCities, setHubCities] = useState<Array<{ hub_id: number; city_name: string }>>([]);
 
   const load = async () => {
@@ -118,6 +122,40 @@ const AdminLivreurs = () => {
     } catch (e: any) { toast.error(e.message || "Erreur"); }
   };
 
+  const openEdit = async (l: Livreur) => {
+    setEditTarget(l);
+    setEditForm({ full_name: l.full_name || "", phone: "", email: "", password: "" });
+    const [{ data: prof }, emailRes] = await Promise.all([
+      db.from("profiles").select("phone").eq("id", l.id).maybeSingle(),
+      supabase.functions.invoke("admin-update-user", { body: { user_id: l.id, get_email: true } }),
+    ]);
+    setEditForm((f) => ({ ...f, phone: (prof as any)?.phone ?? "", email: (emailRes.data as any)?.email ?? "" }));
+  };
+
+  const submitEdit = async () => {
+    if (!editTarget) return;
+    setEditBusy(true);
+    try {
+      const payload: any = {
+        user_id: editTarget.id,
+        full_name: editForm.full_name || null,
+        phone: editForm.phone || null,
+        username: editTarget.username,
+        role: "livreur",
+        is_active: editTarget.is_active ?? true,
+      };
+      if (editForm.email) payload.email = editForm.email;
+      if (editForm.password) payload.password = editForm.password;
+      const { data, error } = await supabase.functions.invoke("admin-update-user", { body: payload });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Profil mis à jour");
+      setEditTarget(null);
+      load();
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
+    finally { setEditBusy(false); }
+  };
+
   const masked = (t: string | null) => t ? `${t.slice(0, 6)}${"•".repeat(20)}${t.slice(-4)}` : "—";
 
   return (
@@ -189,6 +227,9 @@ const AdminLivreurs = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(l)} title="Modifier le profil">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => loginAs(l)} disabled={l.id === user?.id} title="Se connecter en tant que">
                         <LogIn className="h-4 w-4" />
                       </Button>
@@ -222,6 +263,21 @@ const AdminLivreurs = () => {
               title={`Villes restreintes aux hubs assignés (${citiesOfLivreur(tarifsTarget.id).length})`}
             />
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Modifier le profil — {editTarget?.username}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Nom complet</Label><Input value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} /></div>
+            <div><Label>Téléphone</Label><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div><Label>Nouveau mot de passe</Label><Input type="password" placeholder="Laisser vide pour ne pas changer" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Annuler</Button>
+            <Button onClick={submitEdit} disabled={editBusy}>{editBusy ? "..." : "Enregistrer"}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

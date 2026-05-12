@@ -5,9 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Receipt, FileText, FileSpreadsheet, Image as ImageIcon } from "lucide-react";
+import { Receipt, FileText, FileSpreadsheet, Filter, X } from "lucide-react";
 import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
 import { useAuth } from "@/contexts/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import PaymentProofThumb from "@/components/dashboard/PaymentProofThumb";
 
 const db = supabase as any;
 
@@ -37,6 +40,9 @@ const VendeurFacturation = () => {
   const [summary, setSummary] = useState<Record<number, Summary>>({});
   const [open, setOpen] = useState<Invoice | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  const [filter, setFilter] = useState<{ status: "all" | "paid" | "unpaid"; from: string; to: string; q: string }>(
+    { status: "all", from: "", to: "", q: "" }
+  );
 
   useEffect(() => {
     db.from("invoices").select("*").eq("recipient_type", "vendeur").order("created_at", { ascending: false })
@@ -76,11 +82,14 @@ const VendeurFacturation = () => {
     fmt === "pdf" ? exportInvoicePdf(data, (its ?? []) as any) : exportInvoiceCsv(data, (its ?? []) as any);
   };
 
-  const viewProof = async (path: string) => {
-    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 60 * 5);
-    if (error || !data?.signedUrl) return;
-    window.open(data.signedUrl, "_blank");
-  };
+  const filteredInvoices = invoices.filter((inv) => {
+    if (filter.status === "paid" && inv.status !== "paid") return false;
+    if (filter.status === "unpaid" && inv.status === "paid") return false;
+    if (filter.from && new Date(inv.created_at) < new Date(filter.from)) return false;
+    if (filter.to && new Date(inv.created_at) > new Date(filter.to + "T23:59:59")) return false;
+    if (filter.q.trim() && !String(inv.id).includes(filter.q.trim())) return false;
+    return true;
+  });
 
   const orderItems = items.filter((i) => i.fee_type !== "extra");
   const extraItems = items.filter((i) => i.fee_type === "extra");
@@ -91,6 +100,28 @@ const VendeurFacturation = () => {
         <Receipt className="h-6 w-6 text-primary" />
         <h2 className="text-2xl font-bold">Facturation</h2>
       </div>
+
+      <Card className="p-3 flex flex-wrap items-center gap-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select value={filter.status} onValueChange={(v) => setFilter({ ...filter, status: v as any })}>
+          <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous statuts</SelectItem>
+            <SelectItem value="paid">Payées</SelectItem>
+            <SelectItem value="unpaid">Non payées</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input className="h-8 w-32" placeholder="N° facture…" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} />
+        <span className="text-xs text-muted-foreground">Du</span>
+        <Input className="h-8 w-36" type="date" value={filter.from} onChange={(e) => setFilter({ ...filter, from: e.target.value })} />
+        <span className="text-xs text-muted-foreground">au</span>
+        <Input className="h-8 w-36" type="date" value={filter.to} onChange={(e) => setFilter({ ...filter, to: e.target.value })} />
+        {(filter.status !== "all" || filter.q || filter.from || filter.to) && (
+          <Button size="sm" variant="ghost" onClick={() => setFilter({ status: "all", from: "", to: "", q: "" })}>
+            <X className="h-3 w-3 mr-1" />Réinitialiser
+          </Button>
+        )}
+      </Card>
 
       <Card>
         <Table>
@@ -103,14 +134,15 @@ const VendeurFacturation = () => {
               <TableHead>Autre tarif</TableHead>
               <TableHead>Reste</TableHead>
               <TableHead>Statut</TableHead>
+              <TableHead>Preuve payante</TableHead>
               <TableHead>Créée</TableHead>
               <TableHead className="text-right">Export</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {invoices.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
-            ) : invoices.map((inv) => {
+            {filteredInvoices.length === 0 ? (
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
+            ) : filteredInvoices.map((inv) => {
               const s = summary[inv.id];
               return (
               <TableRow key={inv.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setOpen(inv)}>
@@ -135,13 +167,13 @@ const VendeurFacturation = () => {
                     {inv.payment_reference && <span className="text-xs text-muted-foreground font-mono">Réf: {inv.payment_reference}</span>}
                   </div>
                 </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  {inv.status === "paid" ? <PaymentProofThumb path={inv.payment_proof_url} /> : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{new Date(inv.created_at).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
                   <Button size="sm" variant="outline" onClick={() => exportInvoice(inv, "pdf")}><FileText className="h-4 w-4 mr-1" />PDF</Button>
                   <Button size="sm" variant="outline" onClick={() => exportInvoice(inv, "csv")}><FileSpreadsheet className="h-4 w-4 mr-1" />CSV</Button>
-                  {inv.payment_proof_url && (
-                    <Button size="sm" variant="ghost" onClick={() => viewProof(inv.payment_proof_url!)} title="Voir preuve de paiement"><ImageIcon className="h-4 w-4" /></Button>
-                  )}
                 </TableCell>
               </TableRow>
               );

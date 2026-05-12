@@ -22,24 +22,13 @@ export default function Impersonate() {
       return;
     }
 
-    // Mark this tab as an impersonation tab so the app routes the auth-token
-    // storage key to sessionStorage on next load (keeping admin tab unaffected).
+    // Mark this tab permanently (window.name + sessionStorage) so the bootstrap
+    // in main.tsx redirects supabase auth storage to sessionStorage on every
+    // reload of THIS tab. The admin tab is unaffected (uses localStorage).
+    window.name = "odit-impersonation";
     sessionStorage.setItem("sb-impersonating", "1");
 
-    // Tell any other open tab (the admin tab) to ignore auth-state change
-    // events for a short window while the impersonated session initializes.
-    // Auto-cleared after 3s so legitimate future events are not blocked.
-    try {
-      localStorage.setItem("odit_impersonation_active", "true");
-      setTimeout(() => {
-        localStorage.removeItem("odit_impersonation_active");
-      }, 3000);
-    } catch {
-      // ignore storage errors
-    }
-
-    // Build a temporary client that writes the session into sessionStorage
-    // under the SAME storage key the global supabase client expects.
+    // Tab-scoped storage so writes never touch the admin tab's localStorage.
     const tabStorage: Storage = {
       length: 0,
       clear: () => sessionStorage.clear(),
@@ -61,9 +50,8 @@ export default function Impersonate() {
       .setSession({ access_token, refresh_token })
       .then(({ error }) => {
         if (error) throw error;
-        // Strip tokens from URL and hard-reload into the dashboard so the
-        // global client picks up the session (now redirected to sessionStorage
-        // by the bootstrap logic in the app).
+        // Hard-reload into the dashboard so the global client picks up the
+        // session from sessionStorage (via the localStorage interception).
         window.location.replace("/dashboard");
       })
       .catch(() => {

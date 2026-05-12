@@ -12,6 +12,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, UserX, UserCheck, LogIn, Search, Trash2, Wallet } from "lucide-react";
 import PackManager from "@/components/dashboard/PackManager";
+import VendorAutoInvoice from "@/components/dashboard/VendorAutoInvoice";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -181,18 +182,8 @@ const AdminUtilisateurs = () => {
       if (!access_token || !refresh_token) throw new Error("Jeton de session introuvable");
       const url = `/impersonate?access_token=${encodeURIComponent(access_token)}&refresh_token=${encodeURIComponent(refresh_token)}`;
       const win = window.open(url, "_blank", "noopener,noreferrer");
-      if (!win) {
-        toast.error("Veuillez autoriser les popups pour ce site");
-      } else {
-        toast.success(`Connexion en tant que ${r.username} dans un nouvel onglet`);
-        // Reload the admin tab shortly after to reset any UI side-effects
-        // triggered by storage events from the impersonated tab. The admin
-        // session in localStorage is unaffected, so the reload restores the
-        // correct admin URL and sidebar.
-        setTimeout(() => {
-          window.location.reload();
-        }, 600);
-      }
+      if (!win) toast.error("Veuillez autoriser les popups pour ce site");
+      else toast.success(`Connexion en tant que ${r.username} dans un nouvel onglet`);
     } catch (e: any) {
       toast.error(e.message || "Erreur");
     }
@@ -417,13 +408,16 @@ const AdminUtilisateurs = () => {
             <DialogTitle>Tarif personnalisé — {tarifsTarget?.full_name || tarifsTarget?.username}</DialogTitle>
           </DialogHeader>
           {tarifsTarget && (
-            <PackManager
-              scope="vendeur"
-              ownerId={tarifsTarget.id}
-              showPickupDimension={false}
-              hideDelay
-              title="Packs personnalisés du vendeur"
-            />
+            <div className="space-y-4">
+              <VendorAutoInvoice vendeurId={tarifsTarget.id} />
+              <PackManager
+                scope="vendeur"
+                ownerId={tarifsTarget.id}
+                showPickupDimension={false}
+                hideDelay
+                title="Packs personnalisés du vendeur"
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>
