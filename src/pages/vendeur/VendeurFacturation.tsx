@@ -28,12 +28,13 @@ const VendeurFacturation = () => {
         const list = (data ?? []) as Invoice[];
         setInvoices(list);
         if (list.length) {
-          const { data: its } = await db.from("invoice_items").select("invoice_id, order_value").in("invoice_id", list.map((x) => x.id));
+          const { data: its } = await db.from("invoice_items").select("invoice_id, order_value, fee_amount").in("invoice_id", list.map((x) => x.id));
           const map: Record<number, Summary> = {};
           for (const r of (its ?? []) as any[]) {
-            const cur = map[r.invoice_id] ?? { count: 0, cod: 0 };
+            const cur = map[r.invoice_id] ?? { count: 0, cod: 0, fees: 0 };
             cur.count += 1;
             cur.cod += Number(r.order_value || 0);
+            cur.fees += Number(r.fee_amount || 0);
             map[r.invoice_id] = cur;
           }
           setSummary(map);
