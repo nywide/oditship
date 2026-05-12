@@ -9,10 +9,12 @@ export interface GenerateOptions {
   targetId?: string;
 }
 
-const DELIVERED = ["Livré", "Delivered"];
-const REFUSED = ["Refusé", "Refused"];
-const CANCELLED = ["Annulé", "Cancelled", "Annule"];
+const DELIVERED = ["livré", "delivered"];
+const REFUSED = ["refusé", "refused"];
+const CANCELLED = ["annulé", "cancelled", "annule"];
 const BILLABLE = [...DELIVERED, ...REFUSED, ...CANCELLED];
+const norm = (s: string) => (s || "").toLowerCase().trim();
+const isIn = (arr: string[], s: string) => arr.includes(norm(s));
 
 const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
 
