@@ -78,6 +78,47 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Invoice | null>(null);
   const [payOpen, setPayOpen] = useState<Invoice | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const toggleOne = (id: number) => {
+    const n = new Set(selected);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    setSelected(n);
+  };
+  const toggleAll = (ids: number[]) => {
+    const all = ids.every((i) => selected.has(i));
+    const n = new Set(selected);
+    if (all) ids.forEach((i) => n.delete(i)); else ids.forEach((i) => n.add(i));
+    setSelected(n);
+  };
+  const clearSelection = () => setSelected(new Set());
+
+  const bulkDelete = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Supprimer ${selected.size} facture(s) ?`)) return;
+    const ids = Array.from(selected);
+    await db.from("invoice_items").delete().in("invoice_id", ids);
+    const { error } = await db.from("invoices").delete().in("id", ids);
+    if (error) return toast.error(error.message);
+    toast.success(`${ids.length} facture(s) supprimée(s)`);
+    clearSelection();
+    load();
+  };
+
+  const bulkMarkUnpaid = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    for (const id of ids) await setInvoicePaid(id, false);
+    toast.success(`${ids.length} facture(s) marquée(s) non payée(s)`);
+    clearSelection();
+    load();
+  };
+
+  const viewProof = async (path: string) => {
+    const { data, error } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 60 * 5);
+    if (error || !data?.signedUrl) return toast.error("Preuve introuvable");
+    window.open(data.signedUrl, "_blank");
+  };
 
   const load = async () => {
     const [inv, p, s, c] = await Promise.all([
