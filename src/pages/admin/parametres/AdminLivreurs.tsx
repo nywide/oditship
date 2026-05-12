@@ -8,12 +8,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, Eye, EyeOff, RefreshCw, Zap, Wallet } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, RefreshCw, Zap, Wallet, LogIn, UserX, UserCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PackManager from "@/components/dashboard/PackManager";
 
-interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; }
+interface Livreur { id: string; username: string; full_name: string | null; api_enabled: boolean; api_token: string | null; is_active?: boolean; }
 interface Hub { id: number; name: string; }
 interface HubLivreur { hub_id: number; livreur_id: string; }
 
@@ -26,6 +27,7 @@ const generateToken = () => {
 };
 
 const AdminLivreurs = () => {
+  const { user } = useAuth();
   const [livreurs, setLivreurs] = useState<Livreur[]>([]);
   const [hubs, setHubs] = useState<Hub[]>([]);
   const [hubLivreurs, setHubLivreurs] = useState<HubLivreur[]>([]);
@@ -36,7 +38,7 @@ const AdminLivreurs = () => {
 
   const load = async () => {
     const [p, h, hl, hc] = await Promise.all([
-      db.from("profiles").select("id, username, full_name, api_enabled, api_token").eq("role", "livreur").order("username"),
+      db.from("profiles").select("id, username, full_name, api_enabled, api_token, is_active").eq("role", "livreur").order("username"),
       supabase.from("hubs").select("id, name").order("name"),
       supabase.from("hub_livreur").select("hub_id, livreur_id"),
       supabase.from("hub_cities").select("hub_id, city_name"),
