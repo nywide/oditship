@@ -407,13 +407,16 @@ const AdminUtilisateurs = () => {
             <DialogTitle>Tarif personnalisé — {tarifsTarget?.full_name || tarifsTarget?.username}</DialogTitle>
           </DialogHeader>
           {tarifsTarget && (
-            <PackManager
-              scope="vendeur"
-              ownerId={tarifsTarget.id}
-              showPickupDimension={false}
-              hideDelay
-              title="Packs personnalisés du vendeur"
-            />
+            <div className="space-y-4">
+              <VendorAutoInvoice vendeurId={tarifsTarget.id} />
+              <PackManager
+                scope="vendeur"
+                ownerId={tarifsTarget.id}
+                showPickupDimension={false}
+                hideDelay
+                title="Packs personnalisés du vendeur"
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>
