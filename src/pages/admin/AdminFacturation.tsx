@@ -165,6 +165,20 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [type]);
 
+  const filteredInvoices = invoices.filter((inv) => {
+    if (filter.status === "paid" && inv.status !== "paid") return false;
+    if (filter.status === "unpaid" && inv.status === "paid") return false;
+    if (filter.from && new Date(inv.created_at) < new Date(filter.from)) return false;
+    if (filter.to && new Date(inv.created_at) > new Date(filter.to + "T23:59:59")) return false;
+    if (filter.minAmount && Number(inv.net_amount) < Number(filter.minAmount)) return false;
+    if (filter.maxAmount && Number(inv.net_amount) > Number(filter.maxAmount)) return false;
+    if (filter.q.trim()) {
+      const name = profileName(type === "vendeur" ? inv.vendeur_id : inv.livreur_id).toLowerCase();
+      if (!name.includes(filter.q.trim().toLowerCase()) && !String(inv.id).includes(filter.q.trim())) return false;
+    }
+    return true;
+  });
+
   const profileName = (id: string | null) => {
     const p = profiles.find((x) => x.id === id);
     return p ? (p.full_name || p.username) : id || "—";
