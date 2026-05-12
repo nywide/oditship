@@ -294,10 +294,11 @@ const LinkCitiesDialog = ({ pack, onClose, cities, pickupCities, showPickupDimen
             <div>
               <Label>Ville de ramassage</Label>
               <Select value={pickup} onValueChange={setPickup}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Choisir une ville de ramassage" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="*">Toutes les villes de ramassage</SelectItem>
-                  {pickupCities.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                  {pickupCities.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">Aucune ville de ramassage. Ajoutez-en d'abord.</div>
+                  ) : pickupCities.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
