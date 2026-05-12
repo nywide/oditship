@@ -12,10 +12,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Receipt, Timer, Plus, Pencil, Trash2, FileText, FileSpreadsheet, Image as ImageIcon } from "lucide-react";
+import { Receipt, Timer, Plus, Pencil, Trash2, FileText, FileSpreadsheet, Image as ImageIcon, Filter, X, Download } from "lucide-react";
 import { toast } from "sonner";
 import { generateInvoices, fetchUnbilledCounts, setInvoicePaid, recomputeInvoiceTotals } from "@/lib/invoiceGenerator";
 import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
+import PaymentProofThumb from "@/components/dashboard/PaymentProofThumb";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const db = supabase as any;
 
