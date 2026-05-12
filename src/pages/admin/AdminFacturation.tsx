@@ -81,6 +81,10 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
   const [open, setOpen] = useState<Invoice | null>(null);
   const [payOpen, setPayOpen] = useState<Invoice | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [filter, setFilter] = useState<{ status: "all" | "paid" | "unpaid"; from: string; to: string; q: string; minAmount: string; maxAmount: string }>(
+    { status: "all", from: "", to: "", q: "", minAmount: "", maxAmount: "" }
+  );
+  const [unpaidWarn, setUnpaidWarn] = useState<Invoice | null>(null);
 
   const toggleOne = (id: number) => {
     const n = new Set(selected);
