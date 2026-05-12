@@ -9,6 +9,8 @@ export interface ExportInvoice {
   period_end: string;
   net_amount: number;
   status: string;
+  extra_amount?: number;
+  extra_description?: string | null;
 }
 export interface ExportItem {
   tracking_number: string | null;
@@ -43,12 +45,17 @@ export const exportInvoiceCsv = (inv: ExportInvoice, items: ExportItem[]) => {
     i.tracking_number, i.product_name, i.customer_city, i.status_snapshot,
     i.fee_type, Number(i.order_value).toFixed(2), Number(i.fee_amount).toFixed(2),
   ]);
+  const totalCod = items.filter((i) => i.fee_type === "livraison").reduce((a, i) => a + Number(i.order_value || 0), 0);
+  const totalFees = items.reduce((a, i) => a + Number(i.fee_amount || 0), 0);
   const meta = [
     [`Facture #${inv.id}`],
     [`${inv.recipientType === "vendeur" ? "Vendeur" : "Livreur"}`, inv.recipientName],
-    ["Période", `${inv.period_start} → ${inv.period_end}`],
     ["Statut", inv.status],
-    ["Net", Number(inv.net_amount).toFixed(2)],
+    ["Commandes", String(items.length)],
+    ["COD", totalCod.toFixed(2)],
+    ["Tarif", totalFees.toFixed(2)],
+    ["Autre tarif", Number(inv.extra_amount || 0).toFixed(2) + (inv.extra_description ? ` (${inv.extra_description})` : "")],
+    ["Reste", Number(inv.net_amount).toFixed(2)],
     [],
   ];
   const all = [...meta, headers, ...rows];
@@ -58,16 +65,19 @@ export const exportInvoiceCsv = (inv: ExportInvoice, items: ExportItem[]) => {
 
 export const exportInvoicePdf = (inv: ExportInvoice, items: ExportItem[]) => {
   const doc = new jsPDF();
+  const totalCod = items.filter((i) => i.fee_type === "livraison").reduce((a, i) => a + Number(i.order_value || 0), 0);
+  const totalFees = items.reduce((a, i) => a + Number(i.fee_amount || 0), 0);
   doc.setFontSize(16);
   doc.text(`Facture #${inv.id}`, 14, 18);
   doc.setFontSize(11);
   doc.text(`${inv.recipientType === "vendeur" ? "Vendeur" : "Livreur"} : ${inv.recipientName}`, 14, 28);
-  doc.text(`Période : ${inv.period_start} → ${inv.period_end}`, 14, 35);
-  doc.text(`Statut : ${inv.status}`, 14, 42);
-  doc.text(`Net : ${Number(inv.net_amount).toFixed(2)}`, 14, 49);
+  doc.text(`Statut : ${inv.status}`, 14, 35);
+  doc.text(`Commandes : ${items.length}   COD : ${totalCod.toFixed(2)}`, 14, 42);
+  doc.text(`Tarif : ${totalFees.toFixed(2)}   Autre tarif : ${Number(inv.extra_amount || 0).toFixed(2)}${inv.extra_description ? ` (${inv.extra_description})` : ""}`, 14, 49);
+  doc.text(`Reste : ${Number(inv.net_amount).toFixed(2)}`, 14, 56);
 
   autoTable(doc, {
-    startY: 56,
+    startY: 62,
     head: [["Tracking", "Produit", "Ville", "Statut", "Type", "Prix", "Tarif"]],
     body: items.map((i) => [
       i.tracking_number ?? "—",

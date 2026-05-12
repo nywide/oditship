@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
+import { OrderBillingBadges } from "@/components/dashboard/OrderBillingBadges";
+import { useInvoiceStatusMap } from "@/lib/useInvoiceStatusMap";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
 import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { cn } from "@/lib/utils";
@@ -30,6 +32,8 @@ const LivreurColis = () => {
     }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  const billingMap = useInvoiceStatusMap(orders.map((o) => o.id), "livreur");
 
   return (
     <div className="space-y-4">
@@ -58,7 +62,7 @@ const LivreurColis = () => {
                 <TableCell>{o.customer_city}</TableCell>
                 <TableCell className="font-mono text-sm">{o.customer_phone}</TableCell>
                 <TableCell className="font-semibold">{Number(o.order_value).toFixed(2)} MAD</TableCell>
-                <TableCell><StatusBadge status={o.status} /></TableCell>
+                <TableCell><StatusBadge status={o.status} /><OrderBillingBadges status={o.status} info={billingMap[o.id]} /></TableCell>
                 <TableCell className="text-right">
                   {o.status === "Pickup" && (
                     <Button variant="outline" size="sm" onClick={() => printSticker(o)}>

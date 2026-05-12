@@ -106,10 +106,11 @@ export const generateInvoices = async (opts: GenerateOptions) => {
     const total_refused_fees = sum(items.filter((i) => i.fee_type === "refus").map((i) => i.fee_amount));
     const total_annule_fees = sum(items.filter((i) => i.fee_type === "annulation").map((i) => i.fee_amount));
     const delivery_fees = sum(items.filter((i) => i.fee_type === "livraison").map((i) => i.fee_amount));
+    const totalFees = delivery_fees + total_refused_fees + total_annule_fees;
+    // Vendor invoice → recipient receives COD minus all fees.
+    // Driver invoice → recipient is paid the sum of fees they earned.
     const net_amount =
-      recipientType === "vendeur"
-        ? total_delivered - delivery_fees - total_refused_fees - total_annule_fees
-        : delivery_fees + total_refused_fees + total_annule_fees;
+      recipientType === "vendeur" ? total_delivered - totalFees : totalFees;
 
     const dates = items.map((i) => i._updated_at).filter(Boolean).sort();
     const period_start = (dates[0] ?? new Date().toISOString()).slice(0, 10);
@@ -135,15 +136,17 @@ export const generateInvoices = async (opts: GenerateOptions) => {
     const { error: e2 } = await db.from("invoice_items").insert(itemsRows);
     if (e2) throw e2;
 
-    // Append a chronologie entry on each order: "Facture #N créée"
-    const histRows = recipientOrders.map((o: any) => ({
-      order_id: o.id,
-      old_status: o.status,
-      new_status: o.status,
-      notes: `Facture #${inv.id} ${recipientType === "vendeur" ? "vendeur" : "livreur"} créée`,
-      actor_label: "Facturation",
-    }));
-    if (histRows.length) await db.from("order_status_history").insert(histRows);
+    // Per requirement: only vendor invoice events show up in the order chronology.
+    if (recipientType === "vendeur") {
+      const histRows = recipientOrders.map((o: any) => ({
+        order_id: o.id,
+        old_status: o.status,
+        new_status: o.status,
+        notes: `Facture #${inv.id} vendeur créée`,
+        actor_label: "Facturation",
+      }));
+      if (histRows.length) await db.from("order_status_history").insert(histRows);
+    }
 
     created.push({ invoice_id: inv.id, recipientId, count: items.length });
   }
@@ -169,16 +172,68 @@ export const setInvoicePaid = async (
   const { data: inv, error } = await db.from("invoices").update(patch).eq("id", invoiceId).select("recipient_type").single();
   if (error) throw error;
 
-  const { data: its } = await db.from("invoice_items").select("order_id, status_snapshot").eq("invoice_id", invoiceId);
-  const rows = ((its ?? []) as any[])
-    .filter((r) => r.order_id)
-    .map((r) => ({
-      order_id: r.order_id,
-      old_status: r.status_snapshot,
-      new_status: r.status_snapshot,
-      notes: `Facture #${invoiceId} ${inv?.recipient_type === "vendeur" ? "vendeur" : "livreur"} ${paid ? "payée" : "marquée non payée"}`,
-      actor_label: "Facturation",
-    }));
-  if (rows.length) await db.from("order_status_history").insert(rows);
+  // Only vendor invoice activity is mirrored to the order chronology.
+  if (inv?.recipient_type === "vendeur") {
+    const { data: its } = await db.from("invoice_items").select("order_id, status_snapshot").eq("invoice_id", invoiceId);
+    const rows = ((its ?? []) as any[])
+      .filter((r) => r.order_id)
+      .map((r) => ({
+        order_id: r.order_id,
+        old_status: r.status_snapshot,
+        new_status: r.status_snapshot,
+        notes: `Facture #${invoiceId} vendeur ${paid ? "payée" : "marquée non payée"}`,
+        actor_label: "Facturation",
+      }));
+    if (rows.length) await db.from("order_status_history").insert(rows);
+  }
   return inv;
+};
+
+/**
+ * Recompute and persist net_amount for one invoice. Used after the admin
+ * tweaks line items or the "autre tarif" extra fee.
+ *
+ *   vendor invoice → net = COD(delivered) − (delivery_fees + refused_fees + annule_fees + extra)
+ *   livreur invoice → net = (delivery_fees + refused_fees + annule_fees) + extra
+ */
+export const recomputeInvoiceTotals = async (invoiceId: number) => {
+  const { data: inv, error: e1 } = await db
+    .from("invoices")
+    .select("recipient_type, extra_amount")
+    .eq("id", invoiceId)
+    .single();
+  if (e1) throw e1;
+  const { data: its, error: e2 } = await db
+    .from("invoice_items")
+    .select("order_value, fee_amount, fee_type")
+    .eq("invoice_id", invoiceId);
+  if (e2) throw e2;
+
+  const items = (its ?? []) as any[];
+  const sumBy = (pred: (i: any) => boolean, key: "order_value" | "fee_amount") =>
+    items.filter(pred).reduce((a, i) => a + Number(i[key] || 0), 0);
+
+  const total_delivered = sumBy((i) => i.fee_type === "livraison", "order_value");
+  const delivery_fees = sumBy((i) => i.fee_type === "livraison", "fee_amount");
+  const total_refused_fees = sumBy((i) => i.fee_type === "refus", "fee_amount");
+  const total_annule_fees = sumBy((i) => i.fee_type === "annulation", "fee_amount");
+  const extra = Number(inv?.extra_amount || 0);
+  const totalFees = delivery_fees + total_refused_fees + total_annule_fees;
+  const net_amount =
+    inv?.recipient_type === "vendeur"
+      ? total_delivered - totalFees - extra
+      : totalFees + extra;
+
+  const { error: e3 } = await db
+    .from("invoices")
+    .update({
+      total_delivered_amount: total_delivered,
+      delivery_fees,
+      total_refused_fees,
+      total_annule_fees,
+      net_amount,
+    })
+    .eq("id", invoiceId);
+  if (e3) throw e3;
+  return { net_amount, total_delivered, totalFees, extra };
 };

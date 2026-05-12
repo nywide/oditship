@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Receipt, Timer, Plus, Pencil, Trash2, FileText, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
-import { generateInvoices, fetchUnbilledCounts, setInvoicePaid } from "@/lib/invoiceGenerator";
+import { generateInvoices, fetchUnbilledCounts, setInvoicePaid, recomputeInvoiceTotals } from "@/lib/invoiceGenerator";
 import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
 
 const db = supabase as any;
@@ -30,6 +30,8 @@ interface Invoice {
   status: string;
   created_at: string;
   paid_at: string | null;
+  extra_amount: number;
+  extra_description: string | null;
 }
 interface Item {
   id: number;
@@ -166,6 +168,8 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
       period_end: inv.period_end,
       net_amount: inv.net_amount,
       status: inv.status,
+      extra_amount: inv.extra_amount,
+      extra_description: inv.extra_description,
     };
     const items = (its ?? []) as Item[];
     fmt === "pdf" ? exportInvoicePdf(exportData, items) : exportInvoiceCsv(exportData, items);
@@ -258,8 +262,11 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-20">Facture</TableHead>
               <TableHead>{type === "vendeur" ? "Vendeur" : "Livreur"}</TableHead>
               <TableHead>Commandes / COD</TableHead>
+              <TableHead>Tarif</TableHead>
+              <TableHead>Autre tarif</TableHead>
               <TableHead>Reste</TableHead>
               <TableHead>Statut</TableHead>
               <TableHead>Créée</TableHead>
@@ -268,17 +275,23 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
           </TableHeader>
           <TableBody>
             {invoices.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
             ) : invoices.map((inv) => {
               const s = summary[inv.id];
               return (
               <TableRow key={inv.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setOpen(inv)}>
+                <TableCell className="font-mono font-semibold">#{inv.id}</TableCell>
                 <TableCell className="font-medium">{profileName(type === "vendeur" ? inv.vendeur_id : inv.livreur_id)}</TableCell>
                 <TableCell className="text-sm">
                   <div>{s?.count ?? 0} commande(s)</div>
                   <div className="text-xs text-muted-foreground font-mono">COD : {(s?.cod ?? 0).toFixed(2)}</div>
                 </TableCell>
-                <TableCell className="font-mono">{Number(inv.net_amount).toFixed(2)}</TableCell>
+                <TableCell className="font-mono">{(s?.fees ?? 0).toFixed(2)}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  <div>{Number(inv.extra_amount || 0).toFixed(2)}</div>
+                  {inv.extra_description && <div className="text-muted-foreground truncate max-w-[140px]" title={inv.extra_description}>{inv.extra_description}</div>}
+                </TableCell>
+                <TableCell className="font-mono font-semibold">{Number(inv.net_amount).toFixed(2)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {inv.status === "paid" ? (
                     <Badge variant="default" className="cursor-pointer" onClick={() => markUnpaid(inv)} title="Marquer comme non payée">Payée</Badge>
@@ -389,10 +402,19 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
   const [items, setItems] = useState<Item[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<Item>>({});
+  const [extraAmount, setExtraAmount] = useState(0);
+  const [extraDesc, setExtraDesc] = useState("");
+  const [currentNet, setCurrentNet] = useState(0);
 
   const reload = () => {
     if (!invoice) return;
     db.from("invoice_items").select("*").eq("invoice_id", invoice.id).order("id").then(({ data }: any) => setItems((data ?? []) as Item[]));
+    db.from("invoices").select("net_amount, extra_amount, extra_description").eq("id", invoice.id).single().then(({ data }: any) => {
+      if (!data) return;
+      setExtraAmount(Number(data.extra_amount || 0));
+      setExtraDesc(data.extra_description || "");
+      setCurrentNet(Number(data.net_amount || 0));
+    });
   };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [invoice]);
 
@@ -407,10 +429,27 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
       fee_amount: Number(draft.fee_amount || 0),
     }).eq("id", editing);
     if (error) return toast.error(error.message);
+    if (invoice) await recomputeInvoiceTotals(invoice.id);
     toast.success("Ligne mise à jour");
     setEditing(null);
     reload();
   };
+
+  const saveExtra = async () => {
+    if (!invoice) return;
+    const { error } = await db.from("invoices").update({
+      extra_amount: Number(extraAmount || 0),
+      extra_description: extraDesc || null,
+    }).eq("id", invoice.id);
+    if (error) return toast.error(error.message);
+    await recomputeInvoiceTotals(invoice.id);
+    toast.success("Autre tarif enregistré");
+    reload();
+  };
+
+  const totalFees = items.reduce((a, i) => a + Number(i.fee_amount || 0), 0);
+  const totalCod = items.filter((i) => i.fee_type === "livraison").reduce((a, i) => a + Number(i.order_value || 0), 0);
+
 
   return (
     <Dialog open={!!invoice} onOpenChange={(o) => !o && onClose()}>
@@ -426,8 +465,27 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
             )}
           </DialogTitle>
         </DialogHeader>
-        <div className="text-sm text-muted-foreground mb-2">
-          {summary?.count ?? items.length} commande(s) · COD : <strong>{(summary?.cod ?? 0).toFixed(2)}</strong> · Reste : <strong>{Number(invoice?.net_amount || 0).toFixed(2)}</strong>
+        <div className="grid sm:grid-cols-4 gap-2 text-sm mb-3">
+          <div className="rounded-md border p-2"><div className="text-xs text-muted-foreground">Commandes</div><div className="font-semibold">{summary?.count ?? items.length}</div></div>
+          <div className="rounded-md border p-2"><div className="text-xs text-muted-foreground">COD</div><div className="font-semibold font-mono">{(summary?.cod ?? totalCod).toFixed(2)}</div></div>
+          <div className="rounded-md border p-2"><div className="text-xs text-muted-foreground">Tarif</div><div className="font-semibold font-mono">{totalFees.toFixed(2)}</div></div>
+          <div className="rounded-md border p-2"><div className="text-xs text-muted-foreground">Reste</div><div className="font-semibold font-mono">{currentNet.toFixed(2)}</div></div>
+        </div>
+        <div className="rounded-md border p-3 mb-3 space-y-2 bg-muted/30">
+          <div className="text-sm font-medium">Autre tarif</div>
+          <div className="grid sm:grid-cols-3 gap-2">
+            <div>
+              <Label className="text-xs">Montant</Label>
+              <Input type="number" step="0.01" value={extraAmount} onChange={(e) => setExtraAmount(Number(e.target.value))} className="h-8" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label className="text-xs">Description</Label>
+              <Input value={extraDesc} onChange={(e) => setExtraDesc(e.target.value)} placeholder="Ex. emballage spécial, frais de retour…" className="h-8" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={saveExtra}>Enregistrer</Button>
+          </div>
         </div>
         <Table>
           <TableHeader>
