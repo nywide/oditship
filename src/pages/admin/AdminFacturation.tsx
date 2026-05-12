@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Receipt, Timer, Plus, Pencil, Trash2, FileText, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
-import { generateInvoices, fetchUnbilledCounts, setInvoicePaid } from "@/lib/invoiceGenerator";
+import { generateInvoices, fetchUnbilledCounts, setInvoicePaid, recomputeInvoiceTotals } from "@/lib/invoiceGenerator";
 import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
 
 const db = supabase as any;
