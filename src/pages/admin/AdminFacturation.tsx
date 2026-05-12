@@ -313,9 +313,43 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
         </Card>
       </div>
 
+      <Card>
+        <CardContent className="p-3 flex flex-wrap items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={filter.status} onValueChange={(v) => setFilter({ ...filter, status: v as any })}>
+            <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tous statuts</SelectItem>
+              <SelectItem value="paid">Payées</SelectItem>
+              <SelectItem value="unpaid">Non payées</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input className="h-8 w-44" placeholder={`Rechercher ${type}…`} value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} />
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-muted-foreground">Du</span>
+            <Input className="h-8 w-36" type="date" value={filter.from} onChange={(e) => setFilter({ ...filter, from: e.target.value })} />
+            <span className="text-muted-foreground">au</span>
+            <Input className="h-8 w-36" type="date" value={filter.to} onChange={(e) => setFilter({ ...filter, to: e.target.value })} />
+          </div>
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-muted-foreground">Reste</span>
+            <Input className="h-8 w-20" type="number" placeholder="min" value={filter.minAmount} onChange={(e) => setFilter({ ...filter, minAmount: e.target.value })} />
+            <span className="text-muted-foreground">à</span>
+            <Input className="h-8 w-20" type="number" placeholder="max" value={filter.maxAmount} onChange={(e) => setFilter({ ...filter, maxAmount: e.target.value })} />
+          </div>
+          {(filter.status !== "all" || filter.q || filter.from || filter.to || filter.minAmount || filter.maxAmount) && (
+            <Button size="sm" variant="ghost" onClick={() => setFilter({ status: "all", from: "", to: "", q: "", minAmount: "", maxAmount: "" })}>
+              <X className="h-3 w-3 mr-1" />Réinitialiser
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
       {selected.size > 0 && (
-        <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 shadow-sm flex-wrap">
           <span className="text-sm font-medium">{selected.size} sélectionnée{selected.size > 1 ? "s" : ""}</span>
+          <Button size="sm" variant="outline" onClick={() => bulkExport("pdf")}><Download className="h-4 w-4 mr-1" />PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => bulkExport("csv")}><Download className="h-4 w-4 mr-1" />CSV</Button>
           <Button size="sm" variant="outline" onClick={bulkMarkUnpaid}>Marquer non payée</Button>
           <Button size="sm" variant="destructive" onClick={bulkDelete}><Trash2 className="h-4 w-4 mr-1" />Supprimer</Button>
           <Button size="sm" variant="ghost" onClick={clearSelection}>Annuler</Button>
@@ -328,8 +362,8 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
             <TableRow>
               <TableHead className="w-10">
                 <Checkbox
-                  checked={invoices.length > 0 && invoices.every((i) => selected.has(i.id))}
-                  onCheckedChange={() => toggleAll(invoices.map((i) => i.id))}
+                  checked={filteredInvoices.length > 0 && filteredInvoices.every((i) => selected.has(i.id))}
+                  onCheckedChange={() => toggleAll(filteredInvoices.map((i) => i.id))}
                   aria-label="Tout sélectionner"
                 />
               </TableHead>
@@ -341,14 +375,15 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
               <TableHead>Autre tarif</TableHead>
               <TableHead>Reste</TableHead>
               <TableHead>Statut</TableHead>
+              <TableHead>Preuve payante</TableHead>
               <TableHead>Créée</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {invoices.length === 0 ? (
-              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
-            ) : invoices.map((inv) => {
+            {filteredInvoices.length === 0 ? (
+              <TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
+            ) : filteredInvoices.map((inv) => {
               const s = summary[inv.id];
               return (
               <TableRow key={inv.id} data-state={selected.has(inv.id) ? "selected" : undefined} className="cursor-pointer hover:bg-accent/40" onClick={() => setOpen(inv)}>
@@ -371,17 +406,13 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
                 <TableCell className="font-mono font-semibold">{Number(inv.net_amount).toFixed(2)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
                   {inv.status === "paid" ? (
-                    <div className="flex items-center gap-1">
-                      <Badge variant="default" className="cursor-pointer" onClick={() => markUnpaid(inv)} title="Marquer comme non payée">Payée</Badge>
-                      {inv.payment_proof_url && (
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => viewProof(inv.payment_proof_url!)} title="Voir preuve de paiement">
-                          <ImageIcon className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
+                    <Badge variant="default" className="cursor-pointer" onClick={() => setUnpaidWarn(inv)} title="Marquer comme non payée">Payée</Badge>
                   ) : (
                     <Badge variant="secondary" className="cursor-pointer" onClick={() => setPayOpen(inv)} title="Enregistrer le paiement">Non payée</Badge>
                   )}
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  {inv.status === "paid" ? <PaymentProofThumb path={inv.payment_proof_url} /> : <span className="text-xs text-muted-foreground">—</span>}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{new Date(inv.created_at).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
@@ -397,6 +428,22 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
           </TableBody>
         </Table>
       </Card>
+
+      <AlertDialog open={!!unpaidWarn} onOpenChange={(o) => !o && setUnpaidWarn(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Repasser la facture en Non payée ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La facture #{unpaidWarn?.id} est actuellement Payée. Pour la modifier, elle doit d'abord être marquée Non payée. La référence et la preuve de paiement seront conservées.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => { if (unpaidWarn) { await markUnpaid(unpaidWarn); setUnpaidWarn(null); } }}>Confirmer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       {/* Generate dialog */}
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
