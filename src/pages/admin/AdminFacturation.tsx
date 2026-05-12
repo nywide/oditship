@@ -266,7 +266,8 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
             <TableRow>
               <TableHead className="w-20">Facture</TableHead>
               <TableHead>{type === "vendeur" ? "Vendeur" : "Livreur"}</TableHead>
-              <TableHead>Commandes / COD</TableHead>
+              <TableHead>COD</TableHead>
+              <TableHead>Commandes</TableHead>
               <TableHead>Tarif</TableHead>
               <TableHead>Autre tarif</TableHead>
               <TableHead>Reste</TableHead>
@@ -277,21 +278,19 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
           </TableHeader>
           <TableBody>
             {invoices.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
             ) : invoices.map((inv) => {
               const s = summary[inv.id];
               return (
               <TableRow key={inv.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setOpen(inv)}>
                 <TableCell className="font-mono font-semibold">#{inv.id}</TableCell>
                 <TableCell className="font-medium">{profileName(type === "vendeur" ? inv.vendeur_id : inv.livreur_id)}</TableCell>
-                <TableCell className="text-sm">
-                  <div>{s?.count ?? 0} commande(s)</div>
-                  <div className="text-xs text-muted-foreground font-mono">COD : {(s?.cod ?? 0).toFixed(2)}</div>
-                </TableCell>
+                <TableCell className="font-mono">{(s?.cod ?? 0).toFixed(2)}</TableCell>
+                <TableCell>{s?.count ?? 0}</TableCell>
                 <TableCell className="font-mono">{(s?.fees ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="font-mono text-xs">
-                  <div>{Number(inv.extra_amount || 0).toFixed(2)}</div>
-                  {inv.extra_description && <div className="text-muted-foreground truncate max-w-[140px]" title={inv.extra_description}>{inv.extra_description}</div>}
+                  <div>{(s?.extras ?? 0).toFixed(2)}</div>
+                  {s && s.extrasCount > 0 && <div className="text-muted-foreground">{s.extrasCount} ligne(s)</div>}
                 </TableCell>
                 <TableCell className="font-mono font-semibold">{Number(inv.net_amount).toFixed(2)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
