@@ -337,7 +337,7 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
   );
 };
 
-const InvoiceDetail = ({ invoice, onClose, recipientName, onExport }: { invoice: Invoice | null; onClose: () => void; recipientName: string; onExport: (inv: Invoice, fmt: "pdf" | "csv") => void }) => {
+const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: { invoice: Invoice | null; onClose: () => void; recipientName: string; onExport: (inv: Invoice, fmt: "pdf" | "csv") => void; summary?: InvoiceSummary }) => {
   const [items, setItems] = useState<Item[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<Item>>({});
@@ -379,7 +379,7 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport }: { invoice:
           </DialogTitle>
         </DialogHeader>
         <div className="text-sm text-muted-foreground mb-2">
-          {invoice?.period_start} → {invoice?.period_end} · Net : <strong>{Number(invoice?.net_amount || 0).toFixed(2)}</strong>
+          {summary?.count ?? items.length} commande(s) · COD : <strong>{(summary?.cod ?? 0).toFixed(2)}</strong> · Reste : <strong>{Number(invoice?.net_amount || 0).toFixed(2)}</strong>
         </div>
         <Table>
           <TableHeader>
