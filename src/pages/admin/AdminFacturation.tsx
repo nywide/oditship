@@ -568,6 +568,13 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
   const [currentNet, setCurrentNet] = useState(0);
   const [newExtraAmount, setNewExtraAmount] = useState<number>(0);
   const [newExtraDesc, setNewExtraDesc] = useState("");
+  const [paidLockOpen, setPaidLockOpen] = useState(false);
+  const isPaid = invoice?.status === "paid";
+  const warnIfPaid = () => {
+    if (!isPaid) return false;
+    setPaidLockOpen(true);
+    return true;
+  };
 
   const reload = () => {
     if (!invoice) return;
@@ -579,8 +586,9 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
   };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [invoice]);
 
-  const startEdit = (it: Item) => { setEditing(it.id); setDraft({ ...it }); };
+  const startEdit = (it: Item) => { if (warnIfPaid()) return; setEditing(it.id); setDraft({ ...it }); };
   const saveEdit = async () => {
+    if (warnIfPaid()) return;
     const isExtra = draft.fee_type === "extra";
     const patch: any = isExtra
       ? { fee_amount: Number(draft.fee_amount || 0), description: draft.description || null }
@@ -601,6 +609,7 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
   };
 
   const removeItem = async (id: number) => {
+    if (warnIfPaid()) return;
     if (!confirm("Supprimer cette ligne ?")) return;
     const { error } = await db.from("invoice_items").delete().eq("id", id);
     if (error) return toast.error(error.message);
@@ -610,6 +619,7 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
 
   const addExtra = async () => {
     if (!invoice) return;
+    if (warnIfPaid()) return;
     if (!newExtraDesc.trim()) return toast.error("Description requise");
     const { error } = await db.from("invoice_items").insert({
       invoice_id: invoice.id,
@@ -672,6 +682,20 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
             <Button size="sm" onClick={addExtra}><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
           </div>
         </div>
+
+        <AlertDialog open={paidLockOpen} onOpenChange={setPaidLockOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Facture déjà payée</AlertDialogTitle>
+              <AlertDialogDescription>
+                Cette facture a été payée. Aucun contenu ne peut être modifié tant qu'elle reste Payée.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setPaidLockOpen(false)}>Compris</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <Table>
           <TableHeader>
