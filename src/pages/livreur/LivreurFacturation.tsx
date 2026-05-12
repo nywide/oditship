@@ -1,0 +1,238 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Receipt, FileText, FileSpreadsheet, Filter, X } from "lucide-react";
+import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
+import { useAuth } from "@/contexts/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import PaymentProofThumb from "@/components/dashboard/PaymentProofThumb";
+
+const db = supabase as any;
+
+interface Invoice { id: number; period_start: string; period_end: string; net_amount: number; status: string; created_at: string; payment_reference: string | null; payment_proof_url: string | null; }
+interface Item { id: number; tracking_number: string | null; product_name: string | null; customer_city: string | null; status_snapshot: string | null; order_value: number; fee_amount: number; fee_type: string | null; description: string | null; }
+interface Summary { count: number; cod: number; fees: number; extras: number; extrasCount: number; extraNames: string[]; }
+
+const aggregate = (rows: any[]) => {
+  const cur: Summary = { count: 0, cod: 0, fees: 0, extras: 0, extrasCount: 0, extraNames: [] };
+  for (const r of rows) {
+    if (r.fee_type === "extra") {
+      cur.extras += Number(r.fee_amount || 0);
+      cur.extrasCount += 1;
+      cur.extraNames.push((r.description || r.product_name || "Autre tarif") as string);
+    } else {
+      cur.count += 1;
+      cur.cod += Number(r.order_value || 0);
+      cur.fees += Number(r.fee_amount || 0);
+    }
+  }
+  return cur;
+};
+
+const LivreurFacturation = () => {
+  const { profile, user } = useAuth();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [summary, setSummary] = useState<Record<number, Summary>>({});
+  const [open, setOpen] = useState<Invoice | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [filter, setFilter] = useState<{ status: "all" | "paid" | "unpaid"; from: string; to: string; q: string }>(
+    { status: "all", from: "", to: "", q: "" }
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    db.from("invoices").select("*").eq("recipient_type", "livreur").eq("livreur_id", user.id).order("created_at", { ascending: false })
+      .then(async ({ data }: any) => {
+        const list = (data ?? []) as Invoice[];
+        setInvoices(list);
+        if (list.length) {
+          const { data: its } = await db.from("invoice_items").select("invoice_id, order_value, fee_amount, fee_type, description, product_name").in("invoice_id", list.map((x) => x.id));
+          const grouped: Record<number, any[]> = {};
+          for (const r of (its ?? []) as any[]) (grouped[r.invoice_id] ??= []).push(r);
+          const map: Record<number, Summary> = {};
+          for (const id of Object.keys(grouped)) map[Number(id)] = aggregate(grouped[Number(id)]);
+          setSummary(map);
+        }
+      });
+  }, [user]);
+
+  useEffect(() => {
+    if (!open) return;
+    db.from("invoice_items").select("*").eq("invoice_id", open.id).order("id")
+      .then(({ data }: any) => setItems((data ?? []) as Item[]));
+  }, [open]);
+
+  const exportInvoice = async (inv: Invoice, fmt: "pdf" | "csv") => {
+    const { data: its } = await db.from("invoice_items").select("*").eq("invoice_id", inv.id).order("id");
+    const data = {
+      id: inv.id,
+      recipientName: profile?.full_name || profile?.username || "—",
+      recipientType: "livreur" as const,
+      period_start: inv.period_start,
+      period_end: inv.period_end,
+      net_amount: inv.net_amount,
+      status: inv.status,
+    };
+    fmt === "pdf" ? exportInvoicePdf(data, (its ?? []) as any) : exportInvoiceCsv(data, (its ?? []) as any);
+  };
+
+  const filteredInvoices = invoices.filter((inv) => {
+    if (filter.status === "paid" && inv.status !== "paid") return false;
+    if (filter.status === "unpaid" && inv.status === "paid") return false;
+    if (filter.from && new Date(inv.created_at) < new Date(filter.from)) return false;
+    if (filter.to && new Date(inv.created_at) > new Date(filter.to + "T23:59:59")) return false;
+    if (filter.q.trim() && !String(inv.id).includes(filter.q.trim())) return false;
+    return true;
+  });
+
+  const orderItems = items.filter((i) => i.fee_type !== "extra");
+  const extraItems = items.filter((i) => i.fee_type === "extra");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Receipt className="h-6 w-6 text-primary" />
+        <h2 className="text-2xl font-bold">Facturation</h2>
+      </div>
+
+      <Card className="p-3 flex flex-wrap items-center gap-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select value={filter.status} onValueChange={(v) => setFilter({ ...filter, status: v as any })}>
+          <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous statuts</SelectItem>
+            <SelectItem value="paid">Payées</SelectItem>
+            <SelectItem value="unpaid">Non payées</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input className="h-8 w-32" placeholder="N° facture…" value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} />
+        <span className="text-xs text-muted-foreground">Du</span>
+        <Input className="h-8 w-36" type="date" value={filter.from} onChange={(e) => setFilter({ ...filter, from: e.target.value })} />
+        <span className="text-xs text-muted-foreground">au</span>
+        <Input className="h-8 w-36" type="date" value={filter.to} onChange={(e) => setFilter({ ...filter, to: e.target.value })} />
+        {(filter.status !== "all" || filter.q || filter.from || filter.to) && (
+          <Button size="sm" variant="ghost" onClick={() => setFilter({ status: "all", from: "", to: "", q: "" })}>
+            <X className="h-3 w-3 mr-1" />Réinitialiser
+          </Button>
+        )}
+      </Card>
+
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-20">Facture</TableHead>
+              <TableHead>COD</TableHead>
+              <TableHead>Commandes</TableHead>
+              <TableHead>Tarif</TableHead>
+              <TableHead>Autre tarif</TableHead>
+              <TableHead>Reste</TableHead>
+              <TableHead>Statut</TableHead>
+              <TableHead>Preuve payante</TableHead>
+              <TableHead>Créée</TableHead>
+              <TableHead className="text-right">Export</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredInvoices.length === 0 ? (
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
+            ) : filteredInvoices.map((inv) => {
+              const s = summary[inv.id];
+              return (
+              <TableRow key={inv.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setOpen(inv)}>
+                <TableCell className="font-mono font-semibold">#{inv.id}</TableCell>
+                <TableCell className="font-mono">{(s?.cod ?? 0).toFixed(2)}</TableCell>
+                <TableCell>{s?.count ?? 0}</TableCell>
+                <TableCell className="font-mono">{(s?.fees ?? 0).toFixed(2)}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  <div>{(s?.extras ?? 0).toFixed(2)}</div>
+                  {s && s.extraNames.length > 0 && (
+                    <div className="text-[11px] text-muted-foreground font-sans truncate max-w-[200px]" title={s.extraNames.join(" · ")}>
+                      {s.extraNames.join(" · ")}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell className="font-mono font-semibold">{Number(inv.net_amount).toFixed(2)}</TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <Badge variant={inv.status === "paid" ? "default" : "secondary"} className="w-fit">
+                      {inv.status === "paid" ? "Payée" : "Non payée"}
+                    </Badge>
+                    {inv.payment_reference && <span className="text-xs text-muted-foreground font-mono">Réf: {inv.payment_reference}</span>}
+                  </div>
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  {inv.status === "paid" ? <PaymentProofThumb path={inv.payment_proof_url} /> : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{new Date(inv.created_at).toLocaleDateString()}</TableCell>
+                <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                  <Button size="sm" variant="outline" onClick={() => exportInvoice(inv, "pdf")}><FileText className="h-4 w-4 mr-1" />PDF</Button>
+                  <Button size="sm" variant="outline" onClick={() => exportInvoice(inv, "csv")}><FileSpreadsheet className="h-4 w-4 mr-1" />CSV</Button>
+                </TableCell>
+              </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+
+      <Dialog open={!!open} onOpenChange={(o) => !o && setOpen(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Facture #{open?.id}</DialogTitle></DialogHeader>
+          {open && (
+            <div className="text-sm text-muted-foreground mb-2 space-y-1">
+              <div>
+                COD : <strong>{(summary[open.id]?.cod ?? 0).toFixed(2)}</strong> ·{" "}
+                Commandes : <strong>{summary[open.id]?.count ?? orderItems.length}</strong> ·{" "}
+                Tarif : <strong>{(summary[open.id]?.fees ?? 0).toFixed(2)}</strong> ·{" "}
+                Autre tarif : <strong>{(summary[open.id]?.extras ?? 0).toFixed(2)}</strong> ·{" "}
+                Reste : <strong>{Number(open.net_amount).toFixed(2)}</strong>
+              </div>
+            </div>
+          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tracking</TableHead>
+                <TableHead>Produit / Description</TableHead>
+                <TableHead>Ville</TableHead>
+                <TableHead>Statut</TableHead>
+                <TableHead>Prix</TableHead>
+                <TableHead>Tarif</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orderItems.map((it) => (
+                <TableRow key={it.id}>
+                  <TableCell className="font-mono text-xs">{it.tracking_number || "—"}</TableCell>
+                  <TableCell>{it.product_name || "—"}</TableCell>
+                  <TableCell>{it.customer_city || "—"}</TableCell>
+                  <TableCell><Badge variant="outline">{it.status_snapshot}</Badge></TableCell>
+                  <TableCell className="font-mono">{Number(it.order_value).toFixed(2)}</TableCell>
+                  <TableCell className="font-mono">{Number(it.fee_amount).toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+              {extraItems.map((it) => (
+                <TableRow key={it.id} className="bg-amber-50/50 dark:bg-amber-950/20">
+                  <TableCell>—</TableCell>
+                  <TableCell className="italic">{it.description || it.product_name || "Autre tarif"}</TableCell>
+                  <TableCell>—</TableCell>
+                  <TableCell><Badge className="bg-amber-500 text-white border-transparent">Autre tarif</Badge></TableCell>
+                  <TableCell>—</TableCell>
+                  <TableCell className="font-mono">{Number(it.fee_amount).toFixed(2)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default LivreurFacturation;
