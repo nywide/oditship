@@ -265,6 +265,21 @@ const AdminLivreurs = () => {
           )}
         </DialogContent>
       </Dialog>
+      <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Modifier le profil — {editTarget?.username}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Nom complet</Label><Input value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} /></div>
+            <div><Label>Téléphone</Label><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            <div><Label>Email</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div><Label>Nouveau mot de passe</Label><Input type="password" placeholder="Laisser vide pour ne pas changer" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Annuler</Button>
+            <Button onClick={submitEdit} disabled={editBusy}>{editBusy ? "..." : "Enregistrer"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
