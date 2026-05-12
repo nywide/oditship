@@ -62,7 +62,7 @@ const DAYS = [
   { v: 4, l: "Jeu" }, { v: 5, l: "Ven" }, { v: 6, l: "Sam" }, { v: 0, l: "Dim" },
 ];
 
-interface InvoiceSummary { count: number; cod: number; fees: number; extras: number; extrasCount: number; }
+interface InvoiceSummary { count: number; cod: number; fees: number; extras: number; extrasCount: number; extraNames: string[]; }
 
 const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -93,13 +93,15 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
 
     if (list.length) {
       const ids = list.map((x) => x.id);
-      const { data: its } = await db.from("invoice_items").select("invoice_id, order_value, fee_amount, fee_type").in("invoice_id", ids);
+      const { data: its } = await db.from("invoice_items").select("invoice_id, order_value, fee_amount, fee_type, description, product_name").in("invoice_id", ids);
       const map: Record<number, InvoiceSummary> = {};
       for (const r of (its ?? []) as any[]) {
-        const cur = map[r.invoice_id] ?? { count: 0, cod: 0, fees: 0, extras: 0, extrasCount: 0 };
+        const cur = map[r.invoice_id] ?? { count: 0, cod: 0, fees: 0, extras: 0, extrasCount: 0, extraNames: [] };
         if (r.fee_type === "extra") {
           cur.extras += Number(r.fee_amount || 0);
           cur.extrasCount += 1;
+          const name = (r.description || r.product_name || "Autre tarif") as string;
+          cur.extraNames.push(name);
         } else {
           cur.count += 1;
           cur.cod += Number(r.order_value || 0);
@@ -290,7 +292,11 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
                 <TableCell className="font-mono">{(s?.fees ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="font-mono text-xs">
                   <div>{(s?.extras ?? 0).toFixed(2)}</div>
-                  {s && s.extrasCount > 0 && <div className="text-muted-foreground">{s.extrasCount} ligne(s)</div>}
+                  {s && s.extraNames.length > 0 && (
+                    <div className="text-[11px] text-muted-foreground font-sans truncate max-w-[200px]" title={s.extraNames.join(" · ")}>
+                      {s.extraNames.join(" · ")}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="font-mono font-semibold">{Number(inv.net_amount).toFixed(2)}</TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
