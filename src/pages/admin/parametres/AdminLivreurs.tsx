@@ -227,6 +227,9 @@ const AdminLivreurs = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(l)} title="Modifier le profil">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => loginAs(l)} disabled={l.id === user?.id} title="Se connecter en tant que">
                         <LogIn className="h-4 w-4" />
                       </Button>
