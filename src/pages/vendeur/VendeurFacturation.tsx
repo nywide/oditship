@@ -11,9 +11,9 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const db = supabase as any;
 
-interface Invoice { id: number; period_start: string; period_end: string; net_amount: number; status: string; created_at: string; payment_reference: string | null; payment_proof_url: string | null; }
+interface Invoice { id: number; period_start: string; period_end: string; net_amount: number; status: string; created_at: string; payment_reference: string | null; payment_proof_url: string | null; extra_amount: number; extra_description: string | null; }
 interface Item { id: number; tracking_number: string | null; product_name: string | null; customer_city: string | null; status_snapshot: string | null; order_value: number; fee_amount: number; }
-interface Summary { count: number; cod: number; }
+interface Summary { count: number; cod: number; fees: number; }
 
 const VendeurFacturation = () => {
   const { profile } = useAuth();
