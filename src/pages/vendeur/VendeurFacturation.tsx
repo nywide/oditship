@@ -58,6 +58,8 @@ const VendeurFacturation = () => {
       period_end: inv.period_end,
       net_amount: inv.net_amount,
       status: inv.status,
+      extra_amount: inv.extra_amount,
+      extra_description: inv.extra_description,
     };
     fmt === "pdf" ? exportInvoicePdf(data, (its ?? []) as any) : exportInvoiceCsv(data, (its ?? []) as any);
   };
