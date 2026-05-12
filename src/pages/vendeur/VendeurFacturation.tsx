@@ -5,9 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Receipt, FileText, FileSpreadsheet, Image as ImageIcon } from "lucide-react";
+import { Receipt, FileText, FileSpreadsheet, Filter, X } from "lucide-react";
 import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
 import { useAuth } from "@/contexts/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import PaymentProofThumb from "@/components/dashboard/PaymentProofThumb";
 
 const db = supabase as any;
 
