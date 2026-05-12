@@ -85,6 +85,39 @@ const AdminLivreurs = () => {
     else { toast.success("Token regenerated"); load(); }
   };
 
+  const toggleActive = async (l: Livreur) => {
+    if (l.id === user?.id) return toast.error("Vous ne pouvez pas désactiver votre propre compte");
+    const { error } = await supabase.from("profiles").update({ is_active: !l.is_active }).eq("id", l.id);
+    if (error) toast.error(error.message);
+    else { toast.success(l.is_active ? "Désactivé" : "Activé"); load(); }
+  };
+
+  const loginAs = async (l: Livreur) => {
+    if (l.id === user?.id) return toast.error("Vous êtes déjà connecté avec ce compte");
+    try {
+      const { data, error } = await supabase.functions.invoke("get-impersonation-token", { body: { targetUserId: l.id } });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const at = (data as any)?.access_token, rt = (data as any)?.refresh_token;
+      if (!at || !rt) throw new Error("Jeton introuvable");
+      const w = window.open(`/impersonate?access_token=${encodeURIComponent(at)}&refresh_token=${encodeURIComponent(rt)}`, "_blank", "noopener,noreferrer");
+      if (!w) toast.error("Veuillez autoriser les popups");
+      else toast.success(`Connecté en tant que ${l.username}`);
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
+  };
+
+  const deleteLivreur = async (l: Livreur) => {
+    if (l.id === user?.id) return;
+    if (!confirm(`Supprimer le livreur ${l.username} ?`)) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", { body: { targetUserId: l.id } });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Livreur supprimé");
+      load();
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
+  };
+
   const masked = (t: string | null) => t ? `${t.slice(0, 6)}${"•".repeat(20)}${t.slice(-4)}` : "—";
 
   return (
@@ -97,11 +130,12 @@ const AdminLivreurs = () => {
               <TableHead>Hubs assignés</TableHead>
               <TableHead>API</TableHead>
               <TableHead>Workflows</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {livreurs.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No drivers</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No drivers</TableCell></TableRow>
             ) : livreurs.map((l) => {
               const assigned = hubsOf(l.id);
               return (
@@ -150,6 +184,19 @@ const AdminLivreurs = () => {
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => setTarifsTarget(l)}>
                         <Wallet className="h-4 w-4 mr-1" /> Tarifs
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => loginAs(l)} disabled={l.id === user?.id} title="Se connecter en tant que">
+                        <LogIn className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => toggleActive(l)} disabled={l.id === user?.id} title={l.is_active ? "Désactiver" : "Activer"}>
+                        {l.is_active ? <UserX className="h-4 w-4 text-destructive" /> : <UserCheck className="h-4 w-4 text-success" />}
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteLivreur(l)} disabled={l.id === user?.id} title="Supprimer">
+                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </TableCell>
