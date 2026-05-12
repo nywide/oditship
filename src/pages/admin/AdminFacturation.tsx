@@ -85,6 +85,7 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
     { status: "all", from: "", to: "", q: "", minAmount: "", maxAmount: "" }
   );
   const [unpaidWarn, setUnpaidWarn] = useState<Invoice | null>(null);
+  const [paidLockWarn, setPaidLockWarn] = useState<Invoice | null>(null);
 
   const toggleOne = (id: number) => {
     const n = new Set(selected);
@@ -101,6 +102,8 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
 
   const bulkDelete = async () => {
     if (selected.size === 0) return;
+    const paid = invoices.find((i) => selected.has(i.id) && i.status === "paid");
+    if (paid) { setPaidLockWarn(paid); return; }
     if (!confirm(`Supprimer ${selected.size} facture(s) ?`)) return;
     const ids = Array.from(selected);
     await db.from("invoice_items").delete().in("invoice_id", ids);
@@ -206,10 +209,11 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
     } catch (e: any) { toast.error(e.message || "Erreur"); }
   };
 
-  const deleteInvoice = async (id: number) => {
+  const deleteInvoice = async (inv: Invoice) => {
+    if (inv.status === "paid") { setPaidLockWarn(inv); return; }
     if (!confirm("Supprimer cette facture ?")) return;
-    await db.from("invoice_items").delete().eq("invoice_id", id);
-    const { error } = await db.from("invoices").delete().eq("id", id);
+    await db.from("invoice_items").delete().eq("invoice_id", inv.id);
+    const { error } = await db.from("invoices").delete().eq("id", inv.id);
     if (error) return toast.error(error.message);
     toast.success("Supprimée");
     load();
@@ -432,7 +436,7 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
                 <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
                   <Button variant="outline" size="sm" onClick={() => exportInvoice(inv, "pdf")}><FileText className="h-4 w-4 mr-1" />PDF</Button>
                   <Button variant="outline" size="sm" onClick={() => exportInvoice(inv, "csv")}><FileSpreadsheet className="h-4 w-4 mr-1" />CSV</Button>
-                  <Button variant="ghost" size="sm" onClick={() => deleteInvoice(inv.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => deleteInvoice(inv)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </TableCell>
@@ -454,6 +458,20 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={async () => { if (unpaidWarn) { await markUnpaid(unpaidWarn); setUnpaidWarn(null); } }}>Confirmer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!paidLockWarn} onOpenChange={(o) => !o && setPaidLockWarn(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Facture déjà payée</AlertDialogTitle>
+            <AlertDialogDescription>
+              La facture #{paidLockWarn?.id} a été payée. Aucun contenu ne peut être modifié ou supprimé tant qu'elle reste Payée.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setPaidLockWarn(null)}>Compris</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
