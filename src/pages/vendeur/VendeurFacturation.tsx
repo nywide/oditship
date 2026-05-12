@@ -13,14 +13,15 @@ const db = supabase as any;
 
 interface Invoice { id: number; period_start: string; period_end: string; net_amount: number; status: string; created_at: string; payment_reference: string | null; payment_proof_url: string | null; }
 interface Item { id: number; tracking_number: string | null; product_name: string | null; customer_city: string | null; status_snapshot: string | null; order_value: number; fee_amount: number; fee_type: string | null; description: string | null; }
-interface Summary { count: number; cod: number; fees: number; extras: number; extrasCount: number; }
+interface Summary { count: number; cod: number; fees: number; extras: number; extrasCount: number; extraNames: string[]; }
 
 const aggregate = (rows: any[]) => {
-  const cur: Summary = { count: 0, cod: 0, fees: 0, extras: 0, extrasCount: 0 };
+  const cur: Summary = { count: 0, cod: 0, fees: 0, extras: 0, extrasCount: 0, extraNames: [] };
   for (const r of rows) {
     if (r.fee_type === "extra") {
       cur.extras += Number(r.fee_amount || 0);
       cur.extrasCount += 1;
+      cur.extraNames.push((r.description || r.product_name || "Autre tarif") as string);
     } else {
       cur.count += 1;
       cur.cod += Number(r.order_value || 0);
