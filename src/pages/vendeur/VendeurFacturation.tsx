@@ -44,7 +44,7 @@ const VendeurFacturation = () => {
         const list = (data ?? []) as Invoice[];
         setInvoices(list);
         if (list.length) {
-          const { data: its } = await db.from("invoice_items").select("invoice_id, order_value, fee_amount, fee_type").in("invoice_id", list.map((x) => x.id));
+          const { data: its } = await db.from("invoice_items").select("invoice_id, order_value, fee_amount, fee_type, description, product_name").in("invoice_id", list.map((x) => x.id));
           const grouped: Record<number, any[]> = {};
           for (const r of (its ?? []) as any[]) {
             (grouped[r.invoice_id] ??= []).push(r);
@@ -120,7 +120,11 @@ const VendeurFacturation = () => {
                 <TableCell className="font-mono">{(s?.fees ?? 0).toFixed(2)}</TableCell>
                 <TableCell className="font-mono text-xs">
                   <div>{(s?.extras ?? 0).toFixed(2)}</div>
-                  {s && s.extrasCount > 0 && <div className="text-muted-foreground">{s.extrasCount} ligne(s)</div>}
+                  {s && s.extraNames.length > 0 && (
+                    <div className="text-[11px] text-muted-foreground font-sans truncate max-w-[200px]" title={s.extraNames.join(" · ")}>
+                      {s.extraNames.join(" · ")}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className="font-mono font-semibold">{Number(inv.net_amount).toFixed(2)}</TableCell>
                 <TableCell>
