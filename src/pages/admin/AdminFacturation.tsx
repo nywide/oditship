@@ -12,9 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Receipt, Timer, Plus, Pencil, Trash2, Check, X, FileText, FileSpreadsheet } from "lucide-react";
+import { Receipt, Timer, Plus, Pencil, Trash2, FileText, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
-import { generateInvoices, fetchUnbilledCounts } from "@/lib/invoiceGenerator";
+import { generateInvoices, fetchUnbilledCounts, setInvoicePaid } from "@/lib/invoiceGenerator";
 import { exportInvoiceCsv, exportInvoicePdf } from "@/lib/invoiceExport";
 
 const db = supabase as any;
@@ -61,8 +61,11 @@ const DAYS = [
   { v: 4, l: "Jeu" }, { v: 5, l: "Ven" }, { v: 6, l: "Sam" }, { v: 0, l: "Dim" },
 ];
 
+interface InvoiceSummary { count: number; cod: number; fees: number; }
+
 const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [summary, setSummary] = useState<Record<number, InvoiceSummary>>({});
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [counts, setCounts] = useState<Map<string, number>>(new Map());
@@ -71,6 +74,7 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
   const [genTarget, setGenTarget] = useState<string>("all");
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Invoice | null>(null);
+  const [payOpen, setPayOpen] = useState<Invoice | null>(null);
 
   const load = async () => {
     const [inv, p, s, c] = await Promise.all([
@@ -79,11 +83,26 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
       db.from("invoice_schedules").select("*").eq("recipient_type", type).maybeSingle(),
       fetchUnbilledCounts(type),
     ]);
-    setInvoices((inv.data ?? []) as Invoice[]);
+    const list = (inv.data ?? []) as Invoice[];
+    setInvoices(list);
     setProfiles((p.data ?? []) as Profile[]);
     setSchedule((s.data ?? null) as Schedule | null);
     setCounts(c.counts);
     setTotalUnbilled(c.total);
+
+    if (list.length) {
+      const ids = list.map((x) => x.id);
+      const { data: its } = await db.from("invoice_items").select("invoice_id, order_value, fee_amount").in("invoice_id", ids);
+      const map: Record<number, InvoiceSummary> = {};
+      for (const r of (its ?? []) as any[]) {
+        const cur = map[r.invoice_id] ?? { count: 0, cod: 0, fees: 0 };
+        cur.count += 1;
+        cur.cod += Number(r.order_value || 0);
+        cur.fees += Number(r.fee_amount || 0);
+        map[r.invoice_id] = cur;
+      }
+      setSummary(map);
+    } else setSummary({});
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [type]);
 
@@ -106,12 +125,12 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
     finally { setBusy(false); }
   };
 
-  const togglePaid = async (inv: Invoice) => {
-    const newStatus = inv.status === "paid" ? "draft" : "paid";
-    const { error } = await db.from("invoices").update({ status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null }).eq("id", inv.id);
-    if (error) return toast.error(error.message);
-    toast.success(newStatus === "paid" ? "Marquée payée" : "Marquée non payée");
-    load();
+  const markUnpaid = async (inv: Invoice) => {
+    try {
+      await setInvoicePaid(inv.id, false);
+      toast.success("Marquée non payée");
+      load();
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
   };
 
   const deleteInvoice = async (id: number) => {
@@ -240,8 +259,8 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
           <TableHeader>
             <TableRow>
               <TableHead>{type === "vendeur" ? "Vendeur" : "Livreur"}</TableHead>
-              <TableHead>Période</TableHead>
-              <TableHead>Net</TableHead>
+              <TableHead>Commandes / COD</TableHead>
+              <TableHead>Reste</TableHead>
               <TableHead>Statut</TableHead>
               <TableHead>Créée</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -250,29 +269,34 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
           <TableBody>
             {invoices.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucune facture</TableCell></TableRow>
-            ) : invoices.map((inv) => (
+            ) : invoices.map((inv) => {
+              const s = summary[inv.id];
+              return (
               <TableRow key={inv.id} className="cursor-pointer hover:bg-accent/40" onClick={() => setOpen(inv)}>
                 <TableCell className="font-medium">{profileName(type === "vendeur" ? inv.vendeur_id : inv.livreur_id)}</TableCell>
-                <TableCell className="text-sm">{inv.period_start} → {inv.period_end}</TableCell>
+                <TableCell className="text-sm">
+                  <div>{s?.count ?? 0} commande(s)</div>
+                  <div className="text-xs text-muted-foreground font-mono">COD : {(s?.cod ?? 0).toFixed(2)}</div>
+                </TableCell>
                 <TableCell className="font-mono">{Number(inv.net_amount).toFixed(2)}</TableCell>
-                <TableCell>
-                  <Badge variant={inv.status === "paid" ? "default" : "secondary"}>
-                    {inv.status === "paid" ? "Payée" : "Non payée"}
-                  </Badge>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  {inv.status === "paid" ? (
+                    <Badge variant="default" className="cursor-pointer" onClick={() => markUnpaid(inv)} title="Marquer comme non payée">Payée</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="cursor-pointer" onClick={() => setPayOpen(inv)} title="Enregistrer le paiement">Non payée</Badge>
+                  )}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">{new Date(inv.created_at).toLocaleDateString()}</TableCell>
                 <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="sm" title="PDF" onClick={() => exportInvoice(inv, "pdf")}><FileText className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" title="CSV" onClick={() => exportInvoice(inv, "csv")}><FileSpreadsheet className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => togglePaid(inv)}>
-                    {inv.status === "paid" ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => exportInvoice(inv, "pdf")}><FileText className="h-4 w-4 mr-1" />PDF</Button>
+                  <Button variant="outline" size="sm" onClick={() => exportInvoice(inv, "csv")}><FileSpreadsheet className="h-4 w-4 mr-1" />CSV</Button>
                   <Button variant="ghost" size="sm" onClick={() => deleteInvoice(inv.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
@@ -305,12 +329,63 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
         </DialogContent>
       </Dialog>
 
-      <InvoiceDetail invoice={open} onClose={() => { setOpen(null); load(); }} recipientName={open ? profileName(type === "vendeur" ? open.vendeur_id : open.livreur_id) : ""} onExport={exportInvoice} />
+      <PaymentDialog invoice={payOpen} onClose={() => setPayOpen(null)} onSaved={load} />
+
+      <InvoiceDetail invoice={open} onClose={() => { setOpen(null); load(); }} recipientName={open ? profileName(type === "vendeur" ? open.vendeur_id : open.livreur_id) : ""} onExport={exportInvoice} summary={open ? summary[open.id] : undefined} />
     </div>
   );
 };
 
-const InvoiceDetail = ({ invoice, onClose, recipientName, onExport }: { invoice: Invoice | null; onClose: () => void; recipientName: string; onExport: (inv: Invoice, fmt: "pdf" | "csv") => void }) => {
+const PaymentDialog = ({ invoice, onClose, onSaved }: { invoice: Invoice | null; onClose: () => void; onSaved: () => void }) => {
+  const [reference, setReference] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setReference(""); setFile(null); }, [invoice?.id]);
+
+  const submit = async () => {
+    if (!invoice) return;
+    if (!reference.trim()) { toast.error("Numéro de référence requis"); return; }
+    if (!file) { toast.error("Capture d'écran du virement requise"); return; }
+    setBusy(true);
+    try {
+      const ext = file.name.split(".").pop() || "png";
+      const path = `invoice-${invoice.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, file, { upsert: false });
+      if (upErr) throw upErr;
+      await setInvoicePaid(invoice.id, true, { reference: reference.trim(), proofUrl: path });
+      toast.success("Paiement enregistré");
+      onSaved();
+      onClose();
+    } catch (e: any) { toast.error(e.message || "Erreur"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={!!invoice} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Enregistrer le paiement — Facture #{invoice?.id}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Numéro de référence du virement bancaire</Label>
+            <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="REF-12345..." />
+          </div>
+          <div>
+            <Label>Capture d'écran (preuve du virement)</Label>
+            <Input type="file" accept="image/*,.pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+            {file && <p className="text-xs text-muted-foreground mt-1">{file.name}</p>}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button onClick={submit} disabled={busy}>{busy ? "..." : "Marquer comme payée"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: { invoice: Invoice | null; onClose: () => void; recipientName: string; onExport: (inv: Invoice, fmt: "pdf" | "csv") => void; summary?: InvoiceSummary }) => {
   const [items, setItems] = useState<Item[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<Item>>({});
@@ -352,7 +427,7 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport }: { invoice:
           </DialogTitle>
         </DialogHeader>
         <div className="text-sm text-muted-foreground mb-2">
-          {invoice?.period_start} → {invoice?.period_end} · Net : <strong>{Number(invoice?.net_amount || 0).toFixed(2)}</strong>
+          {summary?.count ?? items.length} commande(s) · COD : <strong>{(summary?.cod ?? 0).toFixed(2)}</strong> · Reste : <strong>{Number(invoice?.net_amount || 0).toFixed(2)}</strong>
         </div>
         <Table>
           <TableHeader>

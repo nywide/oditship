@@ -33,7 +33,7 @@ export const fetchUnbilledOrders = async (recipientType: "vendeur" | "livreur") 
 
   let q = supabase
     .from("orders")
-    .select("id, tracking_number, vendeur_id, assigned_livreur_id, customer_city, product_name, order_value, status, updated_at")
+    .select("id, tracking_number, external_tracking_number, vendeur_id, assigned_livreur_id, customer_city, product_name, order_value, status, updated_at")
     .or(BILLABLE.map((s) => `status.ilike.${s}`).join(","));
   const { data: orders, error } = await q;
   if (error) throw error;
@@ -76,11 +76,13 @@ export const generateInvoices = async (opts: GenerateOptions) => {
 
   for (const [recipientId, recipientOrders] of groups) {
     const items = recipientOrders.map((o: any) => {
+      // Vendor billing → only consider vendor & global packs (never livreur).
+      // Livreur billing → only consider livreur & global packs (never vendor).
       const price = resolvePrice(packs, links, {
         pickupCity: null,
         destCity: o.customer_city,
-        vendeurId: recipientType === "vendeur" ? recipientId : o.vendeur_id,
-        livreurId: recipientType === "livreur" ? recipientId : o.assigned_livreur_id,
+        vendeurId: recipientType === "vendeur" ? recipientId : null,
+        livreurId: recipientType === "livreur" ? recipientId : null,
       });
       const isDelivered = isIn(DELIVERED, o.status);
       const isRefused = isIn(REFUSED, o.status);
@@ -89,7 +91,7 @@ export const generateInvoices = async (opts: GenerateOptions) => {
       const feeType = isDelivered ? "livraison" : isRefused ? "refus" : "annulation";
       return {
         order_id: o.id,
-        tracking_number: o.tracking_number,
+        tracking_number: o.tracking_number || o.external_tracking_number || `ODiT-${o.id}`,
         product_name: o.product_name,
         customer_city: o.customer_city,
         status_snapshot: o.status,
@@ -133,8 +135,50 @@ export const generateInvoices = async (opts: GenerateOptions) => {
     const { error: e2 } = await db.from("invoice_items").insert(itemsRows);
     if (e2) throw e2;
 
+    // Append a chronologie entry on each order: "Facture #N créée"
+    const histRows = recipientOrders.map((o: any) => ({
+      order_id: o.id,
+      old_status: o.status,
+      new_status: o.status,
+      notes: `Facture #${inv.id} ${recipientType === "vendeur" ? "vendeur" : "livreur"} créée`,
+      actor_label: "Facturation",
+    }));
+    if (histRows.length) await db.from("order_status_history").insert(histRows);
+
     created.push({ invoice_id: inv.id, recipientId, count: items.length });
   }
 
   return { created: created.length, invoices: created };
+};
+
+/**
+ * Mark an invoice as paid (or unpaid) and append a chronologie entry on every
+ * order in that invoice. Optionally stores a payment reference + proof URL.
+ */
+export const setInvoicePaid = async (
+  invoiceId: number,
+  paid: boolean,
+  extra?: { reference?: string | null; proofUrl?: string | null },
+) => {
+  const patch: any = {
+    status: paid ? "paid" : "draft",
+    paid_at: paid ? new Date().toISOString() : null,
+  };
+  if (extra?.reference !== undefined) patch.payment_reference = extra.reference;
+  if (extra?.proofUrl !== undefined) patch.payment_proof_url = extra.proofUrl;
+  const { data: inv, error } = await db.from("invoices").update(patch).eq("id", invoiceId).select("recipient_type").single();
+  if (error) throw error;
+
+  const { data: its } = await db.from("invoice_items").select("order_id, status_snapshot").eq("invoice_id", invoiceId);
+  const rows = ((its ?? []) as any[])
+    .filter((r) => r.order_id)
+    .map((r) => ({
+      order_id: r.order_id,
+      old_status: r.status_snapshot,
+      new_status: r.status_snapshot,
+      notes: `Facture #${invoiceId} ${inv?.recipient_type === "vendeur" ? "vendeur" : "livreur"} ${paid ? "payée" : "marquée non payée"}`,
+      actor_label: "Facturation",
+    }));
+  if (rows.length) await db.from("order_status_history").insert(rows);
+  return inv;
 };
