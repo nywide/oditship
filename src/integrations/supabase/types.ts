@@ -256,6 +256,8 @@ export type Database = {
           notes: string | null
           packaging_fees: number
           paid_at: string | null
+          payment_proof_url: string | null
+          payment_reference: string | null
           period_end: string
           period_start: string
           recipient_type: string
@@ -275,6 +277,8 @@ export type Database = {
           notes?: string | null
           packaging_fees?: number
           paid_at?: string | null
+          payment_proof_url?: string | null
+          payment_reference?: string | null
           period_end: string
           period_start: string
           recipient_type?: string
@@ -294,6 +298,8 @@ export type Database = {
           notes?: string | null
           packaging_fees?: number
           paid_at?: string | null
+          payment_proof_url?: string | null
+          payment_reference?: string | null
           period_end?: string
           period_start?: string
           recipient_type?: string
