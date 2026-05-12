@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Link2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Link2, ShieldCheck, Lock } from "lucide-react";
 import { toast } from "sonner";
 import type { PricingPack, PricingPackLink } from "@/lib/pricingResolver";
 
@@ -24,12 +24,14 @@ interface Props {
   /** Hide delivery-delay field (custom packs only override price, not the global delay). */
   hideDelay?: boolean;
   title?: string;
+  /** "owner" = livreur view (drafts only editable, can submit). "admin" = admin view (can validate/reject). Default "admin". */
+  mode?: "owner" | "admin";
 }
 
 interface City { id: number; name: string; }
 interface PickupCity { id: number; name: string; }
 
-const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimension = true, hideDelay = false, title }: Props) => {
+const PackManager = ({ scope, ownerId, allowedDestinationCities, showPickupDimension = true, hideDelay = false, title, mode = "admin" }: Props) => {
   const [packs, setPacks] = useState<PricingPack[]>([]);
   const [links, setLinks] = useState<PricingPackLink[]>([]);
   const [cities, setCities] = useState<City[]>([]);
