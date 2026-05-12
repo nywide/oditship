@@ -168,6 +168,8 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
       period_end: inv.period_end,
       net_amount: inv.net_amount,
       status: inv.status,
+      extra_amount: inv.extra_amount,
+      extra_description: inv.extra_description,
     };
     const items = (its ?? []) as Item[];
     fmt === "pdf" ? exportInvoicePdf(exportData, items) : exportInvoiceCsv(exportData, items);
