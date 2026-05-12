@@ -330,7 +330,9 @@ const InvoicesTab = ({ type }: { type: "vendeur" | "livreur" }) => {
         </DialogContent>
       </Dialog>
 
-      <InvoiceDetail invoice={open} onClose={() => { setOpen(null); load(); }} recipientName={open ? profileName(type === "vendeur" ? open.vendeur_id : open.livreur_id) : ""} onExport={exportInvoice} />
+      <PaymentDialog invoice={payOpen} onClose={() => setPayOpen(null)} onSaved={load} />
+
+      <InvoiceDetail invoice={open} onClose={() => { setOpen(null); load(); }} recipientName={open ? profileName(type === "vendeur" ? open.vendeur_id : open.livreur_id) : ""} onExport={exportInvoice} summary={open ? summary[open.id] : undefined} />
     </div>
   );
 };
