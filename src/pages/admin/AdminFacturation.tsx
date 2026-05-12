@@ -400,10 +400,19 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
   const [items, setItems] = useState<Item[]>([]);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState<Partial<Item>>({});
+  const [extraAmount, setExtraAmount] = useState(0);
+  const [extraDesc, setExtraDesc] = useState("");
+  const [currentNet, setCurrentNet] = useState(0);
 
   const reload = () => {
     if (!invoice) return;
     db.from("invoice_items").select("*").eq("invoice_id", invoice.id).order("id").then(({ data }: any) => setItems((data ?? []) as Item[]));
+    db.from("invoices").select("net_amount, extra_amount, extra_description").eq("id", invoice.id).single().then(({ data }: any) => {
+      if (!data) return;
+      setExtraAmount(Number(data.extra_amount || 0));
+      setExtraDesc(data.extra_description || "");
+      setCurrentNet(Number(data.net_amount || 0));
+    });
   };
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [invoice]);
 
@@ -418,10 +427,27 @@ const InvoiceDetail = ({ invoice, onClose, recipientName, onExport, summary }: {
       fee_amount: Number(draft.fee_amount || 0),
     }).eq("id", editing);
     if (error) return toast.error(error.message);
+    if (invoice) await recomputeInvoiceTotals(invoice.id);
     toast.success("Ligne mise à jour");
     setEditing(null);
     reload();
   };
+
+  const saveExtra = async () => {
+    if (!invoice) return;
+    const { error } = await db.from("invoices").update({
+      extra_amount: Number(extraAmount || 0),
+      extra_description: extraDesc || null,
+    }).eq("id", invoice.id);
+    if (error) return toast.error(error.message);
+    await recomputeInvoiceTotals(invoice.id);
+    toast.success("Autre tarif enregistré");
+    reload();
+  };
+
+  const totalFees = items.reduce((a, i) => a + Number(i.fee_amount || 0), 0);
+  const totalCod = items.filter((i) => i.fee_type === "livraison").reduce((a, i) => a + Number(i.order_value || 0), 0);
+
 
   return (
     <Dialog open={!!invoice} onOpenChange={(o) => !o && onClose()}>
