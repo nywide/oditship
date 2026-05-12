@@ -136,15 +136,17 @@ export const generateInvoices = async (opts: GenerateOptions) => {
     const { error: e2 } = await db.from("invoice_items").insert(itemsRows);
     if (e2) throw e2;
 
-    // Append a chronologie entry on each order: "Facture #N créée"
-    const histRows = recipientOrders.map((o: any) => ({
-      order_id: o.id,
-      old_status: o.status,
-      new_status: o.status,
-      notes: `Facture #${inv.id} ${recipientType === "vendeur" ? "vendeur" : "livreur"} créée`,
-      actor_label: "Facturation",
-    }));
-    if (histRows.length) await db.from("order_status_history").insert(histRows);
+    // Per requirement: only vendor invoice events show up in the order chronology.
+    if (recipientType === "vendeur") {
+      const histRows = recipientOrders.map((o: any) => ({
+        order_id: o.id,
+        old_status: o.status,
+        new_status: o.status,
+        notes: `Facture #${inv.id} vendeur créée`,
+        actor_label: "Facturation",
+      }));
+      if (histRows.length) await db.from("order_status_history").insert(histRows);
+    }
 
     created.push({ invoice_id: inv.id, recipientId, count: items.length });
   }
