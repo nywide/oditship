@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
+import { OrderBillingBadges } from "@/components/dashboard/OrderBillingBadges";
+import { useInvoiceStatusMap } from "@/lib/useInvoiceStatusMap";
 import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
 import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { cn } from "@/lib/utils";
