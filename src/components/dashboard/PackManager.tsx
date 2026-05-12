@@ -196,12 +196,12 @@ const LinkCitiesDialog = ({ pack, onClose, cities, pickupCities, showPickupDimen
 
   useEffect(() => {
     if (!pack) return;
-    setPickup("*");
+    setPickup(showPickupDimension ? (pickupCities[0]?.name ?? "*") : "*");
     setAllDest(false);
     setSelected(new Set());
     setExistingSearch("");
     setDestSearch("");
-  }, [pack]);
+  }, [pack, showPickupDimension, pickupCities]);
 
   // Cities already linked to OTHER packs (same scope/owner) for current pickup => excluded
   const takenByOthers = useMemo(() => {
