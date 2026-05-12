@@ -189,19 +189,11 @@ export const setInvoicePaid = async (
 };
 
 /**
- * Recompute and persist net_amount for one invoice. Used after the admin
- * tweaks line items or the "autre tarif" extra fee.
- *
- *   vendor invoice → net = COD(delivered) − (delivery_fees + refused_fees + annule_fees + extra)
- *   livreur invoice → net = (delivery_fees + refused_fees + annule_fees) + extra
+ * Recompute and persist net_amount for one invoice. The "Autre tarif" extras are
+ * stored as additional invoice_items rows with fee_type='extra'. Reste = COD − total fees
+ * (delivery + refus + annulation + extras), identical for vendor and livreur.
  */
 export const recomputeInvoiceTotals = async (invoiceId: number) => {
-  const { data: inv, error: e1 } = await db
-    .from("invoices")
-    .select("recipient_type, extra_amount")
-    .eq("id", invoiceId)
-    .single();
-  if (e1) throw e1;
   const { data: its, error: e2 } = await db
     .from("invoice_items")
     .select("order_value, fee_amount, fee_type")
@@ -216,12 +208,9 @@ export const recomputeInvoiceTotals = async (invoiceId: number) => {
   const delivery_fees = sumBy((i) => i.fee_type === "livraison", "fee_amount");
   const total_refused_fees = sumBy((i) => i.fee_type === "refus", "fee_amount");
   const total_annule_fees = sumBy((i) => i.fee_type === "annulation", "fee_amount");
-  const extra = Number(inv?.extra_amount || 0);
-  const totalFees = delivery_fees + total_refused_fees + total_annule_fees;
-  const net_amount =
-    inv?.recipient_type === "vendeur"
-      ? total_delivered - totalFees - extra
-      : totalFees + extra;
+  const extras = sumBy((i) => i.fee_type === "extra", "fee_amount");
+  const totalFees = delivery_fees + total_refused_fees + total_annule_fees + extras;
+  const net_amount = total_delivered - totalFees;
 
   const { error: e3 } = await db
     .from("invoices")
@@ -234,5 +223,6 @@ export const recomputeInvoiceTotals = async (invoiceId: number) => {
     })
     .eq("id", invoiceId);
   if (e3) throw e3;
-  return { net_amount, total_delivered, totalFees, extra };
+  return { net_amount, total_delivered, totalFees, extras };
 };
+
