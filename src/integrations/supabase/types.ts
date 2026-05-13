@@ -981,6 +981,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      ramassoire_mark_orders_ramasse: {
+        Args: { _order_ids: number[] }
+        Returns: number
+      }
     }
     Enums: {
       app_role:
