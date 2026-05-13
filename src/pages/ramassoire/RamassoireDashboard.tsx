@@ -40,7 +40,7 @@ const useVendeurs = (vendeurIds: string[]) => {
   const [map, setMap] = useState<Record<string, VendeurInfo>>({});
   useEffect(() => {
     if (vendeurIds.length === 0) { setMap({}); return; }
-    supabase.from("profiles").select("id, username, full_name, company_name")
+    supabase.from("profiles").select("id, username, full_name, company_name, city")
       .in("id", vendeurIds)
       .then(({ data }) => {
         const m: Record<string, VendeurInfo> = {};
@@ -259,7 +259,7 @@ const ListeRamassage = () => {
     const ids = Object.keys(counts);
     setRows(ids.map((id) => ({ vendeur_id: id, count: counts[id] })).sort((a, b) => b.count - a.count));
     if (ids.length > 0) {
-      const { data: profs } = await supabase.from("profiles").select("id, username, full_name, company_name").in("id", ids);
+      const { data: profs } = await supabase.from("profiles").select("id, username, full_name, company_name, city").in("id", ids);
       const m: Record<string, VendeurInfo> = {};
       (profs ?? []).forEach((v: any) => { m[v.id] = v; });
       setVendeurs(m);
