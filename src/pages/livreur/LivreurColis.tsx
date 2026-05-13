@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDown, Printer } from "lucide-react";
 import { printSticker } from "@/lib/printSticker";
 
-const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,updated_at,vendeur_id,assigned_livreur_id,driver_name,driver_phone";
+const ORDERS_COLUMNS = "id,customer_name,customer_phone,customer_address,customer_city,product_name,order_value,open_package,comment,status,tracking_number,external_tracking_number,status_note,postponed_date,scheduled_date,created_at,updated_at,vendeur_id,assigned_livreur_id,driver_name,driver_phone,hub_id";
 
 const LivreurColis = () => {
   const [orders, setOrders] = useState<any[]>([]);
