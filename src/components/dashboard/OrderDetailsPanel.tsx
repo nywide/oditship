@@ -13,6 +13,7 @@ import {
 } from "@/lib/colisCanvas";
 import { useCanvasSurface } from "@/lib/useColisCanvas";
 import { statusColor, statusLabel } from "@/lib/orderStatus";
+import { AdminOrderControls } from "@/components/dashboard/AdminOrderControls";
 
 interface OrderSummary {
   id: number;
