@@ -9,6 +9,7 @@ import { OrderDetailsPanel } from "@/components/dashboard/OrderDetailsPanel";
 import { ColisMainRowCell } from "@/components/dashboard/ColisMainRowCell";
 import { OrderBillingBadges } from "@/components/dashboard/OrderBillingBadges";
 import { useInvoiceStatusMap } from "@/lib/useInvoiceStatusMap";
+import { SubStatusFilter, matchesSubStatus, type SubStatusValue } from "@/components/dashboard/SubStatusFilter";
 import { ORDER_STATUSES } from "@/lib/orderStatus";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, Printer, Search } from "lucide-react";
