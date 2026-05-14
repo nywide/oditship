@@ -56,6 +56,7 @@ const VendeurColis = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [subStatusFilter, setSubStatusFilter] = useState<SubStatusValue>("all");
   const [agentFilter, setAgentFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
